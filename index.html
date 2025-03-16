@@ -3,19 +3,38 @@
 <head>
     <title>실시간 RSI 모니터링</title>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body { max-width: 800px; margin: 20px auto; padding: 20px; }
+        .alert { color: red; font-weight: bold; }
+    </style>
 </head>
 <body>
-    <h1>💰 비트코인 RSI 차트</h1>
+    <h1>💰 비트코인 RSI 현황</h1>
     <div id="chart"></div>
-    
+    <div id="status"></div>
+
     <script>
-        // 차트 데이터 (실제로는 GitHub Actions에서 자동 생성)
-        const data = {
-            x: ['2024-03-01', '2024-03-02', '2024-03-03'],
-            y: [45, 67, 72],
-            type: 'scatter'
-        };
-        Plotly.newPlot('chart', [data], {title: 'RSI 추이'});
+        // 5분마다 차트 자동 갱신
+        function updateChart() {
+            fetch('https://didie111.github.io/rsi_chart.html')
+                .then(response => response.text())
+                .then(html => {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const plotlyDiv = doc.querySelector('.plotly-graph-div');
+                    document.getElementById('chart').innerHTML = plotlyDiv.innerHTML;
+                    
+                    const latestRSI = parseFloat(
+                        plotlyDiv.querySelector('.trace.scatter').__data__.y.slice(-1)
+                    document.getElementById('status').innerHTML = 
+                        `<p>최종 업데이트: ${new Date().toLocaleString()}</p>
+                         <p class="${latestRSI > 70 ? 'alert' : ''}">현재 RSI: ${latestRSI.toFixed(2)}</p>`;
+                });
+        }
+        
+        // 초기 실행 + 5분 간격 실행
+        updateChart();
+        setInterval(updateChart, 300000);
     </script>
 </body>
 </html>
