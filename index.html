@@ -1,15 +1,21 @@
-<!-- index.html 최소 필수 코드 -->
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <title>RSI 모니터링 시스템</title>
+    <title>실시간 RSI 모니터링</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
 <body>
-    <h1>🚀 실시간 RSI 차트</h1>
+    <h1>💰 비트코인 RSI 차트</h1>
     <div id="chart"></div>
+    
     <script>
-        // 차트 로딩 스크립트 추가 예정
+        // 차트 데이터 (실제로는 GitHub Actions에서 자동 생성)
+        const data = {
+            x: ['2024-03-01', '2024-03-02', '2024-03-03'],
+            y: [45, 67, 72],
+            type: 'scatter'
+        };
+        Plotly.newPlot('chart', [data], {title: 'RSI 추이'});
     </script>
 </body>
 </html>
