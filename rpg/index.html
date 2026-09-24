@@ -172,6 +172,8 @@ html, body {
 
 .hidden { display: none !important; }
 
+#game:focus, #game:focus-visible { outline: none; }
+
 </style>
 </head>
 <body>
@@ -659,6 +661,15 @@ Art.defs = function () {
 /* 공용 외곽선 색 */
 const OL = '#2e2135';
 
+/* hex 색을 밝게(f>1)/어둡게(f<1) */
+function shade(hex, f) {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex || '');
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const ch = i => Math.max(0, Math.min(255, Math.round(((n >> i) & 255) * f)));
+  return '#' + [ch(16), ch(8), ch(0)].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
 /* ---------------- 캐릭터 ---------------- */
 /* look: {job, weaponArt, weaponColor, hat, hatColor, top, topColor, bottom, bottomColor, shoes, shoesColor, cape, capeColor, glove, gloveColor} */
 Art.weapon = function (kind, color) {
@@ -727,15 +738,20 @@ Art.player = function (look) {
       <path d="M-14 -88 q 8 -8 16 -4" stroke="#fff" stroke-width="2" fill="none" opacity="0.4" stroke-linecap="round"/>
     </g>` : '';
 
+  const sleeve = fill => `<path d="M-4.8 -2 q 4.8 -2.4 9.6 0 l -0.7 16 q -4.1 2.2 -8.2 0 z" fill="${fill}"/>
+      <path d="M-4.5 13 q 4.5 2.2 9 0 l -0.4 5 q -4.1 2 -8.2 0 z" fill="${c.trim}" opacity="0.95"/>`;
+  const hand = `<g class="hand">
+        <circle cx="0" cy="23.5" r="5.6" fill="${gloveC}"/>
+        <path d="M-5.2 21.8 q 2.4 -2.6 5.4 -2.2" stroke="${OL}" stroke-width="1.1" fill="none" opacity="0.55"/>
+        <path d="M-3.4 26.6 q 3.4 1.8 6.8 -0.6" stroke="${OL}" stroke-width="1" fill="none" opacity="0.4"/>
+      </g>`;
+
   const wk = look.weaponArt || job.weapon;
   return `<g class="char" data-wpn="${wk}">
     <ellipse class="shadow" cx="0" cy="1" rx="18" ry="5.5" fill="#000" opacity="0.28" stroke="none"/>
     <g class="body" stroke="${OL}" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round">
       ${capeHTML}
-      <g class="armB" transform="rotate(0)">
-        <rect x="-4.4" y="-2" width="8.8" height="25" rx="4.4" fill="${c.armor2}"/>
-        <circle cx="0" cy="25" r="5.2" fill="${gloveC}"/>
-      </g>
+      <g class="armB" transform="rotate(0)">${sleeve(shade(c.armor2, 0.82))}${hand}</g>
       <g class="legL"><rect x="-5" y="0" width="10" height="19" rx="4.6" fill="${botC}"/>
         <path d="M-6.5 17 h 13 a3.4 3.4 0 0 1 3.4 3.4 v 4.6 h -17.4 v -4.6 a3.4 3.4 0 0 1 1 -3.4 z" fill="${shoeC}"/></g>
       <g class="legR"><rect x="-5" y="0" width="10" height="19" rx="4.6" fill="${botC}"/>
@@ -768,9 +784,9 @@ Art.player = function (look) {
         ${hatHTML}
       </g>
       <g class="armF" transform="rotate(0)">
-        <rect x="-4.4" y="-2" width="8.8" height="25" rx="4.4" fill="${topC}"/>
-        <circle cx="0" cy="25" r="5.2" fill="${gloveC}"/>
-        <g class="wpnMount" transform="translate(0,27)">${Art.weapon(wk, look.weaponColor)}</g>
+        ${sleeve(shade(topC, 0.84))}
+        <g class="wpnMount" transform="translate(0,24)">${Art.weapon(wk, look.weaponColor)}</g>
+        ${hand}
       </g>
     </g>
   </g>`;
@@ -778,9 +794,9 @@ Art.player = function (look) {
 
 /* 무기 종류별 기본 자세 (팔 각도 · 무기 보정 회전) */
 Art.basePose = function (kind) {
-  if (kind === 'bow') return { armF: -86, armB: -56, wpn: 86, wpnY: 22 };
-  if (kind === 'staff') return { armF: -14, armB: 12, wpn: 14, wpnY: 27 };
-  return { armF: 7, armB: -7, wpn: 0, wpnY: 27 };
+  if (kind === 'bow') return { armF: -86, armB: -56, wpn: 86, wpnY: 23 };
+  if (kind === 'staff') return { armF: -14, armB: 12, wpn: 14, wpnY: 26 };
+  return { armF: 7, armB: -7, wpn: 0, wpnY: 26 };
 };
 
 /* 파츠 위치 세팅(정적) - 생성 직후 1회 */
@@ -788,8 +804,8 @@ Art.layoutPlayer = function (g, kind) {
   const pose = Art.basePose(kind || g.getAttribute('data-wpn'));
   g.querySelector('.legL').setAttribute('transform', 'translate(-5,-25)');
   g.querySelector('.legR').setAttribute('transform', 'translate(5,-25)');
-  g.querySelector('.armB').setAttribute('transform', `translate(-11,-50) rotate(${pose.armB})`);
-  g.querySelector('.armF').setAttribute('transform', `translate(11,-50) rotate(${pose.armF})`);
+  g.querySelector('.armB').setAttribute('transform', `translate(-13,-50) rotate(${pose.armB})`);
+  g.querySelector('.armF').setAttribute('transform', `translate(13,-50) rotate(${pose.armF})`);
   const wm = g.querySelector('.wpnMount');
   if (wm) wm.setAttribute('transform', `translate(0,${pose.wpnY}) rotate(${pose.wpn})`);
 };
@@ -1593,8 +1609,8 @@ function animatePlayer(dt) {
   const squash = a.land > 0 ? Math.sin((a.land / 0.2) * Math.PI) * 0.16 : 0;
   pa.legL.setAttribute('transform', `translate(-5,-25) rotate(${r.legL.toFixed(1)})`);
   pa.legR.setAttribute('transform', `translate(5,-25) rotate(${(-r.legL).toFixed(1)})`);
-  pa.armF.setAttribute('transform', `translate(11,-50) rotate(${r.armF.toFixed(1)})`);
-  pa.armB.setAttribute('transform', `translate(-11,-50) rotate(${r.armB.toFixed(1)})`);
+  pa.armF.setAttribute('transform', `translate(13,-50) rotate(${r.armF.toFixed(1)})`);
+  pa.armB.setAttribute('transform', `translate(-13,-50) rotate(${r.armB.toFixed(1)})`);
   if (pa.torso) pa.torso.setAttribute('transform', `rotate(${(r.torso * 0.5).toFixed(1)},0,-26)`);
   if (pa.head) pa.head.setAttribute('transform', `rotate(${(r.torso * 0.35).toFixed(1)},0,-56) translate(0,${(r.bob * 0.4).toFixed(2)})`);
   if (pa.wpnMount) pa.wpnMount.setAttribute('transform', `translate(0,${pose.wpnY}) rotate(${r.wpn.toFixed(1)})`);
@@ -2761,6 +2777,7 @@ function startGame(name, job) {
   UI.drawPortrait();
   UI.refreshHud(); UI.renderInv(); UI.renderQuests(); UI.renderSkills();
   S.running = true;
+  focusGame();
   UI.toast('오른쪽 포탈(↑)로 사냥터에 갈 수 있어요!');
   last = performance.now();
   requestAnimationFrame(frame);
@@ -2843,7 +2860,21 @@ function frame(ts) {
 }
 
 /* ---------------- 전역 키 ---------------- */
+function focusGame() {
+  const g = $('game');
+  if (!g) return;
+  g.setAttribute('tabindex', '-1');
+  try { window.focus(); } catch (e) { /* noop */ }
+  g.focus({ preventScroll: true });
+  if (document.activeElement && document.activeElement.blur &&
+      document.activeElement.tagName === 'BUTTON') document.activeElement.blur();
+  g.focus({ preventScroll: true });
+}
+
 function initGlobalKeys() {
+  window.addEventListener('pointerdown', e => {
+    if (e.target.tagName !== 'INPUT') focusGame();
+  });
   window.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT') return;
     if (!S.running) return;
