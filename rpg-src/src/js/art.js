@@ -137,7 +137,7 @@ Art.weapon = function (kind, color) {
     </g>`;
   }
   if (kind === 'bow') {
-    return `<g class="wpn" stroke-linecap="round">
+    return `<g class="wpn" stroke-linecap="round"><g transform="translate(-20,0)">
       <path d="M2 -36 q 22 13 22 36 q 0 23 -22 36" fill="none" stroke="${OL}" stroke-width="8.6"/>
       <path d="M2 -36 q 22 13 22 36 q 0 23 -22 36" fill="none" stroke="${color}" stroke-width="5.4"/>
       <path d="M2 -36 q 22 13 22 36 q 0 23 -22 36" fill="none" stroke="#ffffff" stroke-width="1.5" opacity="0.4"/>
@@ -150,7 +150,7 @@ Art.weapon = function (kind, color) {
         <path d="M36 0 l -8 -5.5 l 0 11 z" fill="#eef1ff" stroke="${OL}" stroke-width="1"/>
         <path d="M2 0 l 8 -5.5 l 0 11 z" fill="#ff8f6b" stroke="${OL}" stroke-width="1"/>
       </g>
-    </g>`;
+    </g></g>`;
   }
   return `<g class="wpn" stroke="${OL}" stroke-width="1.8" stroke-linejoin="round">
     <path d="M-4 -8 L -4 -39 q 0 -6.5 4 -11 q 4 4.5 4 11 L 4 -8 z" fill="url(#steelG)"/>
