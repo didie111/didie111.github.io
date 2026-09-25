@@ -1409,6 +1409,7 @@ function attachPlayerNode() {
   nm.textContent = p.name;
   nm.setAttribute('style', 'paint-order:stroke;stroke:#000;stroke-width:4px;');
   g.appendChild(nm);
+  p.parts.nameTag = nm;
 }
 function playerLook(p) {
   const e = p.equipped;
@@ -1632,6 +1633,7 @@ function animatePlayer(dt) {
   if (a.hurt > 0) { a.hurt -= dt; p.node.style.opacity = (Math.sin(S.t * 40) > 0 ? 0.35 : 1); }
   else p.node.style.opacity = 1;
   p.node.setAttribute('transform', `translate(${p.x.toFixed(1)},${p.y.toFixed(1)}) scale(${p.facing},1)`);
+  if (p.parts.nameTag) p.parts.nameTag.setAttribute('transform', `scale(${p.facing},1)`);
 }
 
 function animateMonster(mon, dt) {
