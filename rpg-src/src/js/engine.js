@@ -472,7 +472,11 @@ function initInput() {
     if (!S.keys[c]) S.pressed[c] = true;
     S.keys[c] = true;
   });
-  window.addEventListener('keyup', e => { S.keys[codeOf(e)] = false; });
+  window.addEventListener('keyup', e => {
+    const c = codeOf(e);
+    if (c === 'AltLeft' || c === 'AltRight' || c === 'F10') e.preventDefault();
+    S.keys[c] = false;
+  });
   window.addEventListener('blur', () => { S.keys = {}; });
 }
 function key(c) { return !!S.keys[c]; }
