@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>메이플 스타일 RPG - SVG Adventure</title>
+<meta name="author" content="didie111">
+<meta name="copyright" content="© 2025 didie111. All rights reserved.">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="game">
+  <svg id="stage" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid meet">
+    <defs id="defs"></defs>
+    <g id="skyLayer"></g>
+    <g id="farLayer"></g>
+    <g id="nearLayer"></g>
+    <g id="mapLayer"></g>
+    <g id="itemLayer"></g>
+    <g id="entityLayer"></g>
+    <g id="fxLayer"></g>
+    <g id="frontLayer"></g>
+  </svg>
+
+  <!-- ================= HUD ================= -->
+  <div id="hud">
+    <div id="topLeft">
+      <div class="charBox">
+        <svg id="portrait" viewBox="0 0 60 60"></svg>
+        <div class="charInfo">
+          <div class="nameRow"><span id="lvBadge">Lv.1</span><span id="charName">모험가</span><span id="jobName">초보자</span></div>
+          <div class="bar hpBar"><div class="fill" id="hpFill"></div><span class="barText" id="hpText">100/100</span></div>
+          <div class="bar mpBar"><div class="fill" id="mpFill"></div><span class="barText" id="mpText">50/50</span></div>
+          <div class="bar expBar"><div class="fill" id="expFill"></div><span class="barText" id="expText">0.00%</span></div>
+        </div>
+      </div>
+      <div id="mesoBox"><span class="coin">●</span><span id="mesoText">0</span> 메소</div>
+    </div>
+
+    <div id="minimapBox">
+      <div class="mmTitle"><span id="mapName">구름 언덕</span><button class="mmBtn" id="mmToggle">─</button></div>
+      <svg id="minimap" viewBox="0 0 220 120"></svg>
+    </div>
+
+    <div id="skillBar"></div>
+    <div id="keyHint">이동 ←→ · 점프 Alt/Space · 아래점프 ↓+Alt · 공격 Z · 스킬 X C V · 줍기 A · 포탈 ↑ · 인벤 I · 스탯 S · 장비 E · 퀘스트 Q · 도움말 F1</div>
+
+    <div id="toastArea"></div>
+    <div id="bossBar" class="hidden">
+      <div class="bossName">발록</div>
+      <div class="bossHpOuter"><div class="bossHpFill" id="bossHpFill"></div><span id="bossHpText"></span></div>
+    </div>
+    <div id="levelUpFx" class="hidden">LEVEL UP!</div>
+  </div>
+
+  <!-- ================= WINDOWS ================= -->
+  <div class="win hidden" id="winInv" style="left:640px; top:120px">
+    <div class="winBar"><span>인벤토리</span><button class="x" data-close="winInv">✕</button></div>
+    <div class="tabs">
+      <button class="tab active" data-tab="equip">장비</button>
+      <button class="tab" data-tab="use">소비</button>
+      <button class="tab" data-tab="etc">기타</button>
+    </div>
+    <div class="invGrid" id="invGrid"></div>
+    <div class="winFoot"><span id="invMeso">0 메소</span><button id="btnSort">정렬</button></div>
+  </div>
+
+  <div class="win hidden" id="winEquip" style="left:330px; top:120px">
+    <div class="winBar"><span>장비창</span><button class="x" data-close="winEquip">✕</button></div>
+    <div class="equipBody">
+      <div class="equipSlots" id="equipSlots"></div>
+      <div class="equipPreview"><svg id="previewSvg" viewBox="0 0 120 170"></svg></div>
+    </div>
+    <div class="winFoot"><span id="equipSummary"></span></div>
+  </div>
+
+  <div class="win hidden" id="winStat" style="left:60px; top:120px">
+    <div class="winBar"><span>스탯</span><button class="x" data-close="winStat">✕</button></div>
+    <div class="statBody" id="statBody"></div>
+  </div>
+
+  <div class="win hidden" id="winSkill" style="left:60px; top:430px">
+    <div class="winBar"><span>스킬</span><button class="x" data-close="winSkill">✕</button></div>
+    <div class="skillBody" id="skillBody"></div>
+  </div>
+
+  <div class="win hidden" id="winQuest" style="left:660px; top:430px">
+    <div class="winBar"><span>퀘스트</span><button class="x" data-close="winQuest">✕</button></div>
+    <div class="questBody" id="questBody"></div>
+  </div>
+
+  <div class="win hidden" id="winHelp" style="left:340px; top:90px">
+    <div class="winBar"><span>도움말</span><button class="x" data-close="winHelp">✕</button></div>
+    <div class="helpBody">
+      <table>
+        <tr><td>← →</td><td>이동</td></tr>
+        <tr><td>Alt / Space</td><td>점프 (공중에서 한 번 더 = 더블점프)</td></tr>
+        <tr><td>↓ + Alt</td><td>아래 발판으로 내려가기</td></tr>
+        <tr><td>↑</td><td>포탈 이동 / 사다리 오르기</td></tr>
+        <tr><td>Z</td><td>기본 공격</td></tr>
+        <tr><td>X / C / V</td><td>스킬 (파워 스트라이크 / 썬더 브레이크 / 힐)</td></tr>
+        <tr><td>A</td><td>아이템 줍기</td></tr>
+        <tr><td>1 ~ 4</td><td>퀵슬롯 물약 사용</td></tr>
+        <tr><td>I / E / S / K / Q</td><td>인벤토리 / 장비 / 스탯 / 스킬 / 퀘스트</td></tr>
+        <tr><td>F5 (게임 내 버튼)</td><td>저장 · 불러오기</td></tr>
+      </table>
+      <p>몬스터를 사냥해 경험치·메소·장비를 모으고, 각 맵 끝의 포탈을 통해 보스 <b>발록</b>에게 도전하세요!</p>
+    </div>
+  </div>
+
+  <div id="itemTooltip" class="hidden"></div>
+
+  <div id="sysBtns">
+    <button id="btnSave">저장</button>
+    <button id="btnLoad">불러오기</button>
+    <button id="btnReset">초기화</button>
+    <button id="btnHelp">도움말</button>
+  </div>
+
+  <div id="deathScreen" class="hidden">
+    <div class="deathBox">
+      <h2>쓰러졌습니다...</h2>
+      <p>경험치의 일부를 잃고 마을로 돌아갑니다.</p>
+      <button id="btnRevive">부활하기</button>
+    </div>
+  </div>
+
+  <div id="startScreen">
+    <div class="startBox">
+      <h1>SVG MAPLE ADVENTURE</h1>
+      <p class="sub">모든 그래픽이 SVG로 그려진 횡스크롤 RPG</p>
+      <p class="sub" id="verTag">v3 · 그래픽 리뉴얼 (2025-09-24)</p>
+      <div class="nameInput"><label>캐릭터 이름</label><input id="nameField" maxlength="10" value="모험가"></div>
+      <div class="jobPick" id="jobPick"></div>
+      <button id="btnStart">모험 시작</button>
+      <p class="tip">Tip: 저장된 데이터가 있으면 '불러오기'로 이어서 할 수 있어요.</p>
+      <p class="tip">© 2025 didie111 · 무단 복제 및 재배포 금지</p>
+    </div>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/art.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
