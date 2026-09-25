@@ -2872,9 +2872,9 @@ function focusGame() {
 }
 
 function initGlobalKeys() {
-  window.addEventListener('pointerdown', e => {
-    if (e.target.tagName !== 'INPUT') focusGame();
-  });
+  const refocus = e => { if (S.running && e.target.tagName !== 'INPUT') focusGame(); };
+  window.addEventListener('pointerdown', refocus);
+  window.addEventListener('click', refocus);
   window.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT') return;
     if (!S.running) return;
