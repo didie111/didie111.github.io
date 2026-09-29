@@ -10,6 +10,7 @@ const S = {
   boss: null,
   killCount: {},
   msgQueue: [],
+  mapState: {}, respawns: [],
 };
 
 const LAYERS = {};
@@ -106,10 +107,53 @@ function refreshStats(p, fill) {
 }
 
 /* ---------------- 맵 로딩 ---------------- */
+function saveMapState() {
+  if (!S.map) return;
+  S.mapState[S.mapId] = {
+    monsters: S.monsters.filter(m => !m.dead).map(m => ({
+      type: m.type, x: m.x, y: m.y, hp: m.hp, facing: m.facing, home: m.home, phase: m.phase,
+    })),
+    drops: S.drops.map(d => ({
+      meso: d.meso, equip: d.equip, itemId: d.itemId, x: d.x, y: d.y, life: d.life,
+    })),
+    respawns: S.respawns.slice(),
+  };
+}
+function restoreMapState(st) {
+  st.monsters.forEach(sm => {
+    const mon = spawnMonster(sm.type, sm.x, sm.y);
+    mon.hp = sm.hp; mon.facing = sm.facing; mon.home = sm.home; mon.phase = sm.phase || 1;
+    if (mon.boss) UI.updateBossBar(mon);
+  });
+  st.drops.forEach(sd => {
+    const payload = sd.meso ? { meso: sd.meso } : sd.equip ? { equip: sd.equip } : { itemId: sd.itemId };
+    spawnDrop(payload, sd.x, sd.y);
+    const d = S.drops[S.drops.length - 1];
+    d.vx = 0; d.vy = 0; d.landed = true; d.life = sd.life;
+  });
+  S.respawns = st.respawns.slice();
+}
+function queueRespawn(type, boss, delayMs) {
+  S.respawns.push({ type, boss, at: Date.now() + delayMs });
+}
+function processRespawns() {
+  if (!S.respawns.length) return;
+  const now = Date.now();
+  for (let i = S.respawns.length - 1; i >= 0; i--) {
+    const r = S.respawns[i];
+    if (r.at > now) continue;
+    S.respawns.splice(i, 1);
+    if (r.boss) spawnMonster(r.type, S.map.w / 2, S.map.groundY);
+    else spawnMonster(r.type);
+  }
+}
+
 function loadMap(id, spawnX) {
+  saveMapState();
   const m = MAPS[id];
   S.map = m; S.mapId = id;
-  S.monsters = []; S.drops = []; S.projs = []; S.fx = []; S.npcs = []; S.portals = []; S.boss = null;
+  S.monsters = []; S.drops = []; S.projs = []; S.fx = []; S.npcs = []; S.portals = []; S.boss = null; S.respawns = [];
+  UI.hideBossBar();
   [LAYERS.skyLayer, LAYERS.farLayer, LAYERS.nearLayer, LAYERS.mapLayer, LAYERS.itemLayer, LAYERS.entityLayer, LAYERS.fxLayer, LAYERS.frontLayer].forEach(clearLayer);
 
   const bg = Art.background(m.theme, m.w);
@@ -146,9 +190,15 @@ function loadMap(id, spawnX) {
     S.npcs.push({ ...n, node: g, t: Math.random() * 6 });
   });
 
-  // 몬스터
-  (m.spawns || []).forEach(sp => { for (let i = 0; i < sp.n; i++) spawnMonster(sp.type); });
-  if (m.boss) spawnMonster(m.boss, m.w / 2, m.groundY);
+  // 몬스터 (이전에 방문한 맵이면 떠날 때 상태 복원)
+  const st = S.mapState[id];
+  if (st) {
+    restoreMapState(st);
+    processRespawns();
+  } else {
+    (m.spawns || []).forEach(sp => { for (let i = 0; i < sp.n; i++) spawnMonster(sp.type); });
+    if (m.boss) spawnMonster(m.boss, m.w / 2, m.groundY);
+  }
 
   // 플레이어 노드 재생성
   attachPlayerNode();
@@ -291,6 +341,61 @@ const easeOutCubic = k => 1 - Math.pow(1 - k, 3);
 const easeInQuad = k => k * k;
 const easeInOutSine = k => 0.5 - Math.cos(Math.PI * k) / 2;
 
+/* 검 공격 키프레임 (armF: 앞팔 각도 0=아래 -90=앞 -180=위, wpn: 손 기준 검 회전, 날 방향 = armF+wpn) */
+const L = (a, b, t) => a + (b - a) * t;
+const seg = (k, s0, s1) => clamp((k - s0) / (s1 - s0), 0, 1);
+const easeOutQuart = k => 1 - Math.pow(1 - k, 4);
+function swordKeyframes(id, k, pose) {
+  const o = { armF: pose.armF, armB: pose.armB, wpn: pose.wpn, torso: 0, leg: 0, bob: 0 };
+  const set = (armF, armB, wpn, torso, leg, bob) => { o.armF = armF; o.armB = armB; o.wpn = wpn; o.torso = torso; o.leg = leg; o.bob = bob; };
+  if (id === 'power') {
+    if (k < 0.42) {                 // 크게 들어올리기 + 웅쪼림
+      const e = easeOutCubic(seg(k, 0, 0.42));
+      set(L(pose.armF, -178, e), L(pose.armB, -55, e), L(pose.wpn, -80, e), -18 * e, 12 * e, 5 * e);
+    } else if (k < 0.6) {           // 내리치기 (가속)
+      const e = easeInQuad(seg(k, 0.42, 0.6));
+      set(L(-178, -8, e), L(-55, 26, e), L(-80, -170, e), L(-18, 20, e), L(12, 30, e), L(5, 4, e));
+    } else if (k < 0.82) {          // 충격 유지 (진동)
+      const t = seg(k, 0.6, 0.82);
+      set(-8, 26, -170, 20 + Math.sin(t * 40) * 1.5 * (1 - t), 30, 4);
+    } else {                        // 복귀
+      const e = easeInOutSine(seg(k, 0.82, 1));
+      set(L(-8, pose.armF, e), L(26, pose.armB, e), L(-170, pose.wpn, e), 20 * (1 - e), 30 * (1 - e), 4 * (1 - e));
+    }
+  } else if (id === 'blast') {      // 머리 위에서 크게 휘두르는 광역 베기
+    if (k < 0.3) {
+      const e = easeOutCubic(seg(k, 0, 0.3));
+      set(L(pose.armF, -215, e), L(pose.armB, -60, e), L(pose.wpn, 180, e), -22 * e, 14 * e, 6 * e);
+    } else if (k < 0.55) {
+      const e = easeOutQuart(seg(k, 0.3, 0.55));
+      set(L(-215, -50, e), L(-60, 30, e), 180, L(-22, 18, e), L(14, 32, e), L(6, 2, e));
+    } else if (k < 0.72) {
+      const t = seg(k, 0.55, 0.72);
+      set(-50 + t * 8, 30, 180, 18 - t * 4, 32, 2);
+    } else {
+      const e = easeInOutSine(seg(k, 0.72, 1));
+      set(L(-42, pose.armF, e), L(30, pose.armB, e), L(180, pose.wpn, e), 14 * (1 - e), 32 * (1 - e), 2 * (1 - e));
+    }
+  } else if (id === 'ironBody') {   // 검을 하늘로 지음
+    const up = k < 0.35 ? easeOutCubic(seg(k, 0, 0.35)) : k < 0.7 ? 1 : 1 - easeInOutSine(seg(k, 0.7, 1));
+    set(L(pose.armF, -172, up), L(pose.armB, -20, up), L(pose.wpn, 180, up), -6 * up, 0, 0);
+  } else {                          // 기본 베기: 어깨 뒤로 들어 → 사선 내려베기 → 복귀
+    if (k < 0.3) {
+      const e = easeOutCubic(seg(k, 0, 0.3));
+      set(L(pose.armF, -160, e), L(pose.armB, -38, e), L(pose.wpn, -85, e), -12 * e, 10 * e, 0);
+    } else if (k < 0.55) {
+      const e = easeOutQuart(seg(k, 0.3, 0.55));
+      set(L(-160, -22, e), L(-38, 20, e), L(-85, -172, e), L(-12, 14, e), L(10, 24, e), 3 * e);
+    } else if (k < 0.7) {
+      set(-22, 20, -172, 14, 24, 3);
+    } else {
+      const e = easeInOutSine(seg(k, 0.7, 1));
+      set(L(-22, pose.armF, e), L(20, pose.armB, e), L(-172, pose.wpn, e), 14 * (1 - e), 24 * (1 - e), 3 * (1 - e));
+    }
+  }
+  return o;
+}
+
 function animatePlayer(dt) {
   const p = S.player, a = p.anim, pa = p.parts;
   a.t += dt;
@@ -357,20 +462,15 @@ function animatePlayer(dt) {
         armF = -136 + r * 62; armB = pose.armB - 20 + r * 24; torso = -7 + r * 13; orbS = 1.55 - r * 0.55;
       }
       wpnRot = -armF * 0.55;
-    } else {                                 // 검 베기
-      if (k < 0.3) {                        // 윈드업
-        const d = easeOutCubic(k / 0.3);
-        armF = pose.armF - d * 158; torso = -11 * d; wpnRot = -34 * d;
-      } else {                              // 내려베기
-        const r = easeOutCubic((k - 0.3) / 0.7);
-        armF = -151 + r * 212; torso = -11 + r * 22; wpnRot = -34 + r * 52;
-      }
-      armB = pose.armB + (armF + 40) * -0.18;
+    } else {                                 // 검 (스킬별 키프레임)
+      const sw = swordKeyframes(a.atkId, k, pose);
+      armF = sw.armF; armB = sw.armB; wpnRot = sw.wpn; torso = sw.torso;
+      if (p.onGround) { legA = sw.leg; bob = sw.bob; }
     }
   }
 
   // 부드러운 보간 (프레임 독립)
-  const rate = attacking ? 34 : 16;
+  const rate = attacking ? (p.wpnKind === 'sword' ? 60 : 34) : 16;
   const s = 1 - Math.exp(-rate * dt);
   const r = p.rig;
   r.armF += (armF - r.armF) * s;
@@ -535,10 +635,24 @@ function spawnFx(kind, x, y, opt) {
   switch (kind) {
     case 'dust': html = `<ellipse cx="0" cy="-4" rx="16" ry="6" fill="#fff" opacity="0.5"/>`; life = 0.3; break;
     case 'dblJump': html = `<circle cx="0" cy="0" r="26" fill="none" stroke="#bfe6ff" stroke-width="4" opacity="0.85"/>`; life = 0.35; break;
-    case 'slash': html = `<path d="M-10 -40 q 60 20 6 56" fill="none" stroke="#fff" stroke-width="7" opacity="0.9" stroke-linecap="round"/>
-        <path d="M-6 -34 q 46 18 4 44" fill="none" stroke="#ffe08a" stroke-width="3" opacity="0.9" stroke-linecap="round"/>`; life = 0.22; break;
-    case 'power': html = `<g><path d="M-20 -50 q 90 30 10 74" fill="none" stroke="#ffb35c" stroke-width="12" opacity="0.9" stroke-linecap="round"/>
-        <path d="M-14 -44 q 70 26 8 58" fill="none" stroke="#fff" stroke-width="5" opacity="0.95" stroke-linecap="round"/></g>`; life = 0.3; break;
+    case 'slash': html = `<g>
+        <path d="M-26 -66 A 70 70 0 0 1 44 34 L 30 26 A 56 56 0 0 0 -18 -52 Z" fill="#fff" opacity="0.85"/>
+        <path d="M-22 -60 A 64 64 0 0 1 38 30" fill="none" stroke="#ffe08a" stroke-width="3" opacity="0.9" stroke-linecap="round"/>
+        <path d="M-30 -70 A 76 76 0 0 1 48 38" fill="none" stroke="#fff" stroke-width="2" opacity="0.5" stroke-linecap="round"/></g>`; life = 0.2; break;
+    case 'power': html = `<g>
+        <path d="M-30 -84 A 92 92 0 0 1 70 46 L 50 36 A 72 72 0 0 0 -20 -66 Z" fill="#ffb35c" opacity="0.9"/>
+        <path d="M-26 -76 A 84 84 0 0 1 62 40 L 50 34 A 70 70 0 0 0 -20 -64 Z" fill="#fff" opacity="0.9"/>
+        <path d="M-34 -92 A 100 100 0 0 1 78 52" fill="none" stroke="#ffd36b" stroke-width="3" opacity="0.8" stroke-linecap="round"/></g>`; life = 0.3; break;
+    case 'shock': html = `<g>
+        <path d="M-70 0 A 70 26 0 0 1 70 0" fill="none" stroke="#ffd36b" stroke-width="6" opacity="0.9" stroke-linecap="round"/>
+        <path d="M-46 0 A 46 16 0 0 1 46 0" fill="none" stroke="#fff" stroke-width="4" opacity="0.9"/>
+        <circle cx="0" cy="-6" r="30" fill="url(#glowY)" opacity="0.9"/>
+        <path d="M-18 -4 l -8 -22 M0 -8 l 0 -28 M18 -4 l 8 -22" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity="0.8"/></g>`; life = 0.36; break;
+    case 'spin': html = `<g>
+        <path d="M-92 0 A 92 34 0 0 1 92 0 A 92 34 0 0 1 -92 0 Z" fill="none" stroke="#ffb35c" stroke-width="12" opacity="0.8"/>
+        <path d="M-84 0 A 84 30 0 0 1 84 0 A 84 30 0 0 1 -84 0 Z" fill="none" stroke="#fff" stroke-width="4" opacity="0.9"/>
+        <path d="M-60 -78 A 100 100 0 0 1 100 -20" fill="none" stroke="#fff" stroke-width="7" opacity="0.8" stroke-linecap="round"/>
+        <path d="M60 78 A 100 100 0 0 1 -100 20" fill="none" stroke="#fff" stroke-width="7" opacity="0.8" stroke-linecap="round"/></g>`; life = 0.34; break;
     case 'thunder': html = `<g><path d="M6 -520 l -18 340 h 26 l -14 190 l 40 -250 h -26 z" fill="#ffe14d" opacity="0.95"/>
         <path d="M6 -520 l -10 340 h 14 l -8 180" fill="none" stroke="#fff" stroke-width="6" opacity="0.9"/>
         <circle cx="0" cy="0" r="60" fill="url(#glowY)"/></g>`; life = 0.32; break;
@@ -600,6 +714,13 @@ function updateFx(dt) {
         f.node.setAttribute('transform', `translate(${f.x},${f.y}) scale(${(0.5 + k * 0.9) * (f.flip || 1)},${0.5 + k * 0.9}) rotate(${k * 180})`);
       } else if (f.kind === 'buff') {
         f.node.setAttribute('transform', `translate(${f.x},${f.y}) scale(${1.3 - k * 0.5})`);
+      } else if (f.kind === 'slash' || f.kind === 'power') {
+        const g = 0.9 + easeOutCubic(k) * 0.3;
+        f.node.setAttribute('transform', `translate(${f.x + f.flip * k * 18},${f.y}) scale(${g * f.flip},${g})`);
+      } else if (f.kind === 'shock') {
+        f.node.setAttribute('transform', `translate(${f.x},${f.y}) scale(${(0.6 + k * 0.9) * f.flip},${0.6 + k * 0.6})`);
+      } else if (f.kind === 'spin') {
+        f.node.setAttribute('transform', `translate(${f.x},${f.y}) scale(${(0.7 + k * 0.6) * f.flip},${0.7 + k * 0.6}) rotate(${k * 140})`);
       } else if (f.kind === 'boom' || f.kind === 'dblJump' || f.kind === 'levelup') {
         f.node.setAttribute('transform', `translate(${f.x},${f.y}) scale(${(1 + k * 1.2) * (f.flip || 1)},${1 + k * 1.2})`);
       }

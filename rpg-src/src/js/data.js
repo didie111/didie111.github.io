@@ -34,11 +34,11 @@ function expNeeded(lv) { return Math.floor(22 * Math.pow(lv, 1.72) + 18 * lv + 2
 /* ---------------- 스킬 ---------------- */
 const SKILL_SETS = {
   warrior: [
-    { id: 'slash', name: '기본 베기', key: 'Z', kind: 'melee', mp: 0, cd: 0.42, dmg: 1.0, range: 82, anim: 0.34,
+    { id: 'slash', name: '기본 베기', key: 'Z', kind: 'melee', mp: 0, cd: 0.42, dmg: 1.0, range: 82, anim: 0.36, hitAt: 0.42,
       desc: '검으로 적을 벤다. 소모 없음.', icon: 'sword' },
-    { id: 'power', name: '파워 스트라이크', key: 'X', kind: 'melee', mp: 12, cd: 1.4, dmg: 2.6, range: 108, anim: 0.42, fx: 'power',
+    { id: 'power', name: '파워 스트라이크', key: 'X', kind: 'melee', mp: 12, cd: 1.4, dmg: 2.6, range: 108, anim: 0.5, hitAt: 0.56, fx: 'power',
       desc: 'MP 12 · 혼신의 일격 (260%)', icon: 'power' },
-    { id: 'blast', name: '슈러우 블래스트', key: 'C', kind: 'melee', mp: 22, cd: 3.2, dmg: 1.6, hits: 8, range: 150, both: true, anim: 0.46, fx: 'power',
+    { id: 'blast', name: '슈러우 블래스트', key: 'C', kind: 'melee', mp: 22, cd: 3.2, dmg: 1.6, hits: 8, range: 150, both: true, anim: 0.56, hitAt: 0.46, fx: 'spin',
       desc: 'MP 22 · 앞뒤 적 최대 8체를 한꺼번에 베기 (160%)', icon: 'blast' },
     { id: 'ironBody', name: '아이언 바디', key: 'V', kind: 'buff', mp: 18, cd: 14, buff: { def: 1.6, atk: 1.15, dur: 10 }, anim: 0.4,
       desc: 'MP 18 · 10초간 방어력 60% · 공격력 15% 증가', icon: 'shield' },

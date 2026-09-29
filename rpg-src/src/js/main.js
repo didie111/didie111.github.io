@@ -59,6 +59,7 @@ function initStartScreen() {
 
 function startGame(name, job) {
   S.player = createPlayer(name, job);
+  S.map = null; S.mapState = {}; S.respawns = []; S.killCount = {};
   refreshStats(S.player, true);
   $('startScreen').classList.add('hidden');
   UI.buildSkillBar();
@@ -96,6 +97,7 @@ function loadGame() {
     S.player = createPlayer(d.p.name, d.p.job);
     Object.assign(S.player, d.p);
     S.killCount = d.killCount || {};
+    S.map = null; S.mapState = {}; S.respawns = [];
     refreshStats(S.player);
     $('startScreen').classList.add('hidden');
     UI.buildSkillBar();
