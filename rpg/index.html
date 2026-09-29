@@ -1380,6 +1380,7 @@ function loadMap(id, spawnX) {
   const m = MAPS[id];
   S.map = m; S.mapId = id;
   S.monsters = []; S.drops = []; S.projs = []; S.fx = []; S.npcs = []; S.portals = []; S.boss = null; S.respawns = [];
+  UI.hideBossBar();
   [LAYERS.skyLayer, LAYERS.farLayer, LAYERS.nearLayer, LAYERS.mapLayer, LAYERS.itemLayer, LAYERS.entityLayer, LAYERS.fxLayer, LAYERS.frontLayer].forEach(clearLayer);
 
   const bg = Art.background(m.theme, m.w);
