@@ -1576,18 +1576,18 @@ function swordKeyframes(id, k, pose) {
   const o = { armF: pose.armF, armB: pose.armB, wpn: pose.wpn, torso: 0, leg: 0, bob: 0 };
   const set = (armF, armB, wpn, torso, leg, bob) => { o.armF = armF; o.armB = armB; o.wpn = wpn; o.torso = torso; o.leg = leg; o.bob = bob; };
   if (id === 'power') {
-    if (k < 0.42) {                 // 크게 들어올리기 + 웅쪼림
+    if (k < 0.42) {                 // 검을 머리 뒤로 크게 들어올리기 + 웅쪼림
       const e = easeOutCubic(seg(k, 0, 0.42));
-      set(L(pose.armF, -178, e), L(pose.armB, -55, e), L(pose.wpn, -80, e), -18 * e, 12 * e, 5 * e);
-    } else if (k < 0.6) {           // 내리치기 (가속)
+      set(L(pose.armF, -235, e), L(pose.armB, -70, e), L(pose.wpn, 180, e), -22 * e, 14 * e, 6 * e);
+    } else if (k < 0.6) {           // 머리 위에서 앞으로 크게 휘두르기 (가속)
       const e = easeInQuad(seg(k, 0.42, 0.6));
-      set(L(-178, -8, e), L(-55, 26, e), L(-80, -170, e), L(-18, 20, e), L(12, 30, e), L(5, 4, e));
+      set(L(-235, -38, e), L(-70, 34, e), 180, L(-22, 22, e), L(14, 34, e), L(6, 3, e));
     } else if (k < 0.82) {          // 충격 유지 (진동)
       const t = seg(k, 0.6, 0.82);
-      set(-8, 26, -170, 20 + Math.sin(t * 40) * 1.5 * (1 - t), 30, 4);
+      set(-38 + t * 4, 34, 180, 22 + Math.sin(t * 40) * 1.5 * (1 - t), 34, 3);
     } else {                        // 복귀
       const e = easeInOutSine(seg(k, 0.82, 1));
-      set(L(-8, pose.armF, e), L(26, pose.armB, e), L(-170, pose.wpn, e), 20 * (1 - e), 30 * (1 - e), 4 * (1 - e));
+      set(L(-34, pose.armF, e), L(34, pose.armB, e), L(180, pose.wpn, e), 22 * (1 - e), 34 * (1 - e), 3 * (1 - e));
     }
   } else if (id === 'blast') {      // 머리 위에서 크게 휘두르는 광역 베기
     if (k < 0.3) {
@@ -1606,18 +1606,19 @@ function swordKeyframes(id, k, pose) {
   } else if (id === 'ironBody') {   // 검을 하늘로 지음
     const up = k < 0.35 ? easeOutCubic(seg(k, 0, 0.35)) : k < 0.7 ? 1 : 1 - easeInOutSine(seg(k, 0.7, 1));
     set(L(pose.armF, -172, up), L(pose.armB, -20, up), L(pose.wpn, 180, up), -6 * up, 0, 0);
-  } else {                          // 기본 베기: 어깨 뒤로 들어 → 사선 내려베기 → 복귀
+  } else {                          // 기본 베기: 어깨 위로 들어 → 앞으로 호를 그리며 휘두르기 → 복귀
     if (k < 0.3) {
       const e = easeOutCubic(seg(k, 0, 0.3));
-      set(L(pose.armF, -160, e), L(pose.armB, -38, e), L(pose.wpn, -85, e), -12 * e, 10 * e, 0);
+      set(L(pose.armF, -200, e), L(pose.armB, -45, e), L(pose.wpn, 180, e), -14 * e, 10 * e, 2 * e);
     } else if (k < 0.55) {
       const e = easeOutQuart(seg(k, 0.3, 0.55));
-      set(L(-160, -22, e), L(-38, 20, e), L(-85, -172, e), L(-12, 14, e), L(10, 24, e), 3 * e);
+      set(L(-200, -62, e), L(-45, 24, e), 180, L(-14, 14, e), L(10, 26, e), L(2, 3, e));
     } else if (k < 0.7) {
-      set(-22, 20, -172, 14, 24, 3);
+      const t = seg(k, 0.55, 0.7);
+      set(-62 + t * 6, 24, 180, 14, 26, 3);
     } else {
       const e = easeInOutSine(seg(k, 0.7, 1));
-      set(L(-22, pose.armF, e), L(20, pose.armB, e), L(-172, pose.wpn, e), 14 * (1 - e), 24 * (1 - e), 3 * (1 - e));
+      set(L(-56, pose.armF, e), L(24, pose.armB, e), L(180, pose.wpn, e), 14 * (1 - e), 26 * (1 - e), 3 * (1 - e));
     }
   }
   return o;
