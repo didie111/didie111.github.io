@@ -15,6 +15,7 @@ function useSkill(id) {
   p.cds[id] = sk.cd;
   p.anim.atk = sk.anim || 0.34;
   p.anim.atkDur = sk.anim || 0.34;
+  p.anim.atkId = sk.id;
 
   switch (sk.kind) {
     case 'heal': castHeal(p, sk); break;
@@ -30,11 +31,17 @@ function useSkill(id) {
 /* ---------- 전사: 근접 ---------- */
 function castMelee(p, sk) {
   SFX.swing();
-  const delay = (sk.anim || 0.34) * 0.32;
+  const delay = (sk.anim || 0.34) * (sk.hitAt || 0.32);
   setTimeout(() => {
     if (p.dead) return;
-    spawnFx(sk.fx || 'slash', p.x + p.facing * 26, p.y - 44, { flip: p.facing });
-    if (sk.both) spawnFx(sk.fx || 'slash', p.x - p.facing * 26, p.y - 44, { flip: -p.facing });
+    const fx = sk.fx || 'slash';
+    if (fx === 'spin') {
+      spawnFx('spin', p.x, p.y - 44, { flip: p.facing });
+      spawnFx('dust', p.x - 22, p.y); spawnFx('dust', p.x + 22, p.y);
+    } else {
+      spawnFx(fx, p.x + p.facing * 20, p.y - 46, { flip: p.facing });
+      if (fx === 'power') { spawnFx('shock', p.x + p.facing * 44, p.y, { flip: p.facing }); spawnFx('dust', p.x + p.facing * 50, p.y); }
+    }
     const maxHits = sk.hits || 6;
     const x0 = sk.both ? p.x - sk.range : (p.facing > 0 ? p.x : p.x - sk.range);
     const x1 = sk.both ? p.x + sk.range : (p.facing > 0 ? p.x + sk.range : p.x);
@@ -191,12 +198,7 @@ function killMonster(mon) {
     S.boss = null;
   }
   // 리스폰
-  const delay = mon.boss ? 60000 : 6000 + Math.random() * 4000;
-  const type = mon.type;
-  const mapId = S.mapId;
-  setTimeout(() => {
-    if (S.mapId === mapId && S.running) spawnMonster(type, mon.boss ? S.map.w / 2 : undefined, mon.boss ? S.map.groundY : undefined);
-  }, delay);
+  queueRespawn(mon.type, mon.boss, mon.boss ? 60000 : 6000 + Math.random() * 4000);
   setTimeout(() => {
     const i = S.monsters.indexOf(mon);
     if (i >= 0) S.monsters.splice(i, 1);
@@ -217,7 +219,7 @@ function spawnDrop(payload, x, y) {
   LAYERS.itemLayer.appendChild(g);
   S.drops.push({
     ...payload, node: g, x, y, vx: (Math.random() - .5) * 150, vy: -260 - Math.random() * 120,
-    life: 45, label, t: 0, landed: false,
+    life: 180, label, t: 0, landed: false,
   });
 }
 
@@ -354,6 +356,7 @@ function revivePlayer() {
 /* ---------------- 몬스터 AI ---------------- */
 function updateMonsters(dt) {
   const p = S.player;
+  processRespawns();
   for (const m of S.monsters) {
     if (m.dead) continue;
     m.aiT -= dt;
