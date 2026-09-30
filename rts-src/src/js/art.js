@@ -305,6 +305,19 @@ const ART = (() => {
     },
   };
 
+  // 자체 제작 확장 스프라이트. 종족/역할별 실루엣을 분리한다.
+  Object.assign(U, {
+    valkyrie(T) { Pl([[18,0],[4,-7],[-13,-8],[-18,0],[-13,8],[4,7]], TM.mid); R(-10,-15,16,6,T.main); R(-10,9,16,6,T.main); E(10,0,4,3,TM.glass); for (const y of [-12,12]) { E(7,y,2,2,'#ffbc70'); R(-16,y-2,5,4,TM.dk); } },
+    queen(T,f) { const wing = 10 + f * 2; Pl([[9,0],[-4,-wing],[-17,-13],[-7,0],[-17,13],[-4,wing]], ZC.mid); E(-2,0,8,6,ZC.flesh); E(5,0,5,4,T.main); L(8,-2,15,-7,ZC.bone,2); L(8,2,15,7,ZC.bone,2); },
+    guardian(T,f) { E(-3,0,15,11,ZC.mid); E(-6,0,10,8,T.main); for (const y of [-1,1]) { Pl([[7,y*5],[-3,y*(16+f)],[-17,y*14],[-9,y*7]],ZC.bone); L(9,y*4,18,y*7,ZC.lt,3); } E(11,0,5,4,'#403020'); },
+    devourer(T,f) { E(-1,0,15,12,ZC.mid); Pl([[15,0],[4,-8],[-10,-6],[-17,0],[-10,6],[4,8]],T.main); for (const y of [-1,1]) Pl([[1,y*5],[-6,y*(18+f)],[-18,y*14],[-10,y*7]],ZC.lt); E(10,0,4,4,'#99d040'); },
+    infested_terran(T,f,a) { U.marine(T,f,a); E(-2,-5,4,3,ZC.flesh); E(-2,5,4,3,'#70b048'); L(-5,0,-10,6,ZC.bone,2); },
+    archon(T,f) { E(0,0,14,14,'rgba(50,130,255,0.45)'); E(0,0,10+f,10,'#50a0ff'); E(1,0,6,8,'#d0f0ff'); E(6,0,3,3,T.main); L(-4,-10,8,-12,PC.glow2,2); L(-7,9,5,12,PC.glow2,2); },
+    dark_archon(T,f) { E(0,0,14,14,'rgba(255,40,30,0.45)'); E(0,0,10+f,10,'#b83830'); E(1,0,6,8,'#ff8870'); E(6,0,3,3,T.main); },
+    reaver(T,f) { for(let i=0;i<5;i++) { E(-12+i*5,-10,3,3,PC.dk); E(-12+i*5,10,3,3,PC.dk); E(-12+i*5,0,5,9,i%2?PC.lt:T.main); } E(14,0,5,7,PC.mid); E(18,0,2,4,PC.glow); },
+    arbiter(T) { Pl([[19,0],[4,-6],[-17,-19],[-9,-4],[-19,0],[-9,4],[-17,19],[4,6]],PC.mid); Pl([[15,0],[-2,-3],[-12,-14],[-5,0],[-12,14],[-2,3]],PC.lt); E(2,0,4,4,PC.glow); E(-12,-14,3,3,T.main); E(-12,14,3,3,T.main); },
+  });
+
   // 스프라이트 크기 (반경 → 캔버스)
   function spriteSize(type) {
     const d = UNITS[type];
@@ -636,7 +649,16 @@ const ART = (() => {
     const T = TEAM[owner] || TEAM[2];
     let lvl = 0, v = 0;
     if (type === 'mineral') { lvl = extra >> 4; v = extra & 15; }
-    (B[type] || B.depot)(T, w, h, lvl, v);
+    if (BUILDINGS[type].addonOf) {
+      tBase(w, h); box3d(8, ELEV + 12, w - 16, h - 24, 16, '#9aa2aa', '#565e66');
+      R(10, ELEV + h - 22, w - 20, 4, T.main);
+      if (type === 'comsat') { E(w / 2, ELEV + 5, 15, 8, '#c0c8d0'); L(w / 2, ELEV - 8, w / 2, ELEV + 10, '#506070', 3); }
+      else { E(w / 2, ELEV + 6, 9, 9, type === 'physics_lab' ? '#a090ff' : '#60b0d0'); lights([14, w - 14], ELEV + h - 28, '#80ff90'); }
+    } else if (type === 'greater_spire') B.spire(T, w, h, lvl, v);
+    else if (type === 'infested_cc') { B.cc(T, w, h, lvl, v); E(w / 2, ELEV + h / 2, w / 3, h / 3, 'rgba(140,70,100,0.7)'); }
+    else if (type === 'queens_nest') { zBase(w, h); blob(w / 2, ELEV + h / 2, w / 3, h / 3, ZC.flesh); for (const x of [16,w-16]) L(x,ELEV+h-8,x+5,ELEV-8,ZC.bone,5); }
+    else if (['robo_support','observatory','arbiter_tribunal','shield_battery'].includes(type)) { pBase(w,h); box3d(12,ELEV+12,w-24,h-22,15,PC.lt,PC.dk); crystal(w/2,ELEV+4,type==='arbiter_tribunal'?2:1.3,PC.glow); R(16,ELEV+h-22,w-32,4,T.main); }
+    else (B[type] || B.depot)(T, w, h, lvl, v);
     const out = finish(c, w);
     s = { c: out, ox: w / 2, oy: h / 2 + ELEV };
     cache.set(key, s);

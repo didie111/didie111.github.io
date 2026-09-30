@@ -10,12 +10,12 @@ const PROJ = {
   spit:   { speed: 8, color: '#a0e040' }, particle: { speed: 9, color: '#80c0ff' },
   tentacle: { speed: 0, delay: 8 }, spore: { speed: 8, color: '#d0ff90' },
   neutron:{ speed: 12, color: '#60ffff' }, interceptor: { speed: 9, color: '#ffe000' },
-  yamato: { speed: 9, color: '#ff8020' }, lock: { speed: 9, color: '#80ff80' },
+  yamato: { speed: 9, color: '#ff8020' }, lock: { speed: 9, color: '#80ff80' }, scarab: { speed: 7, color: '#ffe090' },
 };
 
 function fireWeapon(src, t, w) {
   const from = src.inside || src;
-  const hits = w.hits || 1;
+  const hits = src.type === 'carrier' ? src.ammo : (w.hits || 1);
   // 저지대 → 고지대 명중률 (원작: 약 50%)
   let miss = false;
   const range = src.range(w);
@@ -26,7 +26,8 @@ function fireWeapon(src, t, w) {
   if (!t.airTarget && range > 40 && !w.splash && !w.line && underSwarm(t)) miss = true;
   SND.play(w.proj || w.fx || 'melee', from.x, from.y, src);
   if (w.suicide) {
-    dealDamage(src, t, w, 1);
+    if (w.splash) splashDamage(src, t.x, t.y, w, src, !!w.friendly, !!t.airTarget);
+    else dealDamage(src, t, w, 1);
     fx('zsplat', t.x, t.y, { life: 14, size: 0.6 });
     killEntity(src, null, true);
     return;
@@ -59,7 +60,10 @@ function fireWeapon(src, t, w) {
   else if (w.fx === 'laser') { fx('beam', from.x, from.y, { life: 5, x2: t.x, y2: t.y, color: src.race === 'P' ? '#ffd040' : '#ff5050' }); }
   else fx('slash', t.x, t.y, { life: 6, race: src.race });
   for (let k = 0; k < hits; k++) dealDamage(src, t, w, 1, miss);
+  if (w.splash && !miss) splashAround(src, t, w);
 }
+
+function underWeb(t) { return GAME.areas.some(a => a.kind === 'web' && dist(a.x, a.y, t.x, t.y) <= a.r); }
 
 function underSwarm(t) {
   for (const a of GAME.areas) if (a.kind === 'swarm' && dist(a.x, a.y, t.x, t.y) <= a.r) return true;
@@ -68,10 +72,14 @@ function underSwarm(t) {
 
 // 피해 적용 (원작 공식: 보호막 → 방어력 차감 → 크기 보정, 최소 0.5)
 function dealDamage(src, t, w, mult, miss) {
-  if (!t || t.dead || t.hidden) return;
+  if (!t || t.dead || t.hidden || t.stasisT > 0) return;
+  if (src && src.hallucination) return;
   if (miss) { fx('miss', t.x, t.y - 6, { life: 10 }); return; }
   let dmg = (src ? src.weaponDmg(w) : w.dmg) * (mult || 1);
   const spell = w.type === 'spell';
+  if (t.hallucination) dmg *= 2;
+  if (!spell) dmg += t.acidSpores || 0;
+  if (dmg <= 0) return;
   if (t.matrixHp > 0) {
     const a = Math.min(t.matrixHp, dmg); t.matrixHp -= a; dmg -= a;
     fx('matrixhit', t.x, t.y, { life: 6 });
@@ -189,6 +197,10 @@ function findUnitAt(x, y, src) {
 
 function onProjectileHit(p) {
   const w = p.w, src = p.src && !p.src.dead ? p.src : null;
+  if (p.emp) {
+    for (const e of SH.query(p.x, p.y, 100)) if (!e.dead && !e.hidden && e !== p.src && !(e.stasisT > 0) && dist(e.x, e.y, p.x, p.y) <= 64 + e.r) { e.sh = 0; e.energy = 0; }
+    fx('empfx', p.x, p.y, { life: 20 }); return;
+  }
   switch (p.kind) {
     case 'siege':
       fx('explode', p.x, p.y, { life: 14, size: 1.2 });
@@ -197,8 +209,11 @@ function onProjectileHit(p) {
       return;
     case 'neutron':
       fx('explode', p.x, p.y, { life: 8, size: 0.5, color: '#60ffff' });
-      if (p.tgt && !p.tgt.dead) { dealDamage(src, p.tgt, w, 1); splashDamage(src, p.x, p.y, w, p.src, false, true); }
+      if (p.tgt && !p.tgt.dead) splashDamage(src, p.x, p.y, w, p.src, false, true);
       return;
+    case 'scarab':
+      if (p.src) splashDamage(src, p.x, p.y, w, p.src, false, false);
+      fx('explode', p.x, p.y, { life: 12, size: 1 }); return;
     case 'glaive': {
       const t = p.tgt;
       if (t && !t.dead) { dealDamage(src, t, w, p.mult, p.miss); fx('hitspark', t.x, t.y, { life: 6, color: '#b0ff70' }); p.hitList.push(t); }
@@ -230,6 +245,9 @@ function onProjectileHit(p) {
       if (p.kind === 'missile' || p.kind === 'grenade' || p.kind === 'shell' || p.kind === 'plasma') fx('explode', t.x, t.y, { life: 8, size: p.kind === 'plasma' ? 0.5 : 0.6, color: p.kind === 'plasma' ? '#a0d8ff' : undefined });
       else fx('hitspark', t.x, t.y, { life: 6, color: col });
       if (w.splash && p.kind !== 'neutron') splashAround(p.src || t, t, w);
+      if (w.acid && !p.miss) for (const e of SH.query(t.x, t.y, 80)) {
+        if (!e.dead && !e.hidden && e.airTarget && isEnemy(p.src.owner, e.owner) && dist(e.x, e.y, t.x, t.y) <= 48 + e.r) { e.acidSpores = Math.min(9, (e.acidSpores || 0) + 1); e.acidT = 900; }
+      }
     }
   }
 }
@@ -239,6 +257,18 @@ function updateAreas() {
   const out = [];
   for (const a of GAME.areas) {
     a.t++;
+    if (a.kind === 'nuke') {
+      if (a.t <= 320 && (!a.src || a.src.dead || a.src.lockT > 0 || a.src.stasisT > 0 || a.src.maelstromT > 0 || !a.src.orders[0] || a.src.orders[0].t !== 'nuke')) continue;
+      if (a.t === 320) a.src.nextOrder();
+      if (a.t === a.life) {
+        for (const e of SH.query(a.x, a.y, 240)) {
+          if (e.dead || e.hidden || e.def.resource || e.stasisT > 0) continue;
+          const d = edgeDistPt(e, a.x, a.y), mult = d <= 64 ? 1 : d <= 128 ? 0.5 : d <= 192 ? 0.25 : 0;
+          if (mult) dealDamage(a.src && !a.src.dead ? a.src : null, e, { dmg: Math.max(500, (e.maxHp + e.maxSh) * 2 / 3), type: 'spell' }, mult);
+        }
+        fx('explode', a.x, a.y, { life: 48, size: 6 }); SND.play('bigboom', a.x, a.y);
+      }
+    }
     if (a.kind === 'storm' && a.t % 8 === 0) {
       const st = GAME.tick;
       for (const e of SH.query(a.x, a.y, a.r + 30)) {
@@ -257,6 +287,24 @@ function updateAreas() {
 // ---------------- 특수 능력 시전 ----------------
 function castSpell(c, s, tgt, x, y) {
   const S = SPELLS[s];
+  if (!S || c.dead || c.hidden || c.hallucination || c.lockT > 0 || c.stasisT > 0 || c.maelstromT > 0 || !(c.def.spells || []).includes(s) || !spellTechOk(c, s)) return false;
+  if (S.target === 'unit' && (!tgt || tgt.dead || tgt.hidden || tgt.stasisT > 0 || !targetableBy(tgt, c.owner))) return false;
+  if (S.target === 'point' && (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x >= MAP_W * TILE || y >= MAP_H * TILE)) return false;
+  if (s === 'lockdown' && (!tgt.def.mech || tgt.isBuilding)) return false;
+  if (s === 'consume' && (tgt === c || tgt.owner !== c.owner || tgt.race !== 'Z' || tgt.isBuilding)) return false;
+  if (s === 'feedback' && (!tgt.maxEnergy || tgt.isBuilding)) return false;
+  if (s === 'mind_control' && (!isEnemy(c.owner, tgt.owner) || tgt.isBuilding || tgt.type === 'larva' || tgt.type === 'egg')) return false;
+  if (s === 'spawn_broodlings' && (tgt.isBuilding || tgt.airTarget || ['probe', 'reaver', 'archon', 'dark_archon', 'spider_mine'].includes(tgt.type))) return false;
+  if (['optic_flare','parasite','hallucination'].includes(s) && (tgt.isBuilding || tgt.type === 'larva' || tgt.type === 'egg')) return false;
+  if (s === 'recharge' && (tgt.owner !== c.owner || !tgt.maxSh || tgt.isBuilding || tgt.hallucination)) return false;
+  let silo;
+  if (s === 'nuclear_strike') {
+    silo = GAME.entities.find(b => !b.dead && b.owner === c.owner && b.type === 'nuclear_silo' && b.nukeReady && hasBuilding(c.owner, 'nuclear_silo') && GAME.entities.some(cc => !cc.dead && !cc.lifted && cc.owner === c.owner && attachedAddon(cc, 'nuclear_silo') === b));
+    if (!silo) return false;
+  }
+  if (s === 'infest' && (tgt.type !== 'cc' || !tgt.done || tgt.lifted || !isEnemy(c.owner, tgt.owner) || tgt.hp > tgt.maxHp / 2 || tgt.cargo.length)) return false;
+  const tx = tgt ? tgt.x : x, ty = tgt ? tgt.y : y;
+  if (S.range && dist(c.x, c.y, tx, ty) > S.range * TILE + (tgt ? tgt.r : 0) + c.r) return false;
   if (S.energy && c.energy < S.energy) { notify(c.owner, 'energy', '에너지가 부족합니다.', 'err'); return false; }
   if (S.energy) c.energy -= S.energy;
   c.attackAnim = 8;
@@ -279,11 +327,6 @@ function castSpell(c, s, tgt, x, y) {
       break;
     case 'emp':
       GAME.projectiles.push({ kind: 'plasma', x: c.x, y: c.y, tx: x, ty: y, tgt: null, src: c, w: { dmg: 0, type: 'spell' }, t: 0, delay: 0, emp: true });
-      for (const e of SH.query(x, y, 100)) {
-        if (e.dead || e === c || dist(e.x, e.y, x, y) > 64 + e.r) continue;
-        e.sh = 0; if (e.maxEnergy) e.energy = 0;
-      }
-      fx('empfx', x, y, { life: 20 });
       break;
     case 'irradiate':
       if (tgt) { tgt.irrT = 600; tgt.irrSrc = c; tgt.onAttacked(c); fx('cast', tgt.x, tgt.y, { life: 16, color: '#50ff50' }); }
@@ -300,7 +343,7 @@ function castSpell(c, s, tgt, x, y) {
       else notify(c.owner, 'mech', '기계 유닛에게만 사용할 수 있습니다.', 'err');
       break;
     case 'restoration':
-      if (tgt) { tgt.irrT = 0; tgt.plagueT = 0; tgt.lockT = 0; tgt.ensnareT = 0; fx('cast', tgt.x, tgt.y, { life: 12, color: '#ffffff' }); }
+      if (tgt) { tgt.irrT = 0; tgt.plagueT = 0; tgt.lockT = 0; tgt.ensnareT = 0; tgt.blinded = false; tgt.parasiteOwner = undefined; tgt.acidSpores = 0; tgt.acidT = 0; fx('cast', tgt.x, tgt.y, { life: 12, color: '#ffffff' }); }
       break;
     case 'consume':
       if (tgt && tgt.owner === c.owner && tgt.race === 'Z' && !tgt.isBuilding && tgt !== c) { killEntity(tgt, null); c.energy = Math.min(c.maxEnergy, c.energy + 50); }
@@ -308,6 +351,45 @@ function castSpell(c, s, tgt, x, y) {
     case 'scan':
       GAME.areas.push({ kind: 'scan', x, y, r: 10 * TILE, t: 0, life: 262, owner: c.owner });
       SND.play('scan', x, y);
+      break;
+    case 'parasite': tgt.parasiteOwner = c.owner; break;
+    case 'optic_flare': tgt.blinded = true; tgt.detCache = null; break;
+    case 'recharge': tgt.issue({ t: 'recharge', tgt: c }); break;
+    case 'hallucination':
+      for (let k = 0; k < 2; k++) { const h = createUnit(tgt.type, c.owner, tgt.x + (k ? 16 : -16), tgt.y); h.hallucination = true; h.energy = 0; h.lifeT = 1800; h.ammo = tgt.ammo; }
+      break;
+    case 'nuclear_strike':
+      silo.nukeReady = false; c.issue({ t: 'nuke' });
+      GAME.areas.push({ kind: 'nuke', x, y, r: 192, t: 0, life: 360, src: c, owner: c.owner });
+      if (typeof UI !== 'undefined') UI.message('핵 공격이 감지되었습니다!'); break;
+    case 'ensnare':
+    case 'maelstrom':
+    case 'stasis':
+      for (const e of SH.query(x, y, 100)) {
+        if (e.dead || e.hidden || e.isBuilding || e === c || e.stasisT > 0 || dist(e.x, e.y, x, y) > 48 + e.r) continue;
+        if (s === 'ensnare') { e.ensnareT = 900; e.detCache = null; }
+        else if (s === 'stasis') { e.stasisT = 900; e.vx = e.vy = 0; }
+        else if (e.def.bio) { e.maelstromT = 180; e.vx = e.vy = 0; }
+      }
+      fx('cast', x, y, { life: 20, color: s === 'ensnare' ? '#20dd60' : '#6080ff' }); break;
+    case 'spawn_broodlings': {
+      const bx = tgt.x, by = tgt.y; killEntity(tgt, c);
+      for (let k = 0; k < 2; k++) { const b = createUnit('broodling', c.owner, bx + (k ? 8 : -8), by); b.lifeT = 1800; }
+      break;
+    }
+    case 'infest':
+      for (const q of tgt.queue) if (q.kind === 'tech') delete P(tgt.owner).researching[q.type];
+      tgt.queue = []; tgt.owner = c.owner; tgt.type = 'infested_cc'; tgt.def = BUILDINGS.infested_cc; tgt.race = 'Z'; tgt.hp = tgt.maxHp; tgt.orders = []; break;
+    case 'feedback': { const dmg = tgt.energy; tgt.energy = 0; dealDamage(c, tgt, { dmg, type: 'spell' }, 1); break; }
+    case 'mind_control':
+      tgt.owner = c.owner; tgt.issue({ t: 'stop' }); tgt.detCache = null; tgt.parasiteOwner = undefined; c.sh = 0; recomputeSupply(); break;
+    case 'disruption_web': GAME.areas.push({ kind: 'web', x, y, r: 64, t: 0, life: 360, owner: c.owner }); break;
+    case 'recall':
+      for (const e of [...GAME.entities]) {
+        if (e.dead || e.hidden || e.isBuilding || e === c || e.owner !== c.owner || e.stasisT > 0 || dist(e.x, e.y, x, y) > 64) continue;
+        const spot = e.airTarget ? [c.x + Math.random() * 32 - 16, c.y + Math.random() * 32 - 16] : findUnloadSpot(c, e);
+        if (spot) { e.x = spot[0]; e.y = spot[1]; e.issue({ t: 'stop' }); }
+      }
       break;
   }
   return true;

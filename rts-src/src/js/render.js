@@ -224,6 +224,9 @@ const RENDER = (() => {
     if (e.plagueT > 0) { ctx.fillStyle = 'rgba(160,200,60,0.5)'; for (let k = 0; k < 3; k++) ctx.fillRect(x - e.r + ((GAME.tick * 3 + k * 7) % (e.r * 2)), y - e.r + ((k * 11 + GAME.tick) % (e.r * 2)), 2, 2); }
     if (e.lockT > 0) statusRing(x, y, e.r + 2, '#80ff80');
     if (e.ensnareT > 0) statusRing(x, y, e.r + 1, '#c0a040');
+    if (e.stasisT > 0) { ctx.fillStyle = 'rgba(100,170,255,0.6)'; ctx.fillRect(x - e.r, y - e.r, e.r * 2, e.r * 2); }
+    if (e.maelstromT > 0) statusRing(x, y, e.r + 3, '#e04090');
+    if (e.acidSpores) statusRing(x, y, e.r + 3, '#b0f050');
     if (e.carry > 0 && e.isWorker) {
       const cx = x + Math.cos(e.dir) * (e.r - 1), cy = y + Math.sin(e.dir) * (e.r - 1);
       if (e.carryKind === 'gas') { ctx.fillStyle = e.race === 'Z' ? '#40c020' : e.race === 'P' ? '#40e060' : '#30b030'; ctx.fillRect(Math.round(cx) - 2, Math.round(cy) - 2, 4, 4); }
@@ -353,6 +356,8 @@ const RENDER = (() => {
   }
   function drawAreas(top) {
     for (const a of GAME.areas) {
+      if (a.kind === 'nuke' && top && isVisibleAt(a.x, a.y)) { ctx.fillStyle = '#ff2020'; ctx.beginPath(); ctx.arc(a.x, a.y, 3 + (GAME.tick % 12) / 4, 0, 6.283); ctx.fill(); continue; }
+      if (a.kind === 'web' && !top && isVisibleAt(a.x, a.y)) { ctx.strokeStyle = '#b0b0ff'; ctx.globalAlpha = 0.4; for (let i = -3; i <= 3; i++) { ctx.beginPath(); ctx.ellipse(a.x, a.y + i * 12, a.r, 10, 0, 0, 6.283); ctx.stroke(); } ctx.globalAlpha = 1; continue; }
       if (!onScreen(a.x, a.y, 120)) continue;
       if (a.kind === 'swarm' && !top) {
         ctx.globalAlpha = 0.45 * Math.min(1, a.t / 20, (a.life - a.t) / 30);

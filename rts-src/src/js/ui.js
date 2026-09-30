@@ -356,8 +356,13 @@ const UI = {
       if (b.morph) { card[8] = B(ART.cmdIcon('cancel'), 'ESCAPE', '변태 취소', () => cmdCancelConstruction(b)); return card; }
       let i = 0;
       for (const t of d.produces || []) {
-        const ud = UNITS[t], miss = missingReq(p, ud.req);
+        const ud = UNITS[t], miss = missingReq(p, ud.req) || (ud.addon && !attachedAddon(b, ud.addon) ? ud.addon : null);
         card[i++] = B(ART.icon(t, p), ud.hotkey, ud.name, () => cmdTrain(b, t), { cost: ud.cost, sup: ud.supply, disabled: !!miss, desc: miss ? '필요: ' + BUILDINGS[miss].name : '' });
+      }
+      for (const t of d.addons || []) {
+        if (i >= 7 || attachedAddon(b)) break;
+        const ad = BUILDINGS[t], miss = missingReq(p, ad.req);
+        card[i++] = B(ART.icon(t, p), t === 'physics_lab' ? 'P' : 'C', ad.name + ' 부속 건물', () => cmdAddon(b, t), { cost: ad.cost, disabled: !!miss || b.queue.length > 0, desc: '오른쪽에 연결 · ' + (miss ? '필요: ' + BUILDINGS[miss].name : '빈 공간 필요') });
       }
       for (const t of d.research || []) {
         if (i >= 8) break;
@@ -377,6 +382,8 @@ const UI = {
           continue;
         }
         if (s === 'lift') { card[i++] = B(ART.cmdIcon('lift'), 'L', '이륙', () => cmdInstant([b], 'lift'), { disabled: b.queue.length > 0 }); continue; }
+        if (s === 'arm_nuke') { card[i++] = B(ART.cmdIcon(s), 'N', b.nukeReady ? '핵무기 준비 완료' : b.nukeBuild ? '핵무기 생산 중' : S.name, () => cmdInstant([b], s), { cost: S.cost, disabled: !!b.nukeReady || !!b.nukeBuild, desc: S.desc }); continue; }
+        if (S.target === 'unit') { card[i++] = B(ART.cmdIcon(s), S.hotkey, S.name, () => this.setMode({ kind: 'target', cmd: 'spell', s }), { desc: S.desc }); continue; }
         if (S.target === 'point') {
           const miss = S.req ? missingReq(p, S.req) : null;
           card[i++] = B(ART.cmdIcon(s), S.hotkey, S.name, () => { if (miss) { notify(p, 'req', BUILDINGS[miss].name + ' 이(가) 필요합니다.', 'err'); return; } if (b.energy < S.energy) { notify(p, 'energy', '에너지가 부족합니다.', 'err'); return; } this.setMode({ kind: 'target', cmd: 'spell', s }); }, { energy: S.energy, disabled: !!miss, desc: S.desc });
@@ -423,6 +430,7 @@ const UI = {
         card[6] = B(ART.cmdIcon('build'), 'B', '기본 건물', () => { this.menu = 'build'; this.cardSig = ''; });
         card[7] = B(ART.cmdIcon('advbuild'), 'V', '고급 건물', () => { this.menu = 'advbuild'; this.cardSig = ''; });
       }
+      if (single && u0.race === 'Z') card[8] = B(ART.cmdIcon('burrow'), 'U', '버로우', () => cmdInstant(mob, 'burrow'), { disabled: !spellTechOk(u0, 'burrow') });
       return card;
     }
     if (!siege) { card[3] = B(ART.cmdIcon('patrol'), 'P', '정찰', () => this.setMode({ kind: 'target', cmd: 'patrol' })); }
@@ -435,6 +443,7 @@ const UI = {
       put(B(ART.cmdIcon('unload'), 'U', '모두 내리기', () => this.setMode({ kind: 'target', cmd: 'unload' }), { disabled: !mob.some(u => u.cargo.length) }));
     }
     if (single) {
+      if (u0.def.ammo) put(B(ART.icon(u0.type, p), u0.type === 'carrier' ? 'I' : 'R', (u0.type === 'carrier' ? '인터셉터' : '스캐럽') + ' 생산 (' + (u0.ammo || 0) + '/' + ammoCapacity(u0) + ')', () => { for (const u of mob) cmdAmmo(u); }, { cost: [u0.type === 'carrier' ? 25 : 15, 0], desc: '생산 대기 ' + (u0.ammoQueue || []).length, disabled: (u0.ammo || 0) + (u0.ammoQueue || []).length >= ammoCapacity(u0) }));
       for (const s of u0.def.spells || []) {
         const S = SPELLS[s];
         if (!S) continue;
@@ -541,7 +550,16 @@ const UI = {
       if (e.maxEnergy) parts.push('<span class="e">에너지 ' + Math.floor(e.energy) + '/' + e.maxEnergy + '</span>');
       l2 = parts.join(' · ');
       if (!e.isBuilding) l3 = '처치 ' + e.kills + (d.supply ? ' · 인구 ' + supplyText(d.pair ? d.supply : d.supply) : '');
-    } else if (d.provides && e.done) { const pp = P(e.owner); if (pp) l2 = '제공 인구: ' + d.provides + ' · 사용 ' + supplyText(pp.used) + '/' + pp.max; }
+    } else if (e.maxEnergy) l2 = '에너지 ' + Math.floor(e.energy) + '/' + e.maxEnergy;
+    else if (d.provides && e.done) { const pp = P(e.owner); if (pp) l2 = '제공 인구: ' + d.provides + ' · 사용 ' + supplyText(pp.used) + '/' + pp.max; }
+    if (d.ammo) l3 += ' · 탄약 ' + (e.ammo || 0) + '/' + ammoCapacity(e) + ' · 생산 대기 ' + (e.ammoQueue || []).length;
+    if (e.nukeReady || e.nukeBuild) l2 += e.nukeReady ? ' · 핵무기 준비 완료' : ' · 핵무기 생산 ' + Math.floor(e.nukeBuild / 15) + '%';
+    if (e.blinded) l3 += ' · 실명';
+    if (e.parasiteOwner !== undefined) l3 += ' · 패러사이트';
+    if (e.stasisT > 0) l3 += ' · 스테이시스';
+    if (e.maelstromT > 0) l3 += ' · 메일스트롬';
+    if (e.acidSpores) l3 += ' · 애시드 스포어 ' + e.acidSpores;
+    if (e.hallucination && own) l3 += ' · 환상';
     if (e.type === 'egg' || e.type === 'lurker_egg') l2 = (UNITS[e.morphTo] ? UNITS[e.morphTo].name : '') + ' 변태 중';
     el.querySelector('.ln2').innerHTML = l2;
     el.querySelector('.ln3').innerHTML = l3;
@@ -723,6 +741,7 @@ const UI = {
     const bopts = Object.keys(BUILDINGS).filter(k => BUILDINGS[k].race !== 'N').map(k => '<option value="' + k + '">' + BUILDINGS[k].name + '</option>').join('');
     t.innerHTML = `
       <div class="th">테스트 / 치트 패널 <span class="x" id="t-close">✕</span></div>
+      <div class="row small">버전 ${RTS_VERSION} · 자체 픽셀 그래픽 / 웹 RTS</div>
       <div class="row"><label>스폰 대상</label>
         <select id="t-type"><optgroup label="테란">${opts('T')}</optgroup><optgroup label="저그">${opts('Z')}</optgroup><optgroup label="프로토스">${opts('P')}</optgroup><optgroup label="건물">${bopts}</optgroup></select></div>
       <div class="row"><label>소속</label><select id="t-owner"><option value="1">적군 (저그/빨강)</option><option value="0">아군 (테란/파랑)</option></select>
@@ -733,6 +752,7 @@ const UI = {
       <div class="row"><label><input type="checkbox" id="t-sandbox"> 샌드박스 (승패 없음)</label><label><input type="checkbox" id="t-snd" checked> 효과음</label></div>
       <div class="row"><label>조작 진영</label><button id="t-ctrl0" class="on">테란 (나)</button><button id="t-ctrl1">저그 (적군 조작)</button></div>
       <div class="row"><button id="t-res">자원 +5000</button><button id="t-fast">빌드 속도 x<span id="t-bs">1</span></button></div>
+      <div class="row"><button id="t-tech">전 종족 연구 완료 (테스트)</button></div>
       <div class="row"><label>게임 속도</label><input id="t-speed" type="range" min="0.5" max="3" step="0.25" value="1"><span id="t-spv">1.0x</span></div>
       <div class="row small">F10 / \` : 패널 열기 · F1 : 도움말 · F9 : 일시정지</div>`;
     const $ = (id) => document.getElementById(id);
@@ -754,6 +774,7 @@ const UI = {
     };
     $('t-ctrl0').onclick = () => ctrl(0); $('t-ctrl1').onclick = () => ctrl(1);
     $('t-res').onclick = () => { const pl = P(GAME.control); pl.min += 5000; pl.gas += 5000; };
+    $('t-tech').onclick = () => { const pl = P(GAME.control); for (const [k, d] of Object.entries(TECH)) { if (d.lv) pl.upg[k] = d.lv; else pl.tech[k] = true; } this.cardSig = ''; this.message('조작 진영 연구 완료 · F10에서 3종족 유닛을 스폰할 수 있습니다.'); };
     $('t-fast').onclick = () => { GAME.buildSpeed = GAME.buildSpeed >= 8 ? 1 : GAME.buildSpeed * 2; $('t-bs').textContent = GAME.buildSpeed; };
     $('t-speed').oninput = (e) => { GAME.speed = +e.target.value; $('t-spv').textContent = GAME.speed.toFixed(2).replace(/0$/, '') + 'x'; };
   },

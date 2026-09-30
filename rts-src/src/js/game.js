@@ -37,7 +37,8 @@ function upgLevel(owner, id) { return P(owner).upg[id] || 0; }
 // 요구 건물 보유 여부 (레어/하이브는 해처리로도 인정)
 function hasBuilding(owner, type) {
   for (const e of GAME.entities) {
-    if (e.dead || e.owner !== owner || !e.isBuilding || !e.done) continue;
+    if (e.dead || e.owner !== owner || !e.isBuilding || !e.done || e.lifted) continue;
+    if (e.def.addonOf && !GAME.entities.some(b => !b.dead && b.done && !b.lifted && b.owner === owner && b.type === e.def.addonOf && e.tx0 === b.tx0 + b.def.w && e.ty0 === b.ty0 + b.def.h - 2)) continue;
     if (e.type === type) return true;
     if (e.def.counts && e.def.counts.includes(type)) return true;
   }
@@ -187,9 +188,11 @@ function recomputeSupply() {
     if (e.dead || e.owner > 1) continue;
     const p = GAME.players[e.owner], d = e.def;
     if (e.isBuilding) {
+      if (e.nukeReady || e.nukeBuild) p.used += 8;
       if (e.done && d.provides) p.max += d.provides;
       if (e.done && e.queue.length && e.queue[0].started && e.queue[0].kind === 'unit') p.used += UNITS[e.queue[0].type].supply;
     } else {
+      if (e.hallucination) continue;
       if (e.type === 'egg' || e.type === 'lurker_egg') { const md = UNITS[e.morphTo]; p.used += md.pair ? md.supply * 2 : md.supply; if (e.type === 'lurker_egg') p.used += 0; }
       else p.used += d.supply || 0;
       if (d.provides && e.done !== false) p.max += d.provides;
@@ -220,12 +223,14 @@ function updateVision() {
   for (const e of GAME.entities) {
     if (e.dead || e.owner > 1 || e.hidden) continue;
     let sight = e.def.sight || 0;
+    if (e.blinded) sight = 1;
     if (e.isBuilding && !e.done) sight = Math.min(sight, 5);
     if (e.burrowed && e.type !== 'lurker') sight = Math.min(sight, 4);
     if (!sight) continue;
     if (e.type === 'overlord' && hasTech(e.owner, 'ventral')) sight = 11;
     const h = (e.air || e.lifted) ? 2 : heightAtPx(e.x, e.y);
     revealCircle(GAME.vis[e.owner], tileOf(e.x), tileOf(e.y), sight, h);
+    if (e.parasiteOwner !== undefined) revealCircle(GAME.vis[e.parasiteOwner], tileOf(e.x), tileOf(e.y), sight, h);
   }
   for (const a of GAME.areas) if (a.kind === 'scan') revealCircle(GAME.vis[a.owner], tileOf(a.x), tileOf(a.y), 10, 2);
   for (let p = 0; p < 2; p++) {
@@ -263,7 +268,9 @@ function isVisibleTo(e, p) {
 }
 function isCloakedFor(e, p) {
   if (e.owner === p) return false;
-  if (!(e.cloaked || e.burrowed)) return false;
+  if (e.ensnareT > 0 || e.irrT > 0 || e.matrixHp > 0 || e.parasiteOwner === p) return false;
+  const aura = !e.isBuilding && e.type !== 'arbiter' && GAME.entities.some(a => !a.dead && !a.hidden && a.owner === e.owner && a.def.cloakAura && !(a.stasisT > 0) && dist(a.x, a.y, e.x, e.y) <= a.def.cloakAura);
+  if (!(e.cloaked || e.def.permCloak || e.burrowed || aura)) return false;
   return !isDetectedBy(e, p);
 }
 function isDetectedBy(e, p) {
@@ -274,7 +281,7 @@ function isDetectedBy(e, p) {
     for (const a of GAME.areas) if (a.kind === 'scan' && a.owner === q && dist(a.x, a.y, e.x, e.y) < 10 * TILE) v[q] = true;
     if (v[q]) continue;
     for (const d of GAME.detectors) {
-      if (d.owner !== q) continue;
+      if (d.owner !== q && d.parasiteOwner !== q) continue;
       const r = (d.def.sight || 7) * TILE;
       if (Math.abs(d.x - e.x) < r && Math.abs(d.y - e.y) < r && dist(d.x, d.y, e.x, e.y) <= r) { v[q] = true; break; }
     }

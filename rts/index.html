@@ -100,7 +100,7 @@ button.on { background: linear-gradient(#2c5a8c, #183050); border-color: #7ab0ff
   <div class="res"><img id="ico-min"><span id="r-min">0</span></div>
   <div class="res"><img id="ico-gas"><span id="r-gas">0</span></div>
   <div class="res"><img id="r-sup-ico"><span id="r-sup">0/0</span></div>
-  <div class="menu-btns"><button onclick="UI.toggleTest()">테스트(F10)</button><button onclick="UI.el.help.classList.toggle('hidden')">도움말(F1)</button><button onclick="GAME.paused=!GAME.paused">일시정지(F9)</button></div>
+  <div class="menu-btns"><span style="font-size:11px;color:#9ab">SC1.2</span><button onclick="UI.toggleTest()">테스트(F10)</button><button onclick="UI.el.help.classList.toggle('hidden')">도움말(F1)</button><button onclick="GAME.paused=!GAME.paused">일시정지(F9)</button></div>
 </div>
 
 <div id="msgs"></div>
@@ -115,7 +115,8 @@ button.on { background: linear-gradient(#2c5a8c, #183050); border-color: #7ab0ff
 <div id="test" class="hidden"></div>
 
 <div id="help" class="hidden">
-  <h2>조작법</h2>
+  <h2>조작법 · SC1.2</h2>
+  <p>생산 건물에서 부속 건물을 연결하세요. 캐리어는 I로 인터셉터, 리버는 R로 스캐럽을 생산해야 공격합니다. 컴샛에서 S로 스캔할 수 있습니다.</p>
   <table>
     <tr><td>좌클릭 / 드래그</td><td>유닛 선택 · 박스 선택 (최대 12기)</td></tr>
     <tr><td>Shift + 클릭</td><td>선택 추가 / 제거 · 명령 예약(웨이포인트)</td></tr>
@@ -521,6 +522,121 @@ const CMD = {
 function typeDef(t) { return UNITS[t] || BUILDINGS[t]; }
 function isBuildingType(t) { return !!BUILDINGS[t]; }
 function supplyText(v) { return (Math.round(v * 2) / 2).toString(); }
+
+</script>
+<script>
+'use strict';
+// 확장 데이터: Blizzard StarCraft Compendium 수치/역할을 참고한 웹게임 구현.
+// 원작 MPQ/엔진을 포함하지 않으며 투사체/애니메이션/길찾기는 자체 구현이다.
+const RTS_VERSION = '2026.09.30-sc1.2';
+Object.assign(UNITS, {
+  valkyrie: { name: '발키리', race: 'T', hp: 200, armor: 2, size: 'large', air: true, speed: 6.6, sight: 8, r: 16,
+    cost: [250, 125], supply: 3, time: 750, mech: true, from: 'starport', hotkey: 'V', req: ['armory'], addon: 'control_tower',
+    aw: W(6, 'explosive', 64, 6 * TILE, { hits: 8, upg: 't_shp_w', proj: 'missile', splash: [5, 50, 100] }), armorUpg: 't_shp_a' },
+  queen: { name: '퀸', race: 'Z', hp: 120, armor: 0, size: 'medium', air: true, speed: 6.6, sight: 10, r: 13,
+    cost: [100, 100], supply: 2, time: 750, bio: true, from: 'larva', hotkey: 'Q', req: ['queens_nest'], energy: 200,
+    spells: ['parasite', 'ensnare', 'spawn_broodlings', 'infest'], armorUpg: 'z_fcar' },
+  guardian: { name: '가디언', race: 'Z', hp: 150, armor: 2, size: 'large', air: true, speed: 2.5, sight: 11, r: 18,
+    cost: [50, 100], supply: 2, time: 600, bio: true, hidden: true,
+    gw: W(20, 'normal', 30, 8 * TILE, { inc: 2, upg: 'z_fat', proj: 'spit' }), armorUpg: 'z_fcar' },
+  devourer: { name: '디바우러', race: 'Z', hp: 250, armor: 2, size: 'large', air: true, speed: 4.5, sight: 10, r: 18,
+    cost: [150, 50], supply: 2, time: 600, bio: true, hidden: true,
+    aw: W(25, 'explosive', 100, 6 * TILE, { inc: 2, upg: 'z_fat', proj: 'spore', acid: true, splash: [16, 32, 48] }), armorUpg: 'z_fcar' },
+  infested_terran: { name: '인페스티드 테란', race: 'Z', hp: 60, armor: 0, size: 'small', speed: 4, sight: 5, r: 8,
+    cost: [100, 50], supply: 1, time: 600, bio: true, from: 'infested_cc', hotkey: 'I', trans: 1,
+    gw: W(500, 'explosive', 1, 4, { upg: 'none', suicide: true, splash: [20, 40, 60], friendly: true }), armorUpg: 'z_car' },
+  archon: { name: '아콘', race: 'P', hp: 10, sh: 350, armor: 0, size: 'large', speed: 4.9, sight: 8, r: 15,
+    cost: [0, 0], supply: 4, time: 300, hidden: true, trans: 4,
+    gw: W(30, 'normal', 20, 2 * TILE, { inc: 3, upg: 'p_gw', fx: 'laser', splash: [3, 15, 30] }),
+    aw: W(30, 'normal', 20, 2 * TILE, { inc: 3, upg: 'p_gw', fx: 'laser', splash: [3, 15, 30] }), armorUpg: 'p_ga' },
+  dark_archon: { name: '다크 아콘', race: 'P', hp: 25, sh: 200, armor: 1, size: 'large', speed: 4.9, sight: 10, r: 15,
+    cost: [0, 0], supply: 4, time: 300, hidden: true, trans: 4, energy: 200,
+    spells: ['feedback', 'maelstrom', 'mind_control'], armorUpg: 'p_ga' },
+  reaver: { name: '리버', race: 'P', hp: 100, sh: 80, armor: 0, size: 'large', speed: 1.8, sight: 10, r: 17,
+    cost: [200, 100], supply: 4, time: 1050, mech: true, from: 'robo', hotkey: 'V', req: ['robo_support'], trans: 4, ammo: 'scarab',
+    gw: W(100, 'normal', 60, 8 * TILE, { upg: 'none', proj: 'scarab', splash: [20, 40, 60] }), armorUpg: 'p_ga' },
+  arbiter: { name: '아비터', race: 'P', hp: 200, sh: 150, armor: 1, size: 'large', air: true, speed: 4, sight: 9, r: 19,
+    cost: [100, 350], supply: 4, time: 2400, mech: true, from: 'stargate', hotkey: 'A', req: ['arbiter_tribunal'], energy: 200,
+    gw: W(10, 'explosive', 45, 5 * TILE, { upg: 'p_aw', proj: 'plasma' }), aw: W(10, 'explosive', 45, 5 * TILE, { upg: 'p_aw', proj: 'plasma' }),
+    spells: ['recall', 'stasis'], cloakAura: 4 * TILE, armorUpg: 'p_aa' },
+});
+UNITS.carrier.hotkey = 'C'; UNITS.carrier.ammo = 'interceptor';
+UNITS.htemplar.spells.push('archon_merge'); UNITS.dtemplar.spells = ['dark_archon_merge'];
+UNITS.mutalisk.spells = ['guardian_morph', 'devourer_morph']; UNITS.corsair.spells = ['disruption_web'];
+UNITS.tank.addon = 'machine_shop'; UNITS.dropship.addon = 'control_tower'; UNITS.vessel.addon = 'control_tower'; UNITS.bc.addon = 'control_tower';
+UNITS.goliath.req = ['armory']; UNITS.ghost.req = ['academy', 'covert_ops']; UNITS.bc.req = ['physics_lab'];
+Object.assign(BUILDINGS, {
+  comsat: { name: '컴샛 스테이션', race: 'T', hp: 500, armor: 1, w: 2, h: 2, cost: [50, 50], time: 600, req: ['academy'], addonOf: 'cc', energy: 200, spells: ['scan'], sight: 10 },
+  machine_shop: { name: '머신 샵', race: 'T', hp: 750, armor: 1, w: 2, h: 2, cost: [50, 50], time: 600, addonOf: 'factory', research: ['siege_tech', 'mines', 'ion'], sight: 8 },
+  control_tower: { name: '컨트롤 타워', race: 'T', hp: 500, armor: 1, w: 2, h: 2, cost: [50, 50], time: 600, addonOf: 'starport', research: ['cloak_w'], sight: 8 },
+  covert_ops: { name: '코버트 옵스', race: 'T', hp: 750, armor: 1, w: 2, h: 2, cost: [50, 50], time: 600, addonOf: 'science_facility', research: ['lockdown_t', 'cloak_g'], sight: 8 },
+  physics_lab: { name: '피직스 랩', race: 'T', hp: 600, armor: 1, w: 2, h: 2, cost: [50, 50], time: 600, addonOf: 'science_facility', research: ['yamato'], sight: 8 },
+  queens_nest: { name: '퀸즈 네스트', race: 'Z', hp: 850, armor: 1, w: 3, h: 2, cost: [150, 100], time: 900, req: ['lair'], research: ['ensnare_t', 'broodlings_t'], hotkey: 'Q', adv: true, sight: 8 },
+  greater_spire: { name: '그레이터 스파이어', race: 'Z', hp: 1000, armor: 1, w: 2, h: 2, cost: [100, 150], time: 1800, hidden: true, counts: ['spire'], research: ['z_fat', 'z_fcar'], sight: 8 },
+  infested_cc: { name: '인페스티드 커맨드 센터', race: 'Z', hp: 1500, armor: 1, w: 4, h: 3, cost: [0, 0], time: 0, hidden: true, produces: ['infested_terran'], sight: 10 },
+  robo_support: { name: '로보틱스 서포트 베이', race: 'P', hp: 450, sh: 450, armor: 1, w: 3, h: 2, cost: [150, 100], time: 450, req: ['robo'], research: ['scarab_damage', 'reaver_capacity'], hotkey: 'B', adv: true, sight: 8 },
+  observatory: { name: '옵저버토리', race: 'P', hp: 250, sh: 250, armor: 1, w: 2, h: 2, cost: [50, 100], time: 450, req: ['robo'], research: [], hotkey: 'O', adv: true, sight: 8 },
+  arbiter_tribunal: { name: '아비터 트리뷰널', race: 'P', hp: 500, sh: 500, armor: 1, w: 3, h: 2, cost: [200, 150], time: 900, req: ['stargate', 'archives'], research: ['recall_t', 'stasis_t'], hotkey: 'A', adv: true, sight: 8 },
+});
+UNITS.observer.req = ['observatory'];
+BUILDINGS.cc.spells = ['lift']; BUILDINGS.cc.addons = ['comsat'];
+BUILDINGS.factory.research = []; BUILDINGS.factory.addons = ['machine_shop'];
+BUILDINGS.starport.produces.push('valkyrie'); BUILDINGS.starport.research = []; BUILDINGS.starport.addons = ['control_tower'];
+BUILDINGS.science_facility.research = ['irradiate', 'emp_t']; BUILDINGS.science_facility.addons = ['covert_ops', 'physics_lab'];
+BUILDINGS.robo.produces.push('reaver'); BUILDINGS.stargate.produces.push('arbiter');
+BUILDINGS.spire.spells = ['morph_greater_spire']; BUILDINGS.archives.research.push('maelstrom_t', 'mind_control_t');
+BUILDINGS.fleet_beacon.research = ['carrier_capacity', 'disruption_web_t'];
+BUILD_MENU.Z[1].push('queens_nest'); BUILD_KEYS.queens_nest = 'Q';
+BUILD_MENU.P[1].push('robo_support', 'observatory', 'arbiter_tribunal');
+Object.assign(BUILD_KEYS, { robo_support: 'B', observatory: 'O', arbiter_tribunal: 'A' });
+Object.assign(TECH, {
+  ensnare_t: { name: '인스네어', cost: [100, 100], time: 1200, hotkey: 'E', desc: '퀸의 이동 감속 능력' },
+  broodlings_t: { name: '스폰 브루들링', cost: [100, 100], time: 1200, hotkey: 'B', desc: '지상 생체 유닛을 브루들링으로 변환' },
+  maelstrom_t: { name: '메일스트롬', cost: [100, 100], time: 1500, hotkey: 'E', desc: '생체 유닛 일시 정지' },
+  mind_control_t: { name: '마인드 컨트롤', cost: [200, 200], time: 1800, hotkey: 'M', desc: '적 유닛 소유권 획득' },
+  recall_t: { name: '리콜', cost: [150, 150], time: 1800, hotkey: 'R', desc: '아군 유닛을 아비터로 이동' },
+  stasis_t: { name: '스테이시스 필드', cost: [150, 150], time: 1500, hotkey: 'S', desc: '유닛을 일시적으로 전투에서 제외' },
+  carrier_capacity: { name: '캐리어 용량', cost: [100, 100], time: 1500, hotkey: 'C', desc: '인터셉터 최대 4 → 8' },
+  reaver_capacity: { name: '리버 용량', cost: [200, 200], time: 1500, hotkey: 'R', desc: '스캐럽 최대 5 → 10' },
+  scarab_damage: { name: '스캐럽 공격력', cost: [200, 200], time: 1500, hotkey: 'S', desc: '스캐럽 공격력 100 → 125' },
+  disruption_web_t: { name: '디스럽션 웹', cost: [200, 200], time: 1200, hotkey: 'D', desc: '영역 내 지상 무기 사용 억제' },
+});
+Object.assign(SPELLS, {
+  parasite: { name: '패러사이트', hotkey: 'P', target: 'unit', energy: 75, range: 12, desc: '대상 시야 공유' },
+  ensnare: { name: '인스네어', hotkey: 'E', target: 'point', energy: 75, tech: 'ensnare_t', range: 9, desc: '영역 내 유닛 감속/클로킹 노출' },
+  spawn_broodlings: { name: '스폰 브루들링', hotkey: 'B', target: 'unit', energy: 150, tech: 'broodlings_t', range: 9, desc: '지상 생체 유닛 제거 후 브루들링 2기 생성' },
+  infest: { name: '인페스트', hotkey: 'I', target: 'unit', range: 1, desc: '체력 절반 이하 적 커맨드 센터 감염' },
+  feedback: { name: '피드백', hotkey: 'F', target: 'unit', energy: 50, range: 10, desc: '대상 에너지를 없애고 그만큼 피해' },
+  maelstrom: { name: '메일스트롬', hotkey: 'E', target: 'point', energy: 100, tech: 'maelstrom_t', range: 10, desc: '영역 내 생체 유닛 정지' },
+  mind_control: { name: '마인드 컨트롤', hotkey: 'M', target: 'unit', energy: 150, tech: 'mind_control_t', range: 8, desc: '적 유닛을 아군으로 전환 · 시전자 보호막 소모' },
+  recall: { name: '리콜', hotkey: 'R', target: 'point', energy: 150, tech: 'recall_t', range: 9999, desc: '지점의 아군 유닛을 아비터 앞으로 소환' },
+  stasis: { name: '스테이시스 필드', hotkey: 'T', target: 'point', energy: 100, tech: 'stasis_t', range: 9, desc: '영역 내 유닛을 정지/무적으로 전환' },
+  disruption_web: { name: '디스럽션 웹', hotkey: 'D', target: 'point', energy: 125, tech: 'disruption_web_t', range: 9, desc: '영역 내 지상 공격 억제' },
+  archon_merge: { name: '아콘 합체', hotkey: 'R', target: 'none', desc: '선택한 하이 템플러 2기를 합체' },
+  dark_archon_merge: { name: '다크 아콘 합체', hotkey: 'R', target: 'none', desc: '선택한 다크 템플러 2기를 합체' },
+  guardian_morph: { name: '가디언 변태', hotkey: 'G', target: 'none', cost: [50, 100], req: ['greater_spire'], desc: '뮤탈리스크를 가디언으로 변태' },
+  devourer_morph: { name: '디바우러 변태', hotkey: 'D', target: 'none', cost: [150, 50], req: ['greater_spire'], desc: '뮤탈리스크를 디바우러로 변태' },
+  morph_greater_spire: { name: '그레이터 스파이어 변태', hotkey: 'G', target: 'none', morph: 'greater_spire', req: ['hive'], desc: '가디언/디바우러 변태 허용' },
+});
+SPELLS.morph_hive.req = ['lair', 'queens_nest'];
+SPELLS.morph_hive.desc = '퀸즈 네스트가 있는 레어를 하이브로 변태';
+
+BUILDINGS.nuclear_silo = { name: '뉴클리어 사일로', race: 'T', hp: 600, armor: 1, w: 2, h: 2, cost: [100, 100], time: 1200, req: ['covert_ops'], addonOf: 'cc', spells: ['arm_nuke'], sight: 8 };
+BUILDINGS.cc.addons.push('nuclear_silo');
+BUILDINGS.infested_cc.canLift = true; BUILDINGS.infested_cc.spells = ['lift'];
+BUILDINGS.shield_battery = { name: '실드 배터리', race: 'P', hp: 200, sh: 200, armor: 1, w: 3, h: 2, cost: [100, 0], time: 450, req: ['gateway'], energy: 200, hotkey: 'B', spells: ['recharge'], sight: 7 };
+BUILD_MENU.P[0].push('shield_battery'); BUILD_KEYS.shield_battery = 'B';
+TECH.optic_flare_t = { name: '옵틱 플레어', cost: [100, 100], time: 1800, hotkey: 'F', desc: '대상 유닛 시야/탐지 무력화' };
+TECH.hallucination_t = { name: '할루시네이션', cost: [150, 150], time: 1200, hotkey: 'H', desc: '피해를 주지 않는 유닛 환상 2기' };
+BUILDINGS.academy.research.push('optic_flare_t'); BUILDINGS.archives.research.push('hallucination_t');
+UNITS.medic.spells.push('optic_flare'); UNITS.htemplar.spells.push('hallucination'); UNITS.ghost.spells.push('nuclear_strike');
+Object.assign(SPELLS, {
+  optic_flare: { name: '옵틱 플레어', hotkey: 'F', target: 'unit', energy: 75, tech: 'optic_flare_t', range: 9, desc: '대상 시야 1 · 탐지 제거 · 리스토레이션으로 회복' },
+  hallucination: { name: '할루시네이션', hotkey: 'L', target: 'unit', energy: 100, tech: 'hallucination_t', range: 7, desc: '환상 2기 · 공격 피해 없음 · 피격 피해 2배' },
+  arm_nuke: { name: '핵무기 준비', hotkey: 'N', target: 'none', cost: [200, 200], desc: '인구 8 필요 · 사일로당 1발' },
+  nuclear_strike: { name: '핵 공격', hotkey: 'N', target: 'point', range: 10, desc: '준비된 핵무기 필요 · 유도 중 정지/사망하면 취소' },
+  recharge: { name: '보호막 충전', hotkey: 'R', target: 'unit', range: 5, desc: '근접한 아군 보호막을 에너지로 충전' },
+});
 
 </script>
 <script>
@@ -983,7 +1099,8 @@ function upgLevel(owner, id) { return P(owner).upg[id] || 0; }
 // 요구 건물 보유 여부 (레어/하이브는 해처리로도 인정)
 function hasBuilding(owner, type) {
   for (const e of GAME.entities) {
-    if (e.dead || e.owner !== owner || !e.isBuilding || !e.done) continue;
+    if (e.dead || e.owner !== owner || !e.isBuilding || !e.done || e.lifted) continue;
+    if (e.def.addonOf && !GAME.entities.some(b => !b.dead && b.done && !b.lifted && b.owner === owner && b.type === e.def.addonOf && e.tx0 === b.tx0 + b.def.w && e.ty0 === b.ty0 + b.def.h - 2)) continue;
     if (e.type === type) return true;
     if (e.def.counts && e.def.counts.includes(type)) return true;
   }
@@ -1133,9 +1250,11 @@ function recomputeSupply() {
     if (e.dead || e.owner > 1) continue;
     const p = GAME.players[e.owner], d = e.def;
     if (e.isBuilding) {
+      if (e.nukeReady || e.nukeBuild) p.used += 8;
       if (e.done && d.provides) p.max += d.provides;
       if (e.done && e.queue.length && e.queue[0].started && e.queue[0].kind === 'unit') p.used += UNITS[e.queue[0].type].supply;
     } else {
+      if (e.hallucination) continue;
       if (e.type === 'egg' || e.type === 'lurker_egg') { const md = UNITS[e.morphTo]; p.used += md.pair ? md.supply * 2 : md.supply; if (e.type === 'lurker_egg') p.used += 0; }
       else p.used += d.supply || 0;
       if (d.provides && e.done !== false) p.max += d.provides;
@@ -1166,12 +1285,14 @@ function updateVision() {
   for (const e of GAME.entities) {
     if (e.dead || e.owner > 1 || e.hidden) continue;
     let sight = e.def.sight || 0;
+    if (e.blinded) sight = 1;
     if (e.isBuilding && !e.done) sight = Math.min(sight, 5);
     if (e.burrowed && e.type !== 'lurker') sight = Math.min(sight, 4);
     if (!sight) continue;
     if (e.type === 'overlord' && hasTech(e.owner, 'ventral')) sight = 11;
     const h = (e.air || e.lifted) ? 2 : heightAtPx(e.x, e.y);
     revealCircle(GAME.vis[e.owner], tileOf(e.x), tileOf(e.y), sight, h);
+    if (e.parasiteOwner !== undefined) revealCircle(GAME.vis[e.parasiteOwner], tileOf(e.x), tileOf(e.y), sight, h);
   }
   for (const a of GAME.areas) if (a.kind === 'scan') revealCircle(GAME.vis[a.owner], tileOf(a.x), tileOf(a.y), 10, 2);
   for (let p = 0; p < 2; p++) {
@@ -1209,7 +1330,9 @@ function isVisibleTo(e, p) {
 }
 function isCloakedFor(e, p) {
   if (e.owner === p) return false;
-  if (!(e.cloaked || e.burrowed)) return false;
+  if (e.ensnareT > 0 || e.irrT > 0 || e.matrixHp > 0 || e.parasiteOwner === p) return false;
+  const aura = !e.isBuilding && e.type !== 'arbiter' && GAME.entities.some(a => !a.dead && !a.hidden && a.owner === e.owner && a.def.cloakAura && !(a.stasisT > 0) && dist(a.x, a.y, e.x, e.y) <= a.def.cloakAura);
+  if (!(e.cloaked || e.def.permCloak || e.burrowed || aura)) return false;
   return !isDetectedBy(e, p);
 }
 function isDetectedBy(e, p) {
@@ -1220,7 +1343,7 @@ function isDetectedBy(e, p) {
     for (const a of GAME.areas) if (a.kind === 'scan' && a.owner === q && dist(a.x, a.y, e.x, e.y) < 10 * TILE) v[q] = true;
     if (v[q]) continue;
     for (const d of GAME.detectors) {
-      if (d.owner !== q) continue;
+      if (d.owner !== q && d.parasiteOwner !== q) continue;
       const r = (d.def.sight || 7) * TILE;
       if (Math.abs(d.x - e.x) < r && Math.abs(d.y - e.y) < r && dist(d.x, d.y, e.x, e.y) <= r) { v[q] = true; break; }
     }
@@ -1307,6 +1430,9 @@ class Entity {
     if (this.isBuilding && !this.done) return null;
     if (this.burrowed && !this.def.burrowAttack) return null;
     if (this.def.burrowAttack && !this.burrowed) return null;
+    if (this.def.ammo && !(this.ammo > 0)) return null;
+    if (this.stasisT > 0 || this.maelstromT > 0) return null;
+    if (!this.airTarget && typeof underWeb === 'function' && underWeb(this)) return null;
     const w = t.airTarget ? this.def.aw : this.def.gw;
     return w || null;
   }
@@ -1320,7 +1446,7 @@ class Entity {
     return r;
   }
   weaponDmg(w) {
-    let d = w.dmg;
+    let d = this.type === 'reaver' && hasTech(this.owner, 'scarab_damage') ? 125 : w.dmg;
     if (w.upg && w.upg !== 'none') d += (w.inc || 1) * upgLevel(this.owner, w.upg);
     return d;
   }
@@ -1341,6 +1467,7 @@ class Entity {
       }
       this.releaseMining();
       this.orders = [o]; this.path = null; this.tgt = null; this.stuck = 0;
+      this.vx = 0; this.vy = 0; this.lastD = undefined; this.giveUp = 0; this.avoidSide = 0; this.blockedTicks = 0;
     } else this.orders.push(o);
   }
   releaseMining() {
@@ -1365,19 +1492,27 @@ class Entity {
     if (this.hidden) { const o = this.orders[0]; if (o && o.t === 'gather' && o.phase === 'in') this.gatherLogic(o); return; }
     if (this.isBuilding) { this.buildingUpdate(); return; }
     if (this.type === 'egg' || this.type === 'lurker_egg') { this.eggUpdate(); return; }
-    if (this.lockT > 0) return;
+    if (this.lockT > 0 || this.stasisT > 0 || this.maelstromT > 0) return;
     if (this.xform) { if (--this.xform.t <= 0) this.finishTransform(); return; }
     if (this.type === 'larva') { this.larvaUpdate(); return; }
     if (this.def.mine) { this.mineUpdate(); return; }
     if (this.def.timed && GAME.tick - this.born > this.def.timed) { killEntity(this, null); return; }
+    if (this.ammoQueue && this.ammoQueue.length) {
+      const q = this.ammoQueue[0]; q.prog += GAME.buildSpeed;
+      if (q.prog >= q.total) { this.ammoQueue.shift(); this.ammo = (this.ammo || 0) + 1; }
+    }
     this.orderLogic();
   }
 
   timers() {
     const d = this.def;
+    if (this.lifeT > 0 && --this.lifeT === 0) { killEntity(this, null); return; }
     if (this.stimT > 0) this.stimT--;
     if (this.ensnareT > 0) this.ensnareT--;
     if (this.lockT > 0) this.lockT--;
+    if (this.stasisT > 0) this.stasisT--;
+    if (this.maelstromT > 0) this.maelstromT--;
+    if (this.acidT > 0 && --this.acidT <= 0) this.acidSpores = 0;
     if (this.matrixT > 0) { if (--this.matrixT <= 0) this.matrixHp = 0; }
     if (this.maxEnergy && this.energy < this.maxEnergy && !(this.isBuilding && !this.done)) this.energy = Math.min(this.maxEnergy, this.energy + 0.03125);
     if (this.maxSh && this.sh < this.maxSh && this.done) this.sh = Math.min(this.maxSh, this.sh + 0.027);
@@ -1405,6 +1540,14 @@ class Entity {
     if (this.def.healer) { if (this.healLogic(o)) return; }
     if (!o) { this.idleLogic(false); return; }
     switch (o.t) {
+      case 'nuke': break;
+      case 'recharge': {
+        const b = o.tgt;
+        if (!b || b.dead || !b.done || b.unpowered || b.energy <= 0 || this.sh >= this.maxSh) { this.nextOrder(); break; }
+        if (edgeDist(this, b) > 12) { this.moveTo(b.x, b.y, this.r + b.r + 6, b); break; }
+        const amount = Math.min(8, this.maxSh - this.sh, b.energy * 2);
+        this.sh += amount; b.energy -= amount / 2; break;
+      }
       case 'move': {
         if (this.moveGroup(o)) this.nextOrder();
         break;
@@ -1488,7 +1631,7 @@ class Entity {
       if (!this.tgt && !this.isWorker && (GAME.tick + this.id) % 6 === 0) this.tgt = this.findTarget(this.acqRange());
       if (this.isWorker && this.retaliate && !this.tgt) this.tgt = this.retaliate;
       if (this.tgt) {
-        if (hold && !this.inRangeOf(this.tgt)) { this.tgt = null; return; }
+        if (hold && !this.inRangeOf(this.tgt)) { this.tgt = this.findTarget(Math.max(...[this.def.gw, this.def.aw].filter(Boolean).map(w => this.range(w)))); if (!this.tgt) return; }
         if (this.isWorker && edgeDist(this, this.tgt) > 3 * TILE) { this.tgt = null; this.retaliate = null; return; }
         if (!this.engage(this.tgt, !hold && !this.isBuilding && this.speed > 0)) this.tgt = null;
         return;
@@ -1556,7 +1699,9 @@ class Entity {
   }
 
   fire(t, w) {
-    let cd = w.cd;
+    if (this.def.ammo && !(this.ammo > 0)) return;
+    if (this.type === 'reaver') this.ammo--;
+    let cd = w.cd * (1 + (this.acidSpores || 0) / 8);
     if (this.stimT > 0) cd = Math.max(1, Math.round(cd / 2));
     this.cooldown = cd + (Math.random() < 0.5 ? 0 : 1);
     this.attackAnim = 6;
@@ -1575,7 +1720,7 @@ class Entity {
       if (dd < gr * 1.6) {
         for (const e of SH.query(this.x, this.y, this.r + 20)) {
           if (e === this || e.dead || e.owner !== this.owner || e.arrivedGroup !== o.group || e.air !== this.air) continue;
-          if (dist(e.x, e.y, this.x, this.y) <= e.r + this.r + 3) { this.arrivedGroup = o.group; this.path = null; return true; }
+          if (dist(e.x, e.y, this.x, this.y) <= e.r + this.r + 3) { this.arrivedGroup = o.group; this.path = null; this.vx = 0; this.vy = 0; return true; }
         }
       }
     }
@@ -1585,9 +1730,9 @@ class Entity {
   moveTo(x, y, arrive, tgtEnt) {
     const dx = x - this.x, dy = y - this.y, d = Math.hypot(dx, dy);
     const edge = tgtEnt ? edgeDist(this, tgtEnt) : d;
-    if (edge <= arrive) { this.path = null; return true; }
+    if (edge <= arrive) { this.path = null; this.vx = 0; this.vy = 0; return true; }
     const sp = this.speed;
-    if (sp <= 0) return true;
+    if (sp <= 0 || this.burrowed || this.sieging || this.xform) { this.vx = 0; this.vy = 0; return true; }
     if (this.air || this.lifted) {
       const s = Math.min(sp, d);
       this.vx = dx / d * s; this.vy = dy / d * s;
@@ -1823,7 +1968,7 @@ class Entity {
     if (d > rng) { this.moveTo(tx, ty, rng * 0.9, o.tgt); return; }
     this.dir = Math.atan2(ty - this.y, tx - this.x);
     castSpell(this, o.s, o.tgt, tx, ty);
-    this.nextOrder();
+    if (this.orders[0] === o) this.nextOrder();
   }
 
   // ---------- 변신 ----------
@@ -1901,7 +2046,7 @@ class Entity {
     const d = this.def;
     if (!this.done) {
       let progress = true;
-      if (this.race === 'T') {
+      if (this.race === 'T' && !d.addonOf) {
         const b = this.builder;
         progress = b && !b.dead && b.orders[0] && b.orders[0].t === 'construct' && b.orders[0].tgt === this && edgeDist(b, this) <= 8;
       }
@@ -1924,11 +2069,18 @@ class Entity {
         notify(this.owner, 'morph' + this.id, BUILDINGS[to].name + ' 변태 완료', 'done');
       }
     }
+    if (d.addonOf) {
+      this.parent = GAME.entities.find(b => !b.dead && b.owner === this.owner && b.type === d.addonOf && !b.lifted &&
+        this.tx0 === b.tx0 + b.def.w && this.ty0 === b.ty0 + b.def.h - 2);
+      if (!this.parent) return;
+    }
     const powered = this.race !== 'P' || d.noPower || isPoweredCached(this);
     this.unpowered = !powered;
     if (this.lifted) { this.liftedLogic(); return; }
     if (this.liftT > 0) { if (--this.liftT === 0) this.finishLift(); return; }
     if (!powered || this.lockT > 0) return;
+    if (this.nukeBuild > 0) { this.nukeBuild += GAME.buildSpeed; if (this.nukeBuild >= 1500) { this.nukeBuild = 0; this.nukeReady = true; } }
+    if (this.orders[0] && this.orders[0].t === 'spell') this.spellLogic(this.orders[0]);
     // 생산
     if (this.queue.length && !this.morph) {
       const q = this.queue[0];
@@ -1973,7 +2125,7 @@ class Entity {
 
   // ---------- 피해 ----------
   takeRaw(amount, src) {
-    if (this.dead) return;
+    if (this.dead || this.stasisT > 0) return;
     this.hp -= amount;
     this.lastHit = GAME.tick;
     if (this.hp <= 0) killEntity(this, src);
@@ -2123,15 +2275,15 @@ function canLoad(t, u) {
   if (t.isBuilding && !t.done) return false;
   if (t.def.bunker && !(u.race === 'T' && u.def.bio)) return false;
   if (t.type === 'overlord' && !hasTech(t.owner, 'ventral')) return false;
-  if (u.type === 'tank_siege' || u.burrowed || u.def.mine || u.type === 'larva' || u.type === 'egg' || u.type === 'lurker_egg') return false;
+  if (u.sieging || u.xform || u.type === 'tank_siege' || u.burrowed || u.def.mine || u.type === 'larva' || u.type === 'egg' || u.type === 'lurker_egg') return false;
   const used = t.cargo.reduce((s, e) => s + (e.def.trans || 1), 0);
   return used + (u.def.trans || 1) <= t.def.cargo;
 }
 function loadUnit(t, u) {
   if (!canLoad(t, u)) return false;
-  u.inside = t; u.hidden = true; u.orders = []; u.tgt = null; u.path = null;
+  u.vx = 0; u.vy = 0; u.inside = t; u.hidden = true; u.orders = []; u.tgt = null; u.path = null;
   t.cargo.push(u);
-  const i = UI.selection.indexOf(u); if (i >= 0) UI.selection.splice(i, 1);
+  if (typeof UI !== 'undefined') { const i = UI.selection.indexOf(u); if (i >= 0) UI.selection.splice(i, 1); }
   SND.play('load', t.x, t.y);
   return true;
 }
@@ -2139,10 +2291,23 @@ function unloadAll(t) {
   const out = t.cargo.slice();
   for (const u of out) unloadUnit(t, u);
 }
+function findUnloadSpot(t, u) {
+  const base = t.isBuilding ? Math.max(t.hw, t.hh) + u.r : u.r;
+  for (let ring = 0; ring < 8; ring++) for (let k = 0; k < 16; k++) {
+    const a = k * Math.PI / 8, r = base + ring * 8;
+    const x = t.x + Math.cos(a) * r, y = t.y + Math.sin(a) * r;
+    if (!PF.lineClear(x, y, x, y, Math.max(3, u.r * 0.75), 0)) continue;
+    if (GAME.entities.some(o => o !== u && o !== t && !o.dead && !o.hidden && groundCollider(o) && dist(o.x, o.y, x, y) < (u.r + o.r) * 0.85)) continue;
+    return [x, y];
+  }
+  return null;
+}
 function unloadUnit(t, u) {
+  if (!t || !u || u.dead || u.inside !== t || !t.cargo.includes(u)) return false;
   const tx = tileOf(t.x), ty = tileOf(t.y);
   if (!t.isBuilding && !groundPassable(tx, ty)) { notify(t.owner, 'unl', '여기에는 내릴 수 없습니다.', 'err'); return false; }
-  const sp = t.isBuilding ? findSpawnSpot(t, u.r) : [t.x + (Math.random() - 0.5) * 20, t.y + (Math.random() - 0.5) * 20];
+  const sp = findUnloadSpot(t, u);
+  if (!sp) { notify(t.owner, 'unl', '유닛을 내릴 빈 공간이 없습니다.', 'err'); return false; }
   u.inside = null; u.hidden = false; u.x = sp[0]; u.y = sp[1];
   t.cargo.splice(t.cargo.indexOf(u), 1);
   return true;
@@ -2214,12 +2379,12 @@ const PROJ = {
   spit:   { speed: 8, color: '#a0e040' }, particle: { speed: 9, color: '#80c0ff' },
   tentacle: { speed: 0, delay: 8 }, spore: { speed: 8, color: '#d0ff90' },
   neutron:{ speed: 12, color: '#60ffff' }, interceptor: { speed: 9, color: '#ffe000' },
-  yamato: { speed: 9, color: '#ff8020' }, lock: { speed: 9, color: '#80ff80' },
+  yamato: { speed: 9, color: '#ff8020' }, lock: { speed: 9, color: '#80ff80' }, scarab: { speed: 7, color: '#ffe090' },
 };
 
 function fireWeapon(src, t, w) {
   const from = src.inside || src;
-  const hits = w.hits || 1;
+  const hits = src.type === 'carrier' ? src.ammo : (w.hits || 1);
   // 저지대 → 고지대 명중률 (원작: 약 50%)
   let miss = false;
   const range = src.range(w);
@@ -2230,7 +2395,8 @@ function fireWeapon(src, t, w) {
   if (!t.airTarget && range > 40 && !w.splash && !w.line && underSwarm(t)) miss = true;
   SND.play(w.proj || w.fx || 'melee', from.x, from.y, src);
   if (w.suicide) {
-    dealDamage(src, t, w, 1);
+    if (w.splash) splashDamage(src, t.x, t.y, w, src, !!w.friendly, !!t.airTarget);
+    else dealDamage(src, t, w, 1);
     fx('zsplat', t.x, t.y, { life: 14, size: 0.6 });
     killEntity(src, null, true);
     return;
@@ -2263,7 +2429,10 @@ function fireWeapon(src, t, w) {
   else if (w.fx === 'laser') { fx('beam', from.x, from.y, { life: 5, x2: t.x, y2: t.y, color: src.race === 'P' ? '#ffd040' : '#ff5050' }); }
   else fx('slash', t.x, t.y, { life: 6, race: src.race });
   for (let k = 0; k < hits; k++) dealDamage(src, t, w, 1, miss);
+  if (w.splash && !miss) splashAround(src, t, w);
 }
+
+function underWeb(t) { return GAME.areas.some(a => a.kind === 'web' && dist(a.x, a.y, t.x, t.y) <= a.r); }
 
 function underSwarm(t) {
   for (const a of GAME.areas) if (a.kind === 'swarm' && dist(a.x, a.y, t.x, t.y) <= a.r) return true;
@@ -2272,10 +2441,14 @@ function underSwarm(t) {
 
 // 피해 적용 (원작 공식: 보호막 → 방어력 차감 → 크기 보정, 최소 0.5)
 function dealDamage(src, t, w, mult, miss) {
-  if (!t || t.dead || t.hidden) return;
+  if (!t || t.dead || t.hidden || t.stasisT > 0) return;
+  if (src && src.hallucination) return;
   if (miss) { fx('miss', t.x, t.y - 6, { life: 10 }); return; }
   let dmg = (src ? src.weaponDmg(w) : w.dmg) * (mult || 1);
   const spell = w.type === 'spell';
+  if (t.hallucination) dmg *= 2;
+  if (!spell) dmg += t.acidSpores || 0;
+  if (dmg <= 0) return;
   if (t.matrixHp > 0) {
     const a = Math.min(t.matrixHp, dmg); t.matrixHp -= a; dmg -= a;
     fx('matrixhit', t.x, t.y, { life: 6 });
@@ -2393,6 +2566,10 @@ function findUnitAt(x, y, src) {
 
 function onProjectileHit(p) {
   const w = p.w, src = p.src && !p.src.dead ? p.src : null;
+  if (p.emp) {
+    for (const e of SH.query(p.x, p.y, 100)) if (!e.dead && !e.hidden && e !== p.src && !(e.stasisT > 0) && dist(e.x, e.y, p.x, p.y) <= 64 + e.r) { e.sh = 0; e.energy = 0; }
+    fx('empfx', p.x, p.y, { life: 20 }); return;
+  }
   switch (p.kind) {
     case 'siege':
       fx('explode', p.x, p.y, { life: 14, size: 1.2 });
@@ -2401,8 +2578,11 @@ function onProjectileHit(p) {
       return;
     case 'neutron':
       fx('explode', p.x, p.y, { life: 8, size: 0.5, color: '#60ffff' });
-      if (p.tgt && !p.tgt.dead) { dealDamage(src, p.tgt, w, 1); splashDamage(src, p.x, p.y, w, p.src, false, true); }
+      if (p.tgt && !p.tgt.dead) splashDamage(src, p.x, p.y, w, p.src, false, true);
       return;
+    case 'scarab':
+      if (p.src) splashDamage(src, p.x, p.y, w, p.src, false, false);
+      fx('explode', p.x, p.y, { life: 12, size: 1 }); return;
     case 'glaive': {
       const t = p.tgt;
       if (t && !t.dead) { dealDamage(src, t, w, p.mult, p.miss); fx('hitspark', t.x, t.y, { life: 6, color: '#b0ff70' }); p.hitList.push(t); }
@@ -2434,6 +2614,9 @@ function onProjectileHit(p) {
       if (p.kind === 'missile' || p.kind === 'grenade' || p.kind === 'shell' || p.kind === 'plasma') fx('explode', t.x, t.y, { life: 8, size: p.kind === 'plasma' ? 0.5 : 0.6, color: p.kind === 'plasma' ? '#a0d8ff' : undefined });
       else fx('hitspark', t.x, t.y, { life: 6, color: col });
       if (w.splash && p.kind !== 'neutron') splashAround(p.src || t, t, w);
+      if (w.acid && !p.miss) for (const e of SH.query(t.x, t.y, 80)) {
+        if (!e.dead && !e.hidden && e.airTarget && isEnemy(p.src.owner, e.owner) && dist(e.x, e.y, t.x, t.y) <= 48 + e.r) { e.acidSpores = Math.min(9, (e.acidSpores || 0) + 1); e.acidT = 900; }
+      }
     }
   }
 }
@@ -2443,6 +2626,18 @@ function updateAreas() {
   const out = [];
   for (const a of GAME.areas) {
     a.t++;
+    if (a.kind === 'nuke') {
+      if (a.t <= 320 && (!a.src || a.src.dead || a.src.lockT > 0 || a.src.stasisT > 0 || a.src.maelstromT > 0 || !a.src.orders[0] || a.src.orders[0].t !== 'nuke')) continue;
+      if (a.t === 320) a.src.nextOrder();
+      if (a.t === a.life) {
+        for (const e of SH.query(a.x, a.y, 240)) {
+          if (e.dead || e.hidden || e.def.resource || e.stasisT > 0) continue;
+          const d = edgeDistPt(e, a.x, a.y), mult = d <= 64 ? 1 : d <= 128 ? 0.5 : d <= 192 ? 0.25 : 0;
+          if (mult) dealDamage(a.src && !a.src.dead ? a.src : null, e, { dmg: Math.max(500, (e.maxHp + e.maxSh) * 2 / 3), type: 'spell' }, mult);
+        }
+        fx('explode', a.x, a.y, { life: 48, size: 6 }); SND.play('bigboom', a.x, a.y);
+      }
+    }
     if (a.kind === 'storm' && a.t % 8 === 0) {
       const st = GAME.tick;
       for (const e of SH.query(a.x, a.y, a.r + 30)) {
@@ -2461,6 +2656,24 @@ function updateAreas() {
 // ---------------- 특수 능력 시전 ----------------
 function castSpell(c, s, tgt, x, y) {
   const S = SPELLS[s];
+  if (!S || c.dead || c.hidden || c.hallucination || c.lockT > 0 || c.stasisT > 0 || c.maelstromT > 0 || !(c.def.spells || []).includes(s) || !spellTechOk(c, s)) return false;
+  if (S.target === 'unit' && (!tgt || tgt.dead || tgt.hidden || tgt.stasisT > 0 || !targetableBy(tgt, c.owner))) return false;
+  if (S.target === 'point' && (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x >= MAP_W * TILE || y >= MAP_H * TILE)) return false;
+  if (s === 'lockdown' && (!tgt.def.mech || tgt.isBuilding)) return false;
+  if (s === 'consume' && (tgt === c || tgt.owner !== c.owner || tgt.race !== 'Z' || tgt.isBuilding)) return false;
+  if (s === 'feedback' && (!tgt.maxEnergy || tgt.isBuilding)) return false;
+  if (s === 'mind_control' && (!isEnemy(c.owner, tgt.owner) || tgt.isBuilding || tgt.type === 'larva' || tgt.type === 'egg')) return false;
+  if (s === 'spawn_broodlings' && (tgt.isBuilding || tgt.airTarget || ['probe', 'reaver', 'archon', 'dark_archon', 'spider_mine'].includes(tgt.type))) return false;
+  if (['optic_flare','parasite','hallucination'].includes(s) && (tgt.isBuilding || tgt.type === 'larva' || tgt.type === 'egg')) return false;
+  if (s === 'recharge' && (tgt.owner !== c.owner || !tgt.maxSh || tgt.isBuilding || tgt.hallucination)) return false;
+  let silo;
+  if (s === 'nuclear_strike') {
+    silo = GAME.entities.find(b => !b.dead && b.owner === c.owner && b.type === 'nuclear_silo' && b.nukeReady && hasBuilding(c.owner, 'nuclear_silo') && GAME.entities.some(cc => !cc.dead && !cc.lifted && cc.owner === c.owner && attachedAddon(cc, 'nuclear_silo') === b));
+    if (!silo) return false;
+  }
+  if (s === 'infest' && (tgt.type !== 'cc' || !tgt.done || tgt.lifted || !isEnemy(c.owner, tgt.owner) || tgt.hp > tgt.maxHp / 2 || tgt.cargo.length)) return false;
+  const tx = tgt ? tgt.x : x, ty = tgt ? tgt.y : y;
+  if (S.range && dist(c.x, c.y, tx, ty) > S.range * TILE + (tgt ? tgt.r : 0) + c.r) return false;
   if (S.energy && c.energy < S.energy) { notify(c.owner, 'energy', '에너지가 부족합니다.', 'err'); return false; }
   if (S.energy) c.energy -= S.energy;
   c.attackAnim = 8;
@@ -2483,11 +2696,6 @@ function castSpell(c, s, tgt, x, y) {
       break;
     case 'emp':
       GAME.projectiles.push({ kind: 'plasma', x: c.x, y: c.y, tx: x, ty: y, tgt: null, src: c, w: { dmg: 0, type: 'spell' }, t: 0, delay: 0, emp: true });
-      for (const e of SH.query(x, y, 100)) {
-        if (e.dead || e === c || dist(e.x, e.y, x, y) > 64 + e.r) continue;
-        e.sh = 0; if (e.maxEnergy) e.energy = 0;
-      }
-      fx('empfx', x, y, { life: 20 });
       break;
     case 'irradiate':
       if (tgt) { tgt.irrT = 600; tgt.irrSrc = c; tgt.onAttacked(c); fx('cast', tgt.x, tgt.y, { life: 16, color: '#50ff50' }); }
@@ -2504,7 +2712,7 @@ function castSpell(c, s, tgt, x, y) {
       else notify(c.owner, 'mech', '기계 유닛에게만 사용할 수 있습니다.', 'err');
       break;
     case 'restoration':
-      if (tgt) { tgt.irrT = 0; tgt.plagueT = 0; tgt.lockT = 0; tgt.ensnareT = 0; fx('cast', tgt.x, tgt.y, { life: 12, color: '#ffffff' }); }
+      if (tgt) { tgt.irrT = 0; tgt.plagueT = 0; tgt.lockT = 0; tgt.ensnareT = 0; tgt.blinded = false; tgt.parasiteOwner = undefined; tgt.acidSpores = 0; tgt.acidT = 0; fx('cast', tgt.x, tgt.y, { life: 12, color: '#ffffff' }); }
       break;
     case 'consume':
       if (tgt && tgt.owner === c.owner && tgt.race === 'Z' && !tgt.isBuilding && tgt !== c) { killEntity(tgt, null); c.energy = Math.min(c.maxEnergy, c.energy + 50); }
@@ -2512,6 +2720,45 @@ function castSpell(c, s, tgt, x, y) {
     case 'scan':
       GAME.areas.push({ kind: 'scan', x, y, r: 10 * TILE, t: 0, life: 262, owner: c.owner });
       SND.play('scan', x, y);
+      break;
+    case 'parasite': tgt.parasiteOwner = c.owner; break;
+    case 'optic_flare': tgt.blinded = true; tgt.detCache = null; break;
+    case 'recharge': tgt.issue({ t: 'recharge', tgt: c }); break;
+    case 'hallucination':
+      for (let k = 0; k < 2; k++) { const h = createUnit(tgt.type, c.owner, tgt.x + (k ? 16 : -16), tgt.y); h.hallucination = true; h.energy = 0; h.lifeT = 1800; h.ammo = tgt.ammo; }
+      break;
+    case 'nuclear_strike':
+      silo.nukeReady = false; c.issue({ t: 'nuke' });
+      GAME.areas.push({ kind: 'nuke', x, y, r: 192, t: 0, life: 360, src: c, owner: c.owner });
+      if (typeof UI !== 'undefined') UI.message('핵 공격이 감지되었습니다!'); break;
+    case 'ensnare':
+    case 'maelstrom':
+    case 'stasis':
+      for (const e of SH.query(x, y, 100)) {
+        if (e.dead || e.hidden || e.isBuilding || e === c || e.stasisT > 0 || dist(e.x, e.y, x, y) > 48 + e.r) continue;
+        if (s === 'ensnare') { e.ensnareT = 900; e.detCache = null; }
+        else if (s === 'stasis') { e.stasisT = 900; e.vx = e.vy = 0; }
+        else if (e.def.bio) { e.maelstromT = 180; e.vx = e.vy = 0; }
+      }
+      fx('cast', x, y, { life: 20, color: s === 'ensnare' ? '#20dd60' : '#6080ff' }); break;
+    case 'spawn_broodlings': {
+      const bx = tgt.x, by = tgt.y; killEntity(tgt, c);
+      for (let k = 0; k < 2; k++) { const b = createUnit('broodling', c.owner, bx + (k ? 8 : -8), by); b.lifeT = 1800; }
+      break;
+    }
+    case 'infest':
+      for (const q of tgt.queue) if (q.kind === 'tech') delete P(tgt.owner).researching[q.type];
+      tgt.queue = []; tgt.owner = c.owner; tgt.type = 'infested_cc'; tgt.def = BUILDINGS.infested_cc; tgt.race = 'Z'; tgt.hp = tgt.maxHp; tgt.orders = []; break;
+    case 'feedback': { const dmg = tgt.energy; tgt.energy = 0; dealDamage(c, tgt, { dmg, type: 'spell' }, 1); break; }
+    case 'mind_control':
+      tgt.owner = c.owner; tgt.issue({ t: 'stop' }); tgt.detCache = null; tgt.parasiteOwner = undefined; c.sh = 0; recomputeSupply(); break;
+    case 'disruption_web': GAME.areas.push({ kind: 'web', x, y, r: 64, t: 0, life: 360, owner: c.owner }); break;
+    case 'recall':
+      for (const e of [...GAME.entities]) {
+        if (e.dead || e.hidden || e.isBuilding || e === c || e.owner !== c.owner || e.stasisT > 0 || dist(e.x, e.y, x, y) > 64) continue;
+        const spot = e.airTarget ? [c.x + Math.random() * 32 - 16, c.y + Math.random() * 32 - 16] : findUnloadSpot(c, e);
+        if (spot) { e.x = spot[0]; e.y = spot[1]; e.issue({ t: 'stop' }); }
+      }
       break;
   }
   return true;
@@ -2527,6 +2774,7 @@ function cmdTrain(b, type) {
   const d = UNITS[type];
   if (!b || b.dead || !b.done || b.lifted || b.morph) return false;
   if (!(b.def.produces || []).includes(type)) return false;
+  if (d.addon && !attachedAddon(b, d.addon)) { notify(b.owner, 'addon', BUILDINGS[d.addon].name + '이 이 생산 건물에 연결되어야 합니다.', 'err'); return false; }
   const miss = missingReq(b.owner, d.req);
   if (miss) { notify(b.owner, 'req', BUILDINGS[miss].name + ' 이(가) 필요합니다.', 'err'); return false; }
   if (b.queue.length >= 5) { notify(b.owner, 'q', '생산 대기열이 가득 찼습니다.', 'err'); return false; }
@@ -2535,6 +2783,47 @@ function cmdTrain(b, type) {
   pay(b.owner, d.cost);
   b.queue.push({ kind: 'unit', type, prog: 0, total: d.time, started: false });
   return true;
+}
+
+function attachedAddon(b, type) {
+  return GAME.entities.find(a => !a.dead && a.done && a.owner === b.owner && a.def.addonOf === b.type &&
+    (!type || a.type === type) && !b.lifted && a.tx0 === b.tx0 + b.def.w && a.ty0 === b.ty0 + b.def.h - 2);
+}
+function cmdAddon(b, type) {
+  const d = BUILDINGS[type];
+  if (!b || b.dead || !b.done || b.lifted || b.liftT || b.queue.length || !(b.def.addons || []).includes(type)) return false;
+  const tx = b.tx0 + b.def.w, ty = b.ty0 + b.def.h - 2;
+  if (GAME.entities.some(a => !a.dead && a.def.addonOf === b.type && a.tx0 === tx && a.ty0 === ty)) return false;
+  if (!reqMet(b.owner, d.req) || costFail(b.owner, d.cost) || !canPlace(type, tx, ty, b.owner, null)) return false;
+  pay(b.owner, d.cost);
+  const a = createBuilding(type, b.owner, tx, ty, false); a.parent = b;
+  return true;
+}
+function ammoCapacity(u) {
+  return u.type === 'carrier' ? (hasTech(u.owner, 'carrier_capacity') ? 8 : 4) : (hasTech(u.owner, 'reaver_capacity') ? 10 : 5);
+}
+function cmdAmmo(u) {
+  if (u.dead || u.hidden || u.xform || u.hallucination || !u.def.ammo || u.ammoQueue && u.ammoQueue.length >= 5) return false;
+  const queue = u.ammoQueue || (u.ammoQueue = []);
+  if ((u.ammo || 0) + queue.length >= ammoCapacity(u)) return false;
+  const cost = [u.type === 'carrier' ? 25 : 15, 0];
+  if (costFail(u.owner, cost)) return false;
+  pay(u.owner, cost); queue.push({ prog: 0, total: u.type === 'carrier' ? 300 : 105 }); return true;
+}
+function cmdMerge(units, type) {
+  const from = type === 'archon' ? 'htemplar' : 'dtemplar';
+  const pool = units.filter(u => !u.dead && !u.hidden && u.type === from && !u.xform);
+  let any = false;
+  while (pool.length >= 2) {
+    const a = pool.shift(), index = pool.findIndex(b => b.owner === a.owner);
+    if (index < 0) continue;
+    const b = pool.splice(index, 1)[0];
+    const merged = createUnit(type, a.owner, (a.x + b.x) / 2, (a.y + b.y) / 2);
+    merged.xform = { to: type, t: 300 }; merged.energy = 0;
+    if (typeof UI !== 'undefined') UI.selection = UI.selection.filter(u => u !== a && u !== b).concat(merged).slice(0, MAX_SELECT);
+    removeEntity(a); removeEntity(b); any = true;
+  }
+  return any;
 }
 
 function techCost(owner, id) {
@@ -2557,6 +2846,8 @@ function techReq(owner, id) {
   return missingReq(owner, t.req);
 }
 function cmdResearch(b, id) {
+  if (b && b.def.addonOf && (!b.parent || b.parent.dead || !attachedAddon(b.parent, b.type))) return false;
+  if (!b || !(b.def.research || []).includes(id)) return false;
   if (!b || b.dead || !b.done || b.queue.length || b.lifted || b.morph) { if (b && b.queue.length) notify(b.owner, 'q', '이미 연구 중입니다.', 'err'); return false; }
   if (!techAvailable(b.owner, id)) return false;
   const miss = techReq(b.owner, id);
@@ -2625,15 +2916,23 @@ function cmdBuildingMorph(b, to) {
 
 // 즉시 발동 능력
 function cmdInstant(units, s) {
+  if (s === 'archon_merge' || s === 'dark_archon_merge') return cmdMerge(units, s === 'archon_merge' ? 'archon' : 'dark_archon');
   const S = SPELLS[s];
   let any = false;
   for (const u of units) {
-    if (u.dead) continue;
+    if (u.dead || u.hidden || u.lockT > 0 || u.stasisT > 0 || u.maelstromT > 0 || u.hallucination) continue;
     const sp = u.def.spells || [];
     const has = sp.includes(s) || (s === 'unsiege' && u.type === 'tank_siege') || (s === 'unburrow' && u.burrowed) || (s === 'land' && u.lifted);
     if (!has && !(s === 'unburrow' || s === 'burrow') ) continue;
     if (!spellTechOk(u, s)) { notify(u.owner, 'tech', '먼저 연구가 필요합니다.', 'err'); continue; }
     switch (s) {
+      case 'arm_nuke':
+        if (!u.done || u.nukeReady || u.nukeBuild || !hasBuilding(u.owner, 'nuclear_silo') || !supplyOk(u.owner, 8) || costFail(u.owner, S.cost)) continue;
+        pay(u.owner, S.cost); u.nukeBuild = 1; any = true; break;
+      case 'guardian_morph': case 'devourer_morph':
+        if (u.type !== 'mutalisk' || u.xform || costFail(u.owner, S.cost)) continue;
+        pay(u.owner, S.cost); u.orders = []; u.tgt = null; u.path = null;
+        u.xform = { to: s === 'guardian_morph' ? 'guardian' : 'devourer', t: 600 }; any = true; break;
       case 'stim':
         if (u.hp <= 10) continue;
         u.hp -= 10; u.stimT = 170; any = true; break;
@@ -2687,19 +2986,9 @@ function commandUnits(units, order, queued) {
   const movers = units.filter(u => !u.dead && (!u.isBuilding || u.lifted));
   if (order.t === 'move' || order.t === 'amove' || order.t === 'patrol') {
     const g = GROUP_ID++;
-    // 대형 유지: 그룹 중심이 목적지와 멀면 상대 위치 유지 (원작의 뭉치기 동작 보완)
-    let cx = 0, cy = 0;
-    for (const u of movers) { cx += u.x; cy += u.y; }
-    cx /= movers.length || 1; cy /= movers.length || 1;
-    let spread = 0;
-    for (const u of movers) spread = Math.max(spread, dist(u.x, u.y, cx, cy));
-    const keepForm = movers.length > 1 && spread < 160 && dist(cx, cy, order.x, order.y) > spread * 2 + 64;
+    // 스타1식 동일 목적지 명령. 자동 대형 유지/상대 좌표 목적지는 사용하지 않는다.
     for (const u of movers) {
       const o = Object.assign({}, order, { group: g, gsize: movers.length });
-      if (keepForm) {
-        const nx = order.x + (u.x - cx), ny = order.y + (u.y - cy);
-        if (u.air || groundPassable(tileOf(nx), tileOf(ny))) { o.x = nx; o.y = ny; }
-      }
       if (order.t === 'patrol') { o.ox = u.x; o.oy = u.y; }
       u.issue(o, queued);
     }
@@ -2738,6 +3027,7 @@ function smartCommand(units, x, y, target, queued) {
         if (u.race === 'T' && t.owner === u.owner && t.isBuilding && !t.done && t.race === 'T') { u.issue({ t: 'construct', tgt: t }, queued); continue; }
         if (u.race === 'T' && t.owner === u.owner && t.done && t.hp < t.maxHp && (t.isBuilding || t.def.mech)) { u.issue({ t: 'repair', tgt: t }, queued); continue; }
       }
+      if (t.type === 'shield_battery' && t.owner === u.owner && u.maxSh && !u.hallucination) { u.issue({ t: 'recharge', tgt: t }, queued); continue; }
       if (t.owner === u.owner && t.def.cargo && canLoad(t, u)) { u.issue({ t: 'load', tgt: t }, queued); continue; }
       if (u.def.cargo && t.owner === u.owner && canLoad(u, t)) { u.issue({ t: 'pickup', tgt: t }, queued); continue; }
       if (t.owner === u.owner && !t.isBuilding) { u.issue({ t: 'follow', tgt: t }, queued); continue; }
@@ -2749,11 +3039,68 @@ function smartCommand(units, x, y, target, queued) {
 }
 
 // ---------------- 시뮬레이션 ----------------
+// 완전 고정 상태는 속도 적용, 유닛 분리, 지형 보정 모두에서 제외한다.
+function collisionFixed(e) {
+  return (e.isBuilding && !e.lifted) || e.type === 'tank_siege' ||
+    e.sieging || !!e.xform || e.type === 'egg' || e.type === 'lurker_egg' ||
+    e.burrowed || e.lockT > 0 || e.stasisT > 0 || e.maelstromT > 0 || (e.orders[0] && e.orders[0].t === 'nuke');
+}
+function groundCollider(e) {
+  return !e.dead && !e.hidden && !e.air && !e.lifted && !e.isBuilding &&
+    !e.noCollide && !e.burrowed && !e.def.mine;
+}
+function collisionMover(e) {
+  const order = e.orders[0];
+  return !collisionFixed(e) && !(order && (order.t === 'hold' || order.t === 'stop')) && e.moving;
+}
+
+// 이동하는 쪽에서만 회피한다. 짧은 직선 후보를 검사하여 옆 공간을 찾고,
+// 통과할 수 없는 길에서는 대기한다 (moveTo의 기존 stuck/재탐색 처리 유지).
+function steerGround(e) {
+  const speed = Math.hypot(e.vx, e.vy);
+  if (!speed) return;
+  const nearby = SH.query(e.x, e.y, e.r + speed * 6 + 24);
+  const blockers = nearby.filter(o => o !== e && groundCollider(o));
+  const angle = Math.atan2(e.vy, e.vx), side = e.avoidSide || 1;
+  function clear(a, length) {
+    const dx = Math.cos(a) * length, dy = Math.sin(a) * length;
+    if (!PF.lineClear(e.x, e.y, e.x + dx, e.y + dy, Math.max(3, e.r * 0.75), 0)) return false;
+    for (const o of blockers) {
+      const ox = o.x - e.x, oy = o.y - e.y;
+      const min = (e.r + o.r) * 0.85;
+      const t = Math.max(0, Math.min(1, (ox * dx + oy * dy) / (length * length)));
+      const closest = Math.hypot(ox - dx * t, oy - dy * t);
+      if (closest >= min + 0.1) continue;
+      // 스폰/언버로우 등으로 이미 겹친 경우 바깥으로 탈출하는 이동 허용.
+      if (Math.hypot(ox, oy) < min + 0.1 && ox * dx + oy * dy <= 0) continue;
+      return false;
+    }
+    return true;
+  }
+  for (const length of [Math.max(speed, e.r + speed * 6), speed]) {
+    for (const turn of [0, side, -side, 2 * side, -2 * side, 3 * side, -3 * side, 4 * side, -4 * side]) {
+      const a = angle + turn * Math.PI / 8;
+      if (!clear(a, length)) continue;
+      e.vx = Math.cos(a) * speed; e.vy = Math.sin(a) * speed;
+      e.dir = a;
+      if (turn) e.avoidSide = Math.sign(turn);
+      return;
+    }
+  }
+  e.vx = 0; e.vy = 0;
+}
+
 function physics() {
   const ents = GAME.entities;
+  // 회피 결과가 0이어도 이동 시도 중인 유닛이 분리 보정을 부담한다.
+  for (const e of ents) {
+    e.collisionMoving = collisionMover(e);
+    if (!e.dead && !e.hidden && groundCollider(e) && e.collisionMoving) steerGround(e);
+  }
   for (const e of ents) {
     if (e.dead || e.hidden) continue;
-    if (e.isBuilding && !e.lifted) continue;
+    if (collisionFixed(e)) { e.vx = 0; e.vy = 0; continue; }
+    if (groundCollider(e) && !e.collisionMoving) continue;
     e.x += e.vx; e.y += e.vy;
   }
   const buf = [];
@@ -2769,40 +3116,35 @@ function physics() {
       }
       continue;
     }
-    if (e.noCollide || e.burrowed || e.def.mine && e.burrowed) continue;
+    if (!groundCollider(e)) continue;
     buf.length = 0; SH.query(e.x, e.y, e.r + 24, buf);
     for (const o of buf) {
-      if (o.id <= e.id || o.dead || o.hidden || o.air || o.isBuilding || o.noCollide || o.burrowed) continue;
-      if (o.def.mine) continue;
+      if (o.id <= e.id || !groundCollider(o)) continue;
       let dx = o.x - e.x, dy = o.y - e.y;
       let d = Math.hypot(dx, dy);
       const min = (e.r + o.r) * 0.85;
       if (d >= min) continue;
-      if (d < 0.01) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d = Math.hypot(dx, dy); }
       const ov = min - d;
-      const me = mobility(e), mo = mobility(o);
-      let we = mo / (me + mo || 1), wo = me / (me + mo || 1);
-      const f = Math.min(ov, 3) * 0.5;
-      e.x -= dx / d * f * we * 2; e.y -= dy / d * f * we * 2;
-      o.x += dx / d * f * wo * 2; o.y += dy / d * f * wo * 2;
+      if (d < 0.01) { dx = e.id % 2 ? 1 : -1; dy = 0; d = 1; }
+      let me = e.collisionMoving ? 1 : 0, mo = o.collisionMoving ? 1 : 0;
+      // 이미 겹친 대기 유닛의 예외적 겹침 해소. Hold/고정 상태는 그대로.
+      if (!me && !mo) {
+        me = !collisionFixed(e) && e.orders[0]?.t !== 'hold' ? 1 : 0;
+        mo = !collisionFixed(o) && o.orders[0]?.t !== 'hold' ? 1 : 0;
+      }
+      const total = me + mo;
+      if (!total) continue;
+      e.x -= dx / d * ov * me / total; e.y -= dy / d * ov * me / total;
+      o.x += dx / d * ov * mo / total; o.y += dy / d * ov * mo / total;
     }
   }
   for (const e of ents) {
     if (e.dead || e.hidden) continue;
-    if (e.isBuilding && !e.lifted) continue;
+    if (collisionFixed(e)) continue;
     e.x = Math.max(8, Math.min(MAP_W * TILE - 8, e.x));
     e.y = Math.max(8, Math.min(MAP_H * TILE - 8, e.y));
     if (!e.air && !e.lifted) resolveTerrain(e);
   }
-}
-// 밀림 정도: 이동 중인 유닛이 대기 유닛을 밀어냄 (원작의 비켜주기)
-function mobility(e) {
-  if (e.type === 'tank_siege' || e.sieging || e.type === 'egg' || e.type === 'lurker_egg') return 0.02;
-  if (e.orders.length && e.orders[0].t === 'hold') return 0.05;
-  if (e.orders.length && e.orders[0].t === 'construct') return 0.1;
-  if (e.tgt && !e.moving) return 0.25; // 공격 중
-  if (e.moving) return 0.3;
-  return 1; // 대기 → 잘 밀림
 }
 function resolveTerrain(e) {
   const r = Math.max(3, e.r * 0.75);
@@ -2833,7 +3175,7 @@ function gameTick() {
   for (const e of ents) {
     if (e.dead) continue;
     if (!e.hidden) SH.insert(e);
-    if (e.def.detector && !e.hidden && e.done && !(e.lockT > 0) && !e.unpowered) GAME.detectors.push(e);
+    if (e.def.detector && !e.hidden && e.done && !e.blinded && !e.hallucination && !(e.lockT > 0) && !(e.stasisT > 0) && !e.unpowered) GAME.detectors.push(e);
   }
   if (GAME.tick % 4 === 1) updateVision();
   if (GAME.tick % 12 === 0) updateCreep();
@@ -3172,6 +3514,19 @@ const ART = (() => {
     },
   };
 
+  // 자체 제작 확장 스프라이트. 종족/역할별 실루엣을 분리한다.
+  Object.assign(U, {
+    valkyrie(T) { Pl([[18,0],[4,-7],[-13,-8],[-18,0],[-13,8],[4,7]], TM.mid); R(-10,-15,16,6,T.main); R(-10,9,16,6,T.main); E(10,0,4,3,TM.glass); for (const y of [-12,12]) { E(7,y,2,2,'#ffbc70'); R(-16,y-2,5,4,TM.dk); } },
+    queen(T,f) { const wing = 10 + f * 2; Pl([[9,0],[-4,-wing],[-17,-13],[-7,0],[-17,13],[-4,wing]], ZC.mid); E(-2,0,8,6,ZC.flesh); E(5,0,5,4,T.main); L(8,-2,15,-7,ZC.bone,2); L(8,2,15,7,ZC.bone,2); },
+    guardian(T,f) { E(-3,0,15,11,ZC.mid); E(-6,0,10,8,T.main); for (const y of [-1,1]) { Pl([[7,y*5],[-3,y*(16+f)],[-17,y*14],[-9,y*7]],ZC.bone); L(9,y*4,18,y*7,ZC.lt,3); } E(11,0,5,4,'#403020'); },
+    devourer(T,f) { E(-1,0,15,12,ZC.mid); Pl([[15,0],[4,-8],[-10,-6],[-17,0],[-10,6],[4,8]],T.main); for (const y of [-1,1]) Pl([[1,y*5],[-6,y*(18+f)],[-18,y*14],[-10,y*7]],ZC.lt); E(10,0,4,4,'#99d040'); },
+    infested_terran(T,f,a) { U.marine(T,f,a); E(-2,-5,4,3,ZC.flesh); E(-2,5,4,3,'#70b048'); L(-5,0,-10,6,ZC.bone,2); },
+    archon(T,f) { E(0,0,14,14,'rgba(50,130,255,0.45)'); E(0,0,10+f,10,'#50a0ff'); E(1,0,6,8,'#d0f0ff'); E(6,0,3,3,T.main); L(-4,-10,8,-12,PC.glow2,2); L(-7,9,5,12,PC.glow2,2); },
+    dark_archon(T,f) { E(0,0,14,14,'rgba(255,40,30,0.45)'); E(0,0,10+f,10,'#b83830'); E(1,0,6,8,'#ff8870'); E(6,0,3,3,T.main); },
+    reaver(T,f) { for(let i=0;i<5;i++) { E(-12+i*5,-10,3,3,PC.dk); E(-12+i*5,10,3,3,PC.dk); E(-12+i*5,0,5,9,i%2?PC.lt:T.main); } E(14,0,5,7,PC.mid); E(18,0,2,4,PC.glow); },
+    arbiter(T) { Pl([[19,0],[4,-6],[-17,-19],[-9,-4],[-19,0],[-9,4],[-17,19],[4,6]],PC.mid); Pl([[15,0],[-2,-3],[-12,-14],[-5,0],[-12,14],[-2,3]],PC.lt); E(2,0,4,4,PC.glow); E(-12,-14,3,3,T.main); E(-12,14,3,3,T.main); },
+  });
+
   // 스프라이트 크기 (반경 → 캔버스)
   function spriteSize(type) {
     const d = UNITS[type];
@@ -3503,7 +3858,16 @@ const ART = (() => {
     const T = TEAM[owner] || TEAM[2];
     let lvl = 0, v = 0;
     if (type === 'mineral') { lvl = extra >> 4; v = extra & 15; }
-    (B[type] || B.depot)(T, w, h, lvl, v);
+    if (BUILDINGS[type].addonOf) {
+      tBase(w, h); box3d(8, ELEV + 12, w - 16, h - 24, 16, '#9aa2aa', '#565e66');
+      R(10, ELEV + h - 22, w - 20, 4, T.main);
+      if (type === 'comsat') { E(w / 2, ELEV + 5, 15, 8, '#c0c8d0'); L(w / 2, ELEV - 8, w / 2, ELEV + 10, '#506070', 3); }
+      else { E(w / 2, ELEV + 6, 9, 9, type === 'physics_lab' ? '#a090ff' : '#60b0d0'); lights([14, w - 14], ELEV + h - 28, '#80ff90'); }
+    } else if (type === 'greater_spire') B.spire(T, w, h, lvl, v);
+    else if (type === 'infested_cc') { B.cc(T, w, h, lvl, v); E(w / 2, ELEV + h / 2, w / 3, h / 3, 'rgba(140,70,100,0.7)'); }
+    else if (type === 'queens_nest') { zBase(w, h); blob(w / 2, ELEV + h / 2, w / 3, h / 3, ZC.flesh); for (const x of [16,w-16]) L(x,ELEV+h-8,x+5,ELEV-8,ZC.bone,5); }
+    else if (['robo_support','observatory','arbiter_tribunal','shield_battery'].includes(type)) { pBase(w,h); box3d(12,ELEV+12,w-24,h-22,15,PC.lt,PC.dk); crystal(w/2,ELEV+4,type==='arbiter_tribunal'?2:1.3,PC.glow); R(16,ELEV+h-22,w-32,4,T.main); }
+    else (B[type] || B.depot)(T, w, h, lvl, v);
     const out = finish(c, w);
     s = { c: out, ox: w / 2, oy: h / 2 + ELEV };
     cache.set(key, s);
@@ -3940,6 +4304,9 @@ const RENDER = (() => {
     if (e.plagueT > 0) { ctx.fillStyle = 'rgba(160,200,60,0.5)'; for (let k = 0; k < 3; k++) ctx.fillRect(x - e.r + ((GAME.tick * 3 + k * 7) % (e.r * 2)), y - e.r + ((k * 11 + GAME.tick) % (e.r * 2)), 2, 2); }
     if (e.lockT > 0) statusRing(x, y, e.r + 2, '#80ff80');
     if (e.ensnareT > 0) statusRing(x, y, e.r + 1, '#c0a040');
+    if (e.stasisT > 0) { ctx.fillStyle = 'rgba(100,170,255,0.6)'; ctx.fillRect(x - e.r, y - e.r, e.r * 2, e.r * 2); }
+    if (e.maelstromT > 0) statusRing(x, y, e.r + 3, '#e04090');
+    if (e.acidSpores) statusRing(x, y, e.r + 3, '#b0f050');
     if (e.carry > 0 && e.isWorker) {
       const cx = x + Math.cos(e.dir) * (e.r - 1), cy = y + Math.sin(e.dir) * (e.r - 1);
       if (e.carryKind === 'gas') { ctx.fillStyle = e.race === 'Z' ? '#40c020' : e.race === 'P' ? '#40e060' : '#30b030'; ctx.fillRect(Math.round(cx) - 2, Math.round(cy) - 2, 4, 4); }
@@ -4069,6 +4436,8 @@ const RENDER = (() => {
   }
   function drawAreas(top) {
     for (const a of GAME.areas) {
+      if (a.kind === 'nuke' && top && isVisibleAt(a.x, a.y)) { ctx.fillStyle = '#ff2020'; ctx.beginPath(); ctx.arc(a.x, a.y, 3 + (GAME.tick % 12) / 4, 0, 6.283); ctx.fill(); continue; }
+      if (a.kind === 'web' && !top && isVisibleAt(a.x, a.y)) { ctx.strokeStyle = '#b0b0ff'; ctx.globalAlpha = 0.4; for (let i = -3; i <= 3; i++) { ctx.beginPath(); ctx.ellipse(a.x, a.y + i * 12, a.r, 10, 0, 0, 6.283); ctx.stroke(); } ctx.globalAlpha = 1; continue; }
       if (!onScreen(a.x, a.y, 120)) continue;
       if (a.kind === 'swarm' && !top) {
         ctx.globalAlpha = 0.45 * Math.min(1, a.t / 20, (a.life - a.t) / 30);
@@ -4752,8 +5121,13 @@ const UI = {
       if (b.morph) { card[8] = B(ART.cmdIcon('cancel'), 'ESCAPE', '변태 취소', () => cmdCancelConstruction(b)); return card; }
       let i = 0;
       for (const t of d.produces || []) {
-        const ud = UNITS[t], miss = missingReq(p, ud.req);
+        const ud = UNITS[t], miss = missingReq(p, ud.req) || (ud.addon && !attachedAddon(b, ud.addon) ? ud.addon : null);
         card[i++] = B(ART.icon(t, p), ud.hotkey, ud.name, () => cmdTrain(b, t), { cost: ud.cost, sup: ud.supply, disabled: !!miss, desc: miss ? '필요: ' + BUILDINGS[miss].name : '' });
+      }
+      for (const t of d.addons || []) {
+        if (i >= 7 || attachedAddon(b)) break;
+        const ad = BUILDINGS[t], miss = missingReq(p, ad.req);
+        card[i++] = B(ART.icon(t, p), t === 'physics_lab' ? 'P' : 'C', ad.name + ' 부속 건물', () => cmdAddon(b, t), { cost: ad.cost, disabled: !!miss || b.queue.length > 0, desc: '오른쪽에 연결 · ' + (miss ? '필요: ' + BUILDINGS[miss].name : '빈 공간 필요') });
       }
       for (const t of d.research || []) {
         if (i >= 8) break;
@@ -4773,6 +5147,8 @@ const UI = {
           continue;
         }
         if (s === 'lift') { card[i++] = B(ART.cmdIcon('lift'), 'L', '이륙', () => cmdInstant([b], 'lift'), { disabled: b.queue.length > 0 }); continue; }
+        if (s === 'arm_nuke') { card[i++] = B(ART.cmdIcon(s), 'N', b.nukeReady ? '핵무기 준비 완료' : b.nukeBuild ? '핵무기 생산 중' : S.name, () => cmdInstant([b], s), { cost: S.cost, disabled: !!b.nukeReady || !!b.nukeBuild, desc: S.desc }); continue; }
+        if (S.target === 'unit') { card[i++] = B(ART.cmdIcon(s), S.hotkey, S.name, () => this.setMode({ kind: 'target', cmd: 'spell', s }), { desc: S.desc }); continue; }
         if (S.target === 'point') {
           const miss = S.req ? missingReq(p, S.req) : null;
           card[i++] = B(ART.cmdIcon(s), S.hotkey, S.name, () => { if (miss) { notify(p, 'req', BUILDINGS[miss].name + ' 이(가) 필요합니다.', 'err'); return; } if (b.energy < S.energy) { notify(p, 'energy', '에너지가 부족합니다.', 'err'); return; } this.setMode({ kind: 'target', cmd: 'spell', s }); }, { energy: S.energy, disabled: !!miss, desc: S.desc });
@@ -4819,6 +5195,7 @@ const UI = {
         card[6] = B(ART.cmdIcon('build'), 'B', '기본 건물', () => { this.menu = 'build'; this.cardSig = ''; });
         card[7] = B(ART.cmdIcon('advbuild'), 'V', '고급 건물', () => { this.menu = 'advbuild'; this.cardSig = ''; });
       }
+      if (single && u0.race === 'Z') card[8] = B(ART.cmdIcon('burrow'), 'U', '버로우', () => cmdInstant(mob, 'burrow'), { disabled: !spellTechOk(u0, 'burrow') });
       return card;
     }
     if (!siege) { card[3] = B(ART.cmdIcon('patrol'), 'P', '정찰', () => this.setMode({ kind: 'target', cmd: 'patrol' })); }
@@ -4831,6 +5208,7 @@ const UI = {
       put(B(ART.cmdIcon('unload'), 'U', '모두 내리기', () => this.setMode({ kind: 'target', cmd: 'unload' }), { disabled: !mob.some(u => u.cargo.length) }));
     }
     if (single) {
+      if (u0.def.ammo) put(B(ART.icon(u0.type, p), u0.type === 'carrier' ? 'I' : 'R', (u0.type === 'carrier' ? '인터셉터' : '스캐럽') + ' 생산 (' + (u0.ammo || 0) + '/' + ammoCapacity(u0) + ')', () => { for (const u of mob) cmdAmmo(u); }, { cost: [u0.type === 'carrier' ? 25 : 15, 0], desc: '생산 대기 ' + (u0.ammoQueue || []).length, disabled: (u0.ammo || 0) + (u0.ammoQueue || []).length >= ammoCapacity(u0) }));
       for (const s of u0.def.spells || []) {
         const S = SPELLS[s];
         if (!S) continue;
@@ -4937,7 +5315,16 @@ const UI = {
       if (e.maxEnergy) parts.push('<span class="e">에너지 ' + Math.floor(e.energy) + '/' + e.maxEnergy + '</span>');
       l2 = parts.join(' · ');
       if (!e.isBuilding) l3 = '처치 ' + e.kills + (d.supply ? ' · 인구 ' + supplyText(d.pair ? d.supply : d.supply) : '');
-    } else if (d.provides && e.done) { const pp = P(e.owner); if (pp) l2 = '제공 인구: ' + d.provides + ' · 사용 ' + supplyText(pp.used) + '/' + pp.max; }
+    } else if (e.maxEnergy) l2 = '에너지 ' + Math.floor(e.energy) + '/' + e.maxEnergy;
+    else if (d.provides && e.done) { const pp = P(e.owner); if (pp) l2 = '제공 인구: ' + d.provides + ' · 사용 ' + supplyText(pp.used) + '/' + pp.max; }
+    if (d.ammo) l3 += ' · 탄약 ' + (e.ammo || 0) + '/' + ammoCapacity(e) + ' · 생산 대기 ' + (e.ammoQueue || []).length;
+    if (e.nukeReady || e.nukeBuild) l2 += e.nukeReady ? ' · 핵무기 준비 완료' : ' · 핵무기 생산 ' + Math.floor(e.nukeBuild / 15) + '%';
+    if (e.blinded) l3 += ' · 실명';
+    if (e.parasiteOwner !== undefined) l3 += ' · 패러사이트';
+    if (e.stasisT > 0) l3 += ' · 스테이시스';
+    if (e.maelstromT > 0) l3 += ' · 메일스트롬';
+    if (e.acidSpores) l3 += ' · 애시드 스포어 ' + e.acidSpores;
+    if (e.hallucination && own) l3 += ' · 환상';
     if (e.type === 'egg' || e.type === 'lurker_egg') l2 = (UNITS[e.morphTo] ? UNITS[e.morphTo].name : '') + ' 변태 중';
     el.querySelector('.ln2').innerHTML = l2;
     el.querySelector('.ln3').innerHTML = l3;
@@ -5119,6 +5506,7 @@ const UI = {
     const bopts = Object.keys(BUILDINGS).filter(k => BUILDINGS[k].race !== 'N').map(k => '<option value="' + k + '">' + BUILDINGS[k].name + '</option>').join('');
     t.innerHTML = `
       <div class="th">테스트 / 치트 패널 <span class="x" id="t-close">✕</span></div>
+      <div class="row small">버전 ${RTS_VERSION} · 자체 픽셀 그래픽 / 웹 RTS</div>
       <div class="row"><label>스폰 대상</label>
         <select id="t-type"><optgroup label="테란">${opts('T')}</optgroup><optgroup label="저그">${opts('Z')}</optgroup><optgroup label="프로토스">${opts('P')}</optgroup><optgroup label="건물">${bopts}</optgroup></select></div>
       <div class="row"><label>소속</label><select id="t-owner"><option value="1">적군 (저그/빨강)</option><option value="0">아군 (테란/파랑)</option></select>
@@ -5129,6 +5517,7 @@ const UI = {
       <div class="row"><label><input type="checkbox" id="t-sandbox"> 샌드박스 (승패 없음)</label><label><input type="checkbox" id="t-snd" checked> 효과음</label></div>
       <div class="row"><label>조작 진영</label><button id="t-ctrl0" class="on">테란 (나)</button><button id="t-ctrl1">저그 (적군 조작)</button></div>
       <div class="row"><button id="t-res">자원 +5000</button><button id="t-fast">빌드 속도 x<span id="t-bs">1</span></button></div>
+      <div class="row"><button id="t-tech">전 종족 연구 완료 (테스트)</button></div>
       <div class="row"><label>게임 속도</label><input id="t-speed" type="range" min="0.5" max="3" step="0.25" value="1"><span id="t-spv">1.0x</span></div>
       <div class="row small">F10 / \` : 패널 열기 · F1 : 도움말 · F9 : 일시정지</div>`;
     const $ = (id) => document.getElementById(id);
@@ -5150,6 +5539,7 @@ const UI = {
     };
     $('t-ctrl0').onclick = () => ctrl(0); $('t-ctrl1').onclick = () => ctrl(1);
     $('t-res').onclick = () => { const pl = P(GAME.control); pl.min += 5000; pl.gas += 5000; };
+    $('t-tech').onclick = () => { const pl = P(GAME.control); for (const [k, d] of Object.entries(TECH)) { if (d.lv) pl.upg[k] = d.lv; else pl.tech[k] = true; } this.cardSig = ''; this.message('조작 진영 연구 완료 · F10에서 3종족 유닛을 스폰할 수 있습니다.'); };
     $('t-fast').onclick = () => { GAME.buildSpeed = GAME.buildSpeed >= 8 ? 1 : GAME.buildSpeed * 2; $('t-bs').textContent = GAME.buildSpeed; };
     $('t-speed').oninput = (e) => { GAME.speed = +e.target.value; $('t-spv').textContent = GAME.speed.toFixed(2).replace(/0$/, '') + 'x'; };
   },

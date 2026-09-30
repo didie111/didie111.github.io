@@ -60,6 +60,9 @@ class Entity {
     if (this.isBuilding && !this.done) return null;
     if (this.burrowed && !this.def.burrowAttack) return null;
     if (this.def.burrowAttack && !this.burrowed) return null;
+    if (this.def.ammo && !(this.ammo > 0)) return null;
+    if (this.stasisT > 0 || this.maelstromT > 0) return null;
+    if (!this.airTarget && typeof underWeb === 'function' && underWeb(this)) return null;
     const w = t.airTarget ? this.def.aw : this.def.gw;
     return w || null;
   }
@@ -73,7 +76,7 @@ class Entity {
     return r;
   }
   weaponDmg(w) {
-    let d = w.dmg;
+    let d = this.type === 'reaver' && hasTech(this.owner, 'scarab_damage') ? 125 : w.dmg;
     if (w.upg && w.upg !== 'none') d += (w.inc || 1) * upgLevel(this.owner, w.upg);
     return d;
   }
@@ -94,6 +97,7 @@ class Entity {
       }
       this.releaseMining();
       this.orders = [o]; this.path = null; this.tgt = null; this.stuck = 0;
+      this.vx = 0; this.vy = 0; this.lastD = undefined; this.giveUp = 0; this.avoidSide = 0; this.blockedTicks = 0;
     } else this.orders.push(o);
   }
   releaseMining() {
@@ -118,19 +122,27 @@ class Entity {
     if (this.hidden) { const o = this.orders[0]; if (o && o.t === 'gather' && o.phase === 'in') this.gatherLogic(o); return; }
     if (this.isBuilding) { this.buildingUpdate(); return; }
     if (this.type === 'egg' || this.type === 'lurker_egg') { this.eggUpdate(); return; }
-    if (this.lockT > 0) return;
+    if (this.lockT > 0 || this.stasisT > 0 || this.maelstromT > 0) return;
     if (this.xform) { if (--this.xform.t <= 0) this.finishTransform(); return; }
     if (this.type === 'larva') { this.larvaUpdate(); return; }
     if (this.def.mine) { this.mineUpdate(); return; }
     if (this.def.timed && GAME.tick - this.born > this.def.timed) { killEntity(this, null); return; }
+    if (this.ammoQueue && this.ammoQueue.length) {
+      const q = this.ammoQueue[0]; q.prog += GAME.buildSpeed;
+      if (q.prog >= q.total) { this.ammoQueue.shift(); this.ammo = (this.ammo || 0) + 1; }
+    }
     this.orderLogic();
   }
 
   timers() {
     const d = this.def;
+    if (this.lifeT > 0 && --this.lifeT === 0) { killEntity(this, null); return; }
     if (this.stimT > 0) this.stimT--;
     if (this.ensnareT > 0) this.ensnareT--;
     if (this.lockT > 0) this.lockT--;
+    if (this.stasisT > 0) this.stasisT--;
+    if (this.maelstromT > 0) this.maelstromT--;
+    if (this.acidT > 0 && --this.acidT <= 0) this.acidSpores = 0;
     if (this.matrixT > 0) { if (--this.matrixT <= 0) this.matrixHp = 0; }
     if (this.maxEnergy && this.energy < this.maxEnergy && !(this.isBuilding && !this.done)) this.energy = Math.min(this.maxEnergy, this.energy + 0.03125);
     if (this.maxSh && this.sh < this.maxSh && this.done) this.sh = Math.min(this.maxSh, this.sh + 0.027);
@@ -158,6 +170,14 @@ class Entity {
     if (this.def.healer) { if (this.healLogic(o)) return; }
     if (!o) { this.idleLogic(false); return; }
     switch (o.t) {
+      case 'nuke': break;
+      case 'recharge': {
+        const b = o.tgt;
+        if (!b || b.dead || !b.done || b.unpowered || b.energy <= 0 || this.sh >= this.maxSh) { this.nextOrder(); break; }
+        if (edgeDist(this, b) > 12) { this.moveTo(b.x, b.y, this.r + b.r + 6, b); break; }
+        const amount = Math.min(8, this.maxSh - this.sh, b.energy * 2);
+        this.sh += amount; b.energy -= amount / 2; break;
+      }
       case 'move': {
         if (this.moveGroup(o)) this.nextOrder();
         break;
@@ -241,7 +261,7 @@ class Entity {
       if (!this.tgt && !this.isWorker && (GAME.tick + this.id) % 6 === 0) this.tgt = this.findTarget(this.acqRange());
       if (this.isWorker && this.retaliate && !this.tgt) this.tgt = this.retaliate;
       if (this.tgt) {
-        if (hold && !this.inRangeOf(this.tgt)) { this.tgt = null; return; }
+        if (hold && !this.inRangeOf(this.tgt)) { this.tgt = this.findTarget(Math.max(...[this.def.gw, this.def.aw].filter(Boolean).map(w => this.range(w)))); if (!this.tgt) return; }
         if (this.isWorker && edgeDist(this, this.tgt) > 3 * TILE) { this.tgt = null; this.retaliate = null; return; }
         if (!this.engage(this.tgt, !hold && !this.isBuilding && this.speed > 0)) this.tgt = null;
         return;
@@ -309,7 +329,9 @@ class Entity {
   }
 
   fire(t, w) {
-    let cd = w.cd;
+    if (this.def.ammo && !(this.ammo > 0)) return;
+    if (this.type === 'reaver') this.ammo--;
+    let cd = w.cd * (1 + (this.acidSpores || 0) / 8);
     if (this.stimT > 0) cd = Math.max(1, Math.round(cd / 2));
     this.cooldown = cd + (Math.random() < 0.5 ? 0 : 1);
     this.attackAnim = 6;
@@ -328,7 +350,7 @@ class Entity {
       if (dd < gr * 1.6) {
         for (const e of SH.query(this.x, this.y, this.r + 20)) {
           if (e === this || e.dead || e.owner !== this.owner || e.arrivedGroup !== o.group || e.air !== this.air) continue;
-          if (dist(e.x, e.y, this.x, this.y) <= e.r + this.r + 3) { this.arrivedGroup = o.group; this.path = null; return true; }
+          if (dist(e.x, e.y, this.x, this.y) <= e.r + this.r + 3) { this.arrivedGroup = o.group; this.path = null; this.vx = 0; this.vy = 0; return true; }
         }
       }
     }
@@ -338,9 +360,9 @@ class Entity {
   moveTo(x, y, arrive, tgtEnt) {
     const dx = x - this.x, dy = y - this.y, d = Math.hypot(dx, dy);
     const edge = tgtEnt ? edgeDist(this, tgtEnt) : d;
-    if (edge <= arrive) { this.path = null; return true; }
+    if (edge <= arrive) { this.path = null; this.vx = 0; this.vy = 0; return true; }
     const sp = this.speed;
-    if (sp <= 0) return true;
+    if (sp <= 0 || this.burrowed || this.sieging || this.xform) { this.vx = 0; this.vy = 0; return true; }
     if (this.air || this.lifted) {
       const s = Math.min(sp, d);
       this.vx = dx / d * s; this.vy = dy / d * s;
@@ -576,7 +598,7 @@ class Entity {
     if (d > rng) { this.moveTo(tx, ty, rng * 0.9, o.tgt); return; }
     this.dir = Math.atan2(ty - this.y, tx - this.x);
     castSpell(this, o.s, o.tgt, tx, ty);
-    this.nextOrder();
+    if (this.orders[0] === o) this.nextOrder();
   }
 
   // ---------- 변신 ----------
@@ -654,7 +676,7 @@ class Entity {
     const d = this.def;
     if (!this.done) {
       let progress = true;
-      if (this.race === 'T') {
+      if (this.race === 'T' && !d.addonOf) {
         const b = this.builder;
         progress = b && !b.dead && b.orders[0] && b.orders[0].t === 'construct' && b.orders[0].tgt === this && edgeDist(b, this) <= 8;
       }
@@ -677,11 +699,18 @@ class Entity {
         notify(this.owner, 'morph' + this.id, BUILDINGS[to].name + ' 변태 완료', 'done');
       }
     }
+    if (d.addonOf) {
+      this.parent = GAME.entities.find(b => !b.dead && b.owner === this.owner && b.type === d.addonOf && !b.lifted &&
+        this.tx0 === b.tx0 + b.def.w && this.ty0 === b.ty0 + b.def.h - 2);
+      if (!this.parent) return;
+    }
     const powered = this.race !== 'P' || d.noPower || isPoweredCached(this);
     this.unpowered = !powered;
     if (this.lifted) { this.liftedLogic(); return; }
     if (this.liftT > 0) { if (--this.liftT === 0) this.finishLift(); return; }
     if (!powered || this.lockT > 0) return;
+    if (this.nukeBuild > 0) { this.nukeBuild += GAME.buildSpeed; if (this.nukeBuild >= 1500) { this.nukeBuild = 0; this.nukeReady = true; } }
+    if (this.orders[0] && this.orders[0].t === 'spell') this.spellLogic(this.orders[0]);
     // 생산
     if (this.queue.length && !this.morph) {
       const q = this.queue[0];
@@ -726,7 +755,7 @@ class Entity {
 
   // ---------- 피해 ----------
   takeRaw(amount, src) {
-    if (this.dead) return;
+    if (this.dead || this.stasisT > 0) return;
     this.hp -= amount;
     this.lastHit = GAME.tick;
     if (this.hp <= 0) killEntity(this, src);
@@ -876,15 +905,15 @@ function canLoad(t, u) {
   if (t.isBuilding && !t.done) return false;
   if (t.def.bunker && !(u.race === 'T' && u.def.bio)) return false;
   if (t.type === 'overlord' && !hasTech(t.owner, 'ventral')) return false;
-  if (u.type === 'tank_siege' || u.burrowed || u.def.mine || u.type === 'larva' || u.type === 'egg' || u.type === 'lurker_egg') return false;
+  if (u.sieging || u.xform || u.type === 'tank_siege' || u.burrowed || u.def.mine || u.type === 'larva' || u.type === 'egg' || u.type === 'lurker_egg') return false;
   const used = t.cargo.reduce((s, e) => s + (e.def.trans || 1), 0);
   return used + (u.def.trans || 1) <= t.def.cargo;
 }
 function loadUnit(t, u) {
   if (!canLoad(t, u)) return false;
-  u.inside = t; u.hidden = true; u.orders = []; u.tgt = null; u.path = null;
+  u.vx = 0; u.vy = 0; u.inside = t; u.hidden = true; u.orders = []; u.tgt = null; u.path = null;
   t.cargo.push(u);
-  const i = UI.selection.indexOf(u); if (i >= 0) UI.selection.splice(i, 1);
+  if (typeof UI !== 'undefined') { const i = UI.selection.indexOf(u); if (i >= 0) UI.selection.splice(i, 1); }
   SND.play('load', t.x, t.y);
   return true;
 }
@@ -892,10 +921,23 @@ function unloadAll(t) {
   const out = t.cargo.slice();
   for (const u of out) unloadUnit(t, u);
 }
+function findUnloadSpot(t, u) {
+  const base = t.isBuilding ? Math.max(t.hw, t.hh) + u.r : u.r;
+  for (let ring = 0; ring < 8; ring++) for (let k = 0; k < 16; k++) {
+    const a = k * Math.PI / 8, r = base + ring * 8;
+    const x = t.x + Math.cos(a) * r, y = t.y + Math.sin(a) * r;
+    if (!PF.lineClear(x, y, x, y, Math.max(3, u.r * 0.75), 0)) continue;
+    if (GAME.entities.some(o => o !== u && o !== t && !o.dead && !o.hidden && groundCollider(o) && dist(o.x, o.y, x, y) < (u.r + o.r) * 0.85)) continue;
+    return [x, y];
+  }
+  return null;
+}
 function unloadUnit(t, u) {
+  if (!t || !u || u.dead || u.inside !== t || !t.cargo.includes(u)) return false;
   const tx = tileOf(t.x), ty = tileOf(t.y);
   if (!t.isBuilding && !groundPassable(tx, ty)) { notify(t.owner, 'unl', '여기에는 내릴 수 없습니다.', 'err'); return false; }
-  const sp = t.isBuilding ? findSpawnSpot(t, u.r) : [t.x + (Math.random() - 0.5) * 20, t.y + (Math.random() - 0.5) * 20];
+  const sp = findUnloadSpot(t, u);
+  if (!sp) { notify(t.owner, 'unl', '유닛을 내릴 빈 공간이 없습니다.', 'err'); return false; }
   u.inside = null; u.hidden = false; u.x = sp[0]; u.y = sp[1];
   t.cargo.splice(t.cargo.indexOf(u), 1);
   return true;
