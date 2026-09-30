@@ -1,0 +1,954 @@
+'use strict';
+// ===================================================================
+//  엔티티(유닛/건물) — 명령 처리, 이동, 전투, 채취, 건설, 생산
+// ===================================================================
+let GROUP_ID = 1;
+
+class Entity {
+  constructor(type, owner, x, y) {
+    const d = typeDef(type);
+    this.id = GAME.nextId++;
+    this.type = type; this.def = d; this.owner = owner; this.race = d.race;
+    this.isBuilding = !!BUILDINGS[type];
+    this.x = x; this.y = y;
+    if (this.isBuilding) { this.hw = d.w * 16; this.hh = d.h * 16; this.r = Math.max(this.hw, this.hh); }
+    else this.r = d.r;
+    this.air = !!d.air;
+    this.maxHp = d.hp; this.hp = d.hp;
+    this.maxSh = d.sh || 0; this.sh = this.maxSh;
+    this.maxEnergy = d.energy || 0; this.energy = d.energy ? 50 : 0;
+    this.dir = Math.PI / 2;
+    this.orders = [];
+    this.cooldown = 0; this.vx = 0; this.vy = 0;
+    this.path = null; this.pi = 0;
+    this.kills = 0; this.anim = Math.random() * 100; this.attackAnim = 0;
+    this.done = true;
+    this.tgt = null;
+    this.queue = [];
+    this.cargo = [];
+    this.carry = 0; this.carryKind = null;
+    this.mines = d.mines || 0;
+    this.born = GAME.tick;
+  }
+
+  // ---------- 스탯 ----------
+  get speed() {
+    const d = this.def; let s = d.speed || 0;
+    if (this.lifted) return 1.1;
+    const o = this.owner;
+    if (this.type === 'zergling' && hasTech(o, 'metabolic')) s *= 1.5;
+    if (this.type === 'hydra' && hasTech(o, 'muscular')) s *= 1.5;
+    if (this.type === 'zealot' && hasTech(o, 'legs')) s *= 1.5;
+    if (this.type === 'vulture' && hasTech(o, 'ion')) s *= 1.5;
+    if (this.type === 'overlord' && hasTech(o, 'pneumatized')) s *= 4;
+    if (this.type === 'ultralisk' && hasTech(o, 'anabolic')) s *= 1.25;
+    if (this.stimT > 0) s *= 1.5;
+    if (this.ensnareT > 0) s *= 0.5;
+    return s;
+  }
+  get armor() {
+    const d = this.def; let a = d.armor || 0;
+    if (this.isBuilding) return a;
+    if (d.armorUpg && d.armorUpg !== 'none') a += upgLevel(this.owner, d.armorUpg);
+    if (this.type === 'ultralisk' && hasTech(this.owner, 'chitinous')) a += 2;
+    return a;
+  }
+  get shArmor() { return upgLevel(this.owner, 'p_sh'); }
+  get airTarget() { return this.air || this.lifted; }
+  get isWorker() { return !!this.def.worker; }
+  weaponVs(t) {
+    if (this.isBuilding && !this.done) return null;
+    if (this.burrowed && !this.def.burrowAttack) return null;
+    if (this.def.burrowAttack && !this.burrowed) return null;
+    const w = t.airTarget ? this.def.aw : this.def.gw;
+    return w || null;
+  }
+  get canAttack() { return !!(this.def.gw || this.def.aw) && !(this.isBuilding && !this.done); }
+  range(w) {
+    let r = w.range;
+    if (this.type === 'marine' && hasTech(this.owner, 'u238')) r += 32;
+    if (this.type === 'hydra' && hasTech(this.owner, 'grooved')) r += 32;
+    if (this.type === 'dragoon' && hasTech(this.owner, 'singularity')) r += 64;
+    if (this.inside && this.inside.def.bunker) r += 32;
+    return r;
+  }
+  weaponDmg(w) {
+    let d = w.dmg;
+    if (w.upg && w.upg !== 'none') d += (w.inc || 1) * upgLevel(this.owner, w.upg);
+    return d;
+  }
+  acqRange() {
+    let best = 0;
+    for (const w of [this.def.gw, this.def.aw]) if (w) best = Math.max(best, this.range(w));
+    if (this.type === 'tank_siege') return best;
+    if (this.isBuilding) return best;
+    return Math.min(Math.max(best + 32, 3 * TILE), (this.def.sight || 7) * TILE);
+  }
+  get moving() { return this.vx !== 0 || this.vy !== 0; }
+
+  // ---------- 명령 ----------
+  issue(o, queued) {
+    if (!queued) {
+      if (this.orders.length && this.orders[0].t === 'construct' && o.t !== 'construct') {
+        const b = this.orders[0].tgt; if (b && b.builder === this) b.builder = null;
+      }
+      this.releaseMining();
+      this.orders = [o]; this.path = null; this.tgt = null; this.stuck = 0;
+    } else this.orders.push(o);
+  }
+  releaseMining() {
+    const o = this.orders[0];
+    if (o && o.t === 'gather' && o.tgt && o.tgt.miner === this) o.tgt.miner = null;
+  }
+  nextOrder() {
+    this.releaseMining();
+    this.orders.shift(); this.path = null; this.tgt = null; this.stuck = 0;
+  }
+  stopAll() { this.issue({ t: 'stop' }); this.orders = []; }
+
+  // ---------- 매 틱 ----------
+  update() {
+    if (this.dead) return;
+    this.timers();
+    if (this.dead) return;
+    this.vx = 0; this.vy = 0;
+    if (this.cooldown > 0) this.cooldown--;
+    if (this.attackAnim > 0) this.attackAnim--;
+    if (this.inside) { if (this.inside.def.bunker) this.bunkerLogic(); return; }
+    if (this.hidden) { const o = this.orders[0]; if (o && o.t === 'gather' && o.phase === 'in') this.gatherLogic(o); return; }
+    if (this.isBuilding) { this.buildingUpdate(); return; }
+    if (this.type === 'egg' || this.type === 'lurker_egg') { this.eggUpdate(); return; }
+    if (this.lockT > 0) return;
+    if (this.xform) { if (--this.xform.t <= 0) this.finishTransform(); return; }
+    if (this.type === 'larva') { this.larvaUpdate(); return; }
+    if (this.def.mine) { this.mineUpdate(); return; }
+    if (this.def.timed && GAME.tick - this.born > this.def.timed) { killEntity(this, null); return; }
+    this.orderLogic();
+  }
+
+  timers() {
+    const d = this.def;
+    if (this.stimT > 0) this.stimT--;
+    if (this.ensnareT > 0) this.ensnareT--;
+    if (this.lockT > 0) this.lockT--;
+    if (this.matrixT > 0) { if (--this.matrixT <= 0) this.matrixHp = 0; }
+    if (this.maxEnergy && this.energy < this.maxEnergy && !(this.isBuilding && !this.done)) this.energy = Math.min(this.maxEnergy, this.energy + 0.03125);
+    if (this.maxSh && this.sh < this.maxSh && this.done) this.sh = Math.min(this.maxSh, this.sh + 0.027);
+    if (this.race === 'Z' && this.hp < this.maxHp && this.done) this.hp = Math.min(this.maxHp, this.hp + 0.0156);
+    if (this.cloaked && !d.permCloak) {
+      this.energy -= 0.04;
+      if (this.energy <= 0) { this.energy = 0; this.cloaked = false; }
+    }
+    if (this.irrT > 0) {
+      this.irrT--;
+      for (const o of SH.query(this.x, this.y, 40)) {
+        if (o.dead || o.hidden || o.isBuilding || !o.def.bio || o.air !== this.air) continue;
+        if (dist(o.x, o.y, this.x, this.y) <= 32 + o.r || o === this) o.takeRaw(0.4167, this.irrSrc);
+      }
+    }
+    if (this.plagueT > 0) { this.plagueT--; if (this.hp > 1) this.hp = Math.max(1, this.hp - 0.5); }
+    if (this.isBuilding && this.race === 'T' && this.done && this.hp < this.maxHp / 3 && !this.dead) {
+      this.hp -= 0.08; if (this.hp <= 0) killEntity(this, null);
+    }
+  }
+
+  // ---------- 주문 처리 ----------
+  orderLogic() {
+    const o = this.orders[0];
+    if (this.def.healer) { if (this.healLogic(o)) return; }
+    if (!o) { this.idleLogic(false); return; }
+    switch (o.t) {
+      case 'move': {
+        if (this.moveGroup(o)) this.nextOrder();
+        break;
+      }
+      case 'hold': this.idleLogic(true); break;
+      case 'stop': this.nextOrder(); break;
+      case 'amove': case 'patrol': {
+        if (this.combatScan(true)) break;
+        if (this.moveGroup(o)) {
+          if (o.t === 'patrol') { const ox = o.ox, oy = o.oy; o.ox = o.x; o.oy = o.y; o.x = ox; o.y = oy; this.path = null; o.group = 0; }
+          else this.nextOrder();
+        }
+        break;
+      }
+      case 'attack': {
+        const t = o.tgt;
+        if (!t || t.dead || !targetableBy(t, this.owner)) {
+          if (t && !t.dead && !this.isBuilding && !o.chasedToLast) { o.chasedToLast = true; o.lx = t.x; o.ly = t.y; }
+          if (o.chasedToLast && o.lx !== undefined && t && !t.dead) { if (this.moveTo(o.lx, o.ly, 16)) this.nextOrder(); break; }
+          this.nextOrder(); break;
+        }
+        o.chasedToLast = false;
+        if (!this.engage(t, true)) {
+          if (!this.weaponVs(t)) notify(this.owner, 'cant', '그 대상은 공격할 수 없습니다.', 'err');
+          this.nextOrder();
+        }
+        break;
+      }
+      case 'follow': {
+        const t = o.tgt;
+        if (!t || t.dead) { this.nextOrder(); break; }
+        if (t.hidden) { this.nextOrder(); break; }
+        this.moveTo(t.x, t.y, this.r + t.r + 12);
+        break;
+      }
+      case 'gather': this.gatherLogic(o); break;
+      case 'ret': this.returnLogic(o); break;
+      case 'build': this.buildLogic(o); break;
+      case 'construct': this.constructLogic(o); break;
+      case 'repair': this.repairLogic(o); break;
+      case 'load': {
+        const t = o.tgt;
+        if (!t || t.dead || t.owner !== this.owner || !canLoad(t, this)) { this.nextOrder(); break; }
+        if (edgeDist(this, t) <= 10) { loadUnit(t, this); this.orders = []; break; }
+        if (t.air && !t.moving && t.orders.length === 0) { t.vx = 0; }
+        this.moveTo(t.x, t.y, this.r + t.r);
+        break;
+      }
+      case 'pickup': {
+        const t = o.tgt;
+        if (!t || t.dead || t.hidden || !canLoad(this, t)) { this.nextOrder(); break; }
+        if (edgeDist(this, t) <= 10) { loadUnit(this, t); this.nextOrder(); break; }
+        this.moveTo(t.x, t.y, 6);
+        break;
+      }
+      case 'unload': {
+        if (!this.cargo.length) { this.nextOrder(); break; }
+        if (this.isBuilding || this.moveTo(o.x, o.y, 8)) { unloadAll(this); this.nextOrder(); }
+        break;
+      }
+      case 'spell': this.spellLogic(o); break;
+      case 'mine': {
+        if (this.mines <= 0) { this.nextOrder(); break; }
+        if (this.moveTo(o.x, o.y, 12)) {
+          this.mines--;
+          const m = createUnit('spider_mine', this.owner, o.x, o.y);
+          m.burrowT = 20; m.burrowed = false; m.src = this;
+          this.nextOrder();
+        }
+        break;
+      }
+      default: this.nextOrder();
+    }
+  }
+
+  // 대기 상태: 사거리 안 적 자동 공격 / 공격받으면 반격 / 밀리면 비켜남
+  idleLogic(hold) {
+    if (this.sieging) return;
+    if (this.canAttack && (!this.isWorker || this.retaliate)) {
+      if (this.tgt && (this.tgt.dead || !targetableBy(this.tgt, this.owner) || !this.weaponVs(this.tgt))) { this.tgt = null; this.retaliate = null; }
+      if (!this.tgt && !this.isWorker && (GAME.tick + this.id) % 6 === 0) this.tgt = this.findTarget(this.acqRange());
+      if (this.isWorker && this.retaliate && !this.tgt) this.tgt = this.retaliate;
+      if (this.tgt) {
+        if (hold && !this.inRangeOf(this.tgt)) { this.tgt = null; return; }
+        if (this.isWorker && edgeDist(this, this.tgt) > 3 * TILE) { this.tgt = null; this.retaliate = null; return; }
+        if (!this.engage(this.tgt, !hold && !this.isBuilding && this.speed > 0)) this.tgt = null;
+        return;
+      }
+    }
+    // 가만히 있을 때 가끔 두리번거림 (원작 idle 애니메이션)
+    if (!this.isBuilding && !this.air && (GAME.tick + this.id * 7) % 170 === 0 && Math.random() < 0.5) this.dir += (Math.random() - 0.5) * 1.6;
+  }
+  inRangeOf(t) {
+    const w = this.weaponVs(t); if (!w) return false;
+    const d = edgeDist(this, t);
+    return d <= this.range(w) && d >= (w.minRange || 0);
+  }
+
+  // 공격 이동/정찰 중 적 탐색
+  combatScan(canMove) {
+    if (!this.canAttack) return false;
+    if (this.tgt && (this.tgt.dead || !targetableBy(this.tgt, this.owner) || !this.weaponVs(this.tgt))) this.tgt = null;
+    if ((GAME.tick + this.id) % 6 === 0) {
+      const t = this.findTarget(this.acqRange());
+      if (t && (!this.tgt || (threat(t) > threat(this.tgt)))) this.tgt = t;
+    }
+    if (this.tgt) {
+      if (this.engage(this.tgt, canMove)) return true;
+      this.tgt = null;
+    }
+    return false;
+  }
+
+  findTarget(r) {
+    let best = null, bs = -1e9;
+    const list = SH.query(this.x, this.y, r + 40);
+    for (const e of list) {
+      if (e.dead || e.hidden || !isEnemy(this.owner, e.owner)) continue;
+      if (e.type === 'larva' || e.type === 'egg' && !this.isBuilding && false) continue;
+      const w = this.weaponVs(e); if (!w) continue;
+      const d = edgeDist(this, e);
+      if (d > r) continue;
+      if (w.minRange && d < w.minRange) continue;
+      if (!targetableBy(e, this.owner)) continue;
+      if (e.type === 'spider_mine' && !e.burrowed) continue;
+      const s = threat(e) * 1000 - d;
+      if (s > bs) { bs = s; best = e; }
+    }
+    return best;
+  }
+
+  // 대상 교전: 사거리 밖이면 추적, 사거리 안이면 사격
+  engage(t, canMove) {
+    const w = this.weaponVs(t);
+    if (!w) return false;
+    if (!targetableBy(t, this.owner)) return false;
+    const d = edgeDist(this, t);
+    const rng = this.range(w);
+    if (d > rng) {
+      if (!canMove || this.speed <= 0) return false;
+      this.moveTo(t.x, t.y, 0, t);
+      return true;
+    }
+    if (w.minRange && d < w.minRange) return false;
+    this.path = null;
+    this.dir = Math.atan2(t.y - this.y, t.x - this.x);
+    if (this.cooldown <= 0) this.fire(t, w);
+    return true;
+  }
+
+  fire(t, w) {
+    let cd = w.cd;
+    if (this.stimT > 0) cd = Math.max(1, Math.round(cd / 2));
+    this.cooldown = cd + (Math.random() < 0.5 ? 0 : 1);
+    this.attackAnim = 6;
+    if (this.cloaked && !this.def.permCloak) { /* 원작: 클로킹 유지 */ }
+    fireWeapon(this, t, w);
+  }
+
+  // ---------- 이동 ----------
+  moveGroup(o) {
+    const arr = o.arrive || 8;
+    if (this.moveTo(o.x, o.y, arr)) { this.arrivedGroup = o.group; return true; }
+    // 그룹 도착 처리: 목적지 근처에서 이미 도착한 동료와 붙으면 정지
+    if (o.group && o.gsize > 1) {
+      const dd = dist(this.x, this.y, o.x, o.y);
+      const gr = 10 + Math.sqrt(o.gsize) * 14 + this.r;
+      if (dd < gr * 1.6) {
+        for (const e of SH.query(this.x, this.y, this.r + 20)) {
+          if (e === this || e.dead || e.owner !== this.owner || e.arrivedGroup !== o.group || e.air !== this.air) continue;
+          if (dist(e.x, e.y, this.x, this.y) <= e.r + this.r + 3) { this.arrivedGroup = o.group; this.path = null; return true; }
+        }
+      }
+    }
+    return false;
+  }
+
+  moveTo(x, y, arrive, tgtEnt) {
+    const dx = x - this.x, dy = y - this.y, d = Math.hypot(dx, dy);
+    const edge = tgtEnt ? edgeDist(this, tgtEnt) : d;
+    if (edge <= arrive) { this.path = null; return true; }
+    const sp = this.speed;
+    if (sp <= 0) return true;
+    if (this.air || this.lifted) {
+      const s = Math.min(sp, d);
+      this.vx = dx / d * s; this.vy = dy / d * s;
+      this.dir = Math.atan2(dy, dx);
+      return false;
+    }
+    // 직선 통행 가능 시 경로 없이 이동
+    const needRepath = !this.path || Math.abs((this.pgx || 0) - x) > 40 || Math.abs((this.pgy || 0) - y) > 40 || GAME.tick >= (this.repathAt || 0);
+    if (needRepath) {
+      if ((GAME.tick + this.id) % 4 === 0 || !this.path) {
+        if (PF.lineClear(this.x, this.y, x, y, Math.max(4, this.r - 3), 0)) { this.path = [[x, y]]; this.pi = 0; this.pgx = x; this.pgy = y; this.repathAt = GAME.tick + 24; }
+        else if (PF.budget > 0) {
+          const p = PF.worldPath(this.x, this.y, x, y, this.r, 0);
+          this.pgx = x; this.pgy = y; this.repathAt = GAME.tick + 120;
+          if (!p || !p.length) { this.path = null; return true; }
+          this.path = p; this.pi = 0;
+        }
+      }
+    }
+    let wx = x, wy = y;
+    if (this.path && this.path.length) {
+      // 목표가 움직이는 경우 마지막 점을 갱신
+      if (tgtEnt || this.path.length === 1) this.path[this.path.length - 1] = [x, y];
+      while (this.pi < this.path.length - 1 && dist(this.x, this.y, this.path[this.pi][0], this.path[this.pi][1]) < Math.max(10, sp * 1.5)) this.pi++;
+      [wx, wy] = this.path[this.pi];
+      if (this.pi === this.path.length - 1 && dist(this.x, this.y, wx, wy) < Math.max(4, sp)) {
+        // 목적지가 막혀 있어 더 못 가는 경우
+        if (d > arrive) { this.path = null; return !tgtEnt ? true : false; }
+      }
+    }
+    const wdx = wx - this.x, wdy = wy - this.y, wd = Math.hypot(wdx, wdy) || 1;
+    const s = Math.min(sp, Math.max(wd, 0.5));
+    this.vx = wdx / wd * s; this.vy = wdy / wd * s;
+    this.dir = Math.atan2(wdy, wdx);
+    // 막힘 감지
+    if (this.lastD !== undefined && d > this.lastD - 0.05 * sp) this.stuck = (this.stuck || 0) + 1;
+    else this.stuck = Math.max(0, (this.stuck || 0) - 2);
+    this.lastD = d;
+    if (this.stuck > 40) {
+      this.stuck = 0; this.path = null; this.repathAt = 0;
+      this.giveUp = (this.giveUp || 0) + 1;
+      if (this.giveUp > 3 && d < 160) { this.giveUp = 0; return true; }
+    }
+    return false;
+  }
+
+  // ---------- 채취 ----------
+  gatherLogic(o) {
+    if (this.carry > 0 && o.phase !== 'ret' && o.phase !== 'in') o.phase = 'ret';
+    if (o.phase === 'ret') {
+      const th = nearestTownHall(this.owner, this.x, this.y);
+      if (!th) { this.nextOrder(); return; }
+      this.noCollide = true;
+      if (this.moveTo(th.x, th.y, 4, th)) {
+        const p = P(this.owner);
+        if (this.carryKind === 'gas') p.gas += this.carry; else p.min += this.carry;
+        this.carry = 0; this.carryKind = null; o.phase = 'go'; this.path = null;
+      }
+      return;
+    }
+    let res = o.tgt;
+    if (!res || res.dead) {
+      res = o.tgt = res && res.type === 'mineral' ? findFreeMineral(o.lx || this.x, o.ly || this.y, this, null) : null;
+      if (!res) { this.nextOrder(); this.noCollide = false; return; }
+    }
+    o.lx = res.x; o.ly = res.y;
+    this.noCollide = true;
+    if (res.type === 'mineral') {
+      if (o.phase === 'mine') {
+        this.dir = Math.atan2(res.y - this.y, res.x - this.x);
+        if (GAME.tick % 8 === 0) fx('mining', res.x + (Math.random() - 0.5) * 20, res.y + (Math.random() - 0.5) * 8, { life: 6, race: this.race });
+        this.attackAnim = 2;
+        if (--this.mineT <= 0) {
+          const amt = Math.min(8, res.amount);
+          res.amount -= amt; this.carry = amt; this.carryKind = 'min';
+          res.miner = null; o.phase = 'ret'; this.path = null;
+          if (res.amount <= 0) killEntity(res, null);
+        }
+        return;
+      }
+      if (this.moveTo(res.x, res.y, 3, res)) {
+        if (res.miner && res.miner !== this && !res.miner.dead && res.miner.orders[0] && res.miner.orders[0].tgt === res && res.miner.orders[0].phase === 'mine') {
+          const alt = findFreeMineral(res.x, res.y, this, res);
+          if (alt) { o.tgt = alt; this.path = null; }
+          return; // 대기
+        }
+        res.miner = this; o.phase = 'mine'; this.mineT = 75;
+      }
+    } else {
+      // 가스
+      if (res.dead || res.owner !== this.owner || !res.done || !res.def.onGeyser) { this.nextOrder(); this.noCollide = false; return; }
+      if (o.phase === 'in') {
+        if (--this.gasT <= 0) {
+          this.hidden = false; res.gasUser = null;
+          const g = res.geyser;
+          const amt = g && g.amount > 0 ? Math.min(8, g.amount) : 2;
+          if (g) g.amount = Math.max(0, g.amount - amt);
+          this.carry = amt; this.carryKind = 'gas'; o.phase = 'ret';
+          const sp = findSpawnSpot(res, this.r, this.x, this.y);
+          this.x = sp[0]; this.y = sp[1];
+        }
+        return;
+      }
+      if (this.moveTo(res.x, res.y, 3, res)) {
+        if (!res.gasUser || res.gasUser.dead || res.gasUser.orders[0]?.tgt !== res) {
+          res.gasUser = this; o.phase = 'in'; this.gasT = 37; this.hidden = true;
+        }
+      }
+    }
+  }
+  returnLogic(o) {
+    if (this.carry <= 0) { this.nextOrder(); return; }
+    const th = nearestTownHall(this.owner, this.x, this.y);
+    if (!th) { this.nextOrder(); return; }
+    if (this.moveTo(th.x, th.y, 4, th)) {
+      const p = P(this.owner);
+      if (this.carryKind === 'gas') p.gas += this.carry; else p.min += this.carry;
+      this.carry = 0;
+      const last = this.lastRes;
+      this.nextOrder();
+      if (!this.orders.length && last && !last.dead) this.issue({ t: 'gather', tgt: last, phase: 'go' });
+    }
+  }
+
+  // ---------- 건설 ----------
+  buildLogic(o) {
+    const d = BUILDINGS[o.bt];
+    const cx = (o.tx + d.w / 2) * TILE, cy = (o.ty + d.h / 2) * TILE;
+    const box = { x: cx, y: cy, hw: d.w * 16, hh: d.h * 16 };
+    if (edgeDist(this, box) > 6) {
+      this.noCollide = false;
+      // 목적지는 건물 영역 가장자리
+      const tx = Math.max(cx - box.hw + 4, Math.min(cx + box.hw - 4, this.x)), ty = Math.max(cy - box.hh + 4, Math.min(cy + box.hh - 4, this.y));
+      const res = this.moveTo(tx, ty, 0, box);
+      if (res && edgeDist(this, box) > 40) { notify(this.owner, 'place', '건설 위치에 도달할 수 없습니다.', 'err'); this.nextOrder(); }
+      return;
+    }
+    startConstruction(this, o);
+  }
+  constructLogic(o) {
+    const b = o.tgt;
+    if (!b || b.dead || b.done) { this.nextOrder(); return; }
+    if (b.builder && b.builder !== this && !b.builder.dead && b.builder.orders[0]?.tgt === b) { this.nextOrder(); return; }
+    if (edgeDist(this, b) > 6) { this.moveTo(b.x, b.y, 4, b); return; }
+    b.builder = this;
+    this.attackAnim = 2;
+    // 건물 주위를 오가며 용접
+    if (GAME.tick % 24 === 0) {
+      const a = Math.random() * Math.PI * 2;
+      this.wx = b.x + Math.cos(a) * (b.hw + this.r); this.wy = b.y + Math.sin(a) * (b.hh + this.r);
+    }
+    if (this.wx !== undefined && dist(this.x, this.y, this.wx, this.wy) > 4) {
+      const dx = this.wx - this.x, dy = this.wy - this.y, dd = Math.hypot(dx, dy);
+      this.vx = dx / dd * Math.min(2, dd); this.vy = dy / dd * Math.min(2, dd);
+    }
+    this.dir = Math.atan2(b.y - this.y, b.x - this.x);
+    if (GAME.tick % 5 === 0) fx('spark', b.x + (Math.random() - 0.5) * b.hw * 1.6, b.y + (Math.random() - 0.5) * b.hh * 1.6, { life: 5 });
+  }
+  repairLogic(o) {
+    const t = o.tgt;
+    if (!t || t.dead || t.hp >= t.maxHp || !t.done) { this.nextOrder(); return; }
+    if (edgeDist(this, t) > 6) { this.moveTo(t.x, t.y, 4, t); return; }
+    this.dir = Math.atan2(t.y - this.y, t.x - this.x);
+    this.attackAnim = 2;
+    const time = t.def.time || 300;
+    const hpPer = t.maxHp / time;
+    const c = t.def.cost || [0, 0];
+    this.repAcc = (this.repAcc || 0) + hpPer / t.maxHp;
+    const cm = c[0] * 0.33 * this.repAcc, cg = c[1] * 0.33 * this.repAcc;
+    if (cm >= 1 || cg >= 1) {
+      const p = P(this.owner);
+      const nm = Math.floor(cm), ng = Math.floor(cg);
+      if (p.min < nm || p.gas < ng) { costFail(this.owner, [nm, ng]); this.nextOrder(); return; }
+      p.min -= nm; p.gas -= ng; this.repAcc = 0;
+    }
+    t.hp = Math.min(t.maxHp, t.hp + hpPer);
+    if (GAME.tick % 6 === 0) fx('spark', t.x + (Math.random() - 0.5) * hx(t), t.y + (Math.random() - 0.5) * hy(t), { life: 5 });
+  }
+
+  // ---------- 메딕 ----------
+  healLogic(o) {
+    if (o && (o.t === 'move' || o.t === 'load' || o.t === 'spell' || o.t === 'follow')) return false;
+    let t = this.healTgt;
+    if (t && (t.dead || t.hidden || t.hp >= t.maxHp || dist(t.x, t.y, this.x, this.y) > 7 * TILE)) t = this.healTgt = null;
+    if (!t && (GAME.tick + this.id) % 8 === 0 && this.energy >= 1) {
+      let bd = 1e9;
+      for (const e of SH.query(this.x, this.y, 6 * TILE)) {
+        if (e.dead || e.hidden || e === this || e.owner !== this.owner || !e.def.bio || e.isBuilding || e.air || e.hp >= e.maxHp) continue;
+        if (e.type === 'larva' || e.type === 'egg') continue;
+        const d = dist(e.x, e.y, this.x, this.y);
+        if (d < bd) { bd = d; t = e; }
+      }
+      this.healTgt = t;
+    }
+    if (!t || this.energy < 0.5) return false;
+    if (edgeDist(this, t) > 30) { if (o && o.t === 'hold') return false; this.moveTo(t.x, t.y, 24, t); return true; }
+    this.dir = Math.atan2(t.y - this.y, t.x - this.x);
+    const h = Math.min(0.78, t.maxHp - t.hp);
+    t.hp += h; this.energy -= h / 2;
+    this.attackAnim = 2;
+    if (GAME.tick % 6 === 0) fx('heal', t.x, t.y - 4, { life: 8 });
+    return true;
+  }
+
+  // ---------- 벙커 ----------
+  bunkerLogic() {
+    const b = this.inside;
+    this.x = b.x; this.y = b.y;
+    if (!this.canAttack) return;
+    if (this.cooldown > 0) return;
+    if (this.tgt && (this.tgt.dead || !targetableBy(this.tgt, this.owner) || !this.inRangeOfFrom(b, this.tgt))) this.tgt = null;
+    if (!this.tgt && (GAME.tick + this.id) % 6 === 0) {
+      let best = null, bd = 1e9;
+      for (const e of SH.query(b.x, b.y, 9 * TILE)) {
+        if (e.dead || e.hidden || !isEnemy(this.owner, e.owner)) continue;
+        if (!this.weaponVs(e) || !targetableBy(e, this.owner) || !this.inRangeOfFrom(b, e)) continue;
+        const d = edgeDist(b, e) - threat(e) * 64;
+        if (d < bd) { bd = d; best = e; }
+      }
+      this.tgt = best;
+    }
+    if (this.tgt) { const w = this.weaponVs(this.tgt); this.fire(this.tgt, w); b.attackAnim = 4; }
+  }
+  inRangeOfFrom(b, t) { const w = this.weaponVs(t); return w && edgeDist(b, t) <= this.range(w); }
+
+  // ---------- 주문(스킬) ----------
+  spellLogic(o) {
+    const s = SPELLS[o.s];
+    const tx = o.tgt ? o.tgt.x : o.x, ty = o.tgt ? o.tgt.y : o.y;
+    if (o.tgt && (o.tgt.dead || o.tgt.hidden)) { this.nextOrder(); return; }
+    const rng = (s.range || 1) * TILE;
+    const d = o.tgt ? edgeDist(this, o.tgt) : dist(this.x, this.y, tx, ty);
+    if (d > rng) { this.moveTo(tx, ty, rng * 0.9, o.tgt); return; }
+    this.dir = Math.atan2(ty - this.y, tx - this.x);
+    castSpell(this, o.s, o.tgt, tx, ty);
+    this.nextOrder();
+  }
+
+  // ---------- 변신 ----------
+  finishTransform() {
+    const to = this.xform.to; this.xform = null;
+    const hpF = this.hp / this.maxHp;
+    this.type = to; this.def = UNITS[to];
+    this.maxHp = this.def.hp; this.hp = Math.max(1, hpF * this.maxHp);
+    this.r = this.def.r; this.sieging = false;
+    this.cooldown = 0;
+  }
+
+  // ---------- 라바 / 에그 ----------
+  larvaUpdate() {
+    const h = this.hatch;
+    if (!h || h.dead) { if (GAME.tick % 48 === 0 && Math.random() < 0.02) killEntity(this, null); return; }
+    if (!this.home || GAME.tick % 60 === (this.id % 60)) this.home = [h.x + (Math.random() - 0.5) * h.hw * 1.6, h.y + h.hh + 6 + Math.random() * 10];
+    if (dist(this.x, this.y, this.home[0], this.home[1]) > 2) {
+      const dx = this.home[0] - this.x, dy = this.home[1] - this.y, d = Math.hypot(dx, dy);
+      this.vx = dx / d * 0.4; this.vy = dy / d * 0.4; this.dir = Math.atan2(dy, dx);
+    }
+  }
+  eggUpdate() {
+    this.prog += GAME.buildSpeed;
+    if (this.prog >= this.total) {
+      const t = this.morphTo, n = UNITS[t].pair ? 2 : 1;
+      const hpF = this.type === 'lurker_egg' ? 1 : 1;
+      const out = [];
+      for (let k = 0; k < n; k++) {
+        const u = createUnit(t, this.owner, this.x + (k ? 8 : (n > 1 ? -8 : 0)), this.y);
+        u.hp = u.maxHp * hpF; out.push(u);
+      }
+      const h = this.hatch;
+      const selWasEgg = UI.selection.includes(this);
+      removeEntity(this);
+      fx('eggpop', this.x, this.y, { life: 14 });
+      for (const u of out) {
+        if (h && !h.dead && h.rally) applyRally(u, h.rally);
+        if (selWasEgg) UI.selection.push(u);
+      }
+      if (this.owner === GAME.control) notify(this.owner, 'hatch' + GAME.tick, '', null);
+    }
+  }
+
+  // ---------- 스파이더 마인 ----------
+  mineUpdate() {
+    if (this.burrowT > 0) { if (--this.burrowT <= 0) this.burrowed = true; return; }
+    if (!this.burrowed && !this.mineTgt) return;
+    let t = this.mineTgt;
+    if (!t || t.dead || t.hidden) {
+      t = this.mineTgt = null;
+      if ((GAME.tick + this.id) % 4) return;
+      for (const e of SH.query(this.x, this.y, 3 * TILE)) {
+        if (e.dead || e.hidden || e.air || e.isBuilding || e.lifted || !isEnemy(this.owner, e.owner)) continue;
+        if (e.type === 'vulture' || e.type === 'spider_mine' || e.burrowed) continue;
+        if (dist(e.x, e.y, this.x, this.y) <= 3 * TILE) { t = e; break; }
+      }
+      if (!t) return;
+      this.mineTgt = t; this.burrowed = false;
+    }
+    const d = edgeDist(this, t);
+    if (d <= 4) {
+      const w = this.def.gw;
+      splashDamage(this, this.x, this.y, w, this.src && !this.src.dead ? this.src : this, true, false);
+      fx('explode', this.x, this.y, { life: 16, size: 1 });
+      SND.play('boom', this.x, this.y);
+      killEntity(this, null, true);
+      return;
+    }
+    this.moveTo(t.x, t.y, 0, t);
+  }
+
+  // ---------- 건물 ----------
+  buildingUpdate() {
+    const d = this.def;
+    if (!this.done) {
+      let progress = true;
+      if (this.race === 'T') {
+        const b = this.builder;
+        progress = b && !b.dead && b.orders[0] && b.orders[0].t === 'construct' && b.orders[0].tgt === this && edgeDist(b, this) <= 8;
+      }
+      if (progress) {
+        const inc = GAME.buildSpeed;
+        this.prog += inc;
+        this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.9 / d.time * inc);
+        if (this.maxSh) this.sh = Math.min(this.maxSh, this.sh + this.maxSh * 0.9 / d.time * inc);
+        if (this.prog >= d.time) completeBuilding(this);
+      }
+      return;
+    }
+    if (this.morph) {
+      this.morph.prog += GAME.buildSpeed;
+      if (this.morph.prog >= this.morph.total) {
+        const to = this.morph.to; this.morph = null;
+        const hpF = this.hp / this.maxHp;
+        this.type = to; this.def = BUILDINGS[to];
+        this.maxHp = this.def.hp; this.hp = Math.max(1, hpF * this.maxHp);
+        notify(this.owner, 'morph' + this.id, BUILDINGS[to].name + ' 변태 완료', 'done');
+      }
+    }
+    const powered = this.race !== 'P' || d.noPower || isPoweredCached(this);
+    this.unpowered = !powered;
+    if (this.lifted) { this.liftedLogic(); return; }
+    if (this.liftT > 0) { if (--this.liftT === 0) this.finishLift(); return; }
+    if (!powered || this.lockT > 0) return;
+    // 생산
+    if (this.queue.length && !this.morph) {
+      const q = this.queue[0];
+      if (!q.started) {
+        if (q.kind === 'unit' && !supplyOk(this.owner, UNITS[q.type].supply)) { if (GAME.tick % 72 === 0) supplyFailMsg(this.owner); }
+        else q.started = true;
+      }
+      if (q.started) {
+        q.prog += GAME.buildSpeed;
+        if (q.prog >= q.total) { this.queue.shift(); finishProduction(this, q); }
+      }
+    }
+    // 라바
+    if (d.larvaHall) {
+      const n = larvaCount(this);
+      if (n < 3) { this.larvaT = (this.larvaT || 0) + GAME.buildSpeed; if (this.larvaT >= 342) { this.larvaT = 0; spawnLarva(this); } }
+      else this.larvaT = 0;
+    }
+    // 방어 건물
+    if (this.canAttack) this.idleLogic(true);
+    // 벙커/수송 명령
+    if (this.orders.length && this.orders[0].t === 'unload') this.orderLogic();
+  }
+  liftedLogic() {
+    const o = this.orders[0];
+    if (!o) return;
+    if (o.t === 'move') { if (this.moveTo(o.x, o.y, 2)) this.nextOrder(); }
+    else if (o.t === 'land') {
+      const d = this.def;
+      const cx = (o.tx + d.w / 2) * TILE, cy = (o.ty + d.h / 2) * TILE;
+      if (this.moveTo(cx, cy, 1)) {
+        if (canPlace(this.type, o.tx, o.ty, this.owner, this)) {
+          this.x = cx; this.y = cy; this.tx0 = o.tx; this.ty0 = o.ty;
+          this.lifted = false; this.air = false; occupy(this, true); this.liftT = 0;
+          fx('dust', cx, cy + this.hh, { life: 20 });
+        }
+        this.nextOrder();
+      }
+    } else this.nextOrder();
+  }
+  finishLift() { this.lifted = true; this.air = true; }
+
+  // ---------- 피해 ----------
+  takeRaw(amount, src) {
+    if (this.dead) return;
+    this.hp -= amount;
+    this.lastHit = GAME.tick;
+    if (this.hp <= 0) killEntity(this, src);
+  }
+  onAttacked(src) {
+    if (!src || src.dead || src.owner === this.owner) return;
+    this.lastHit = GAME.tick;
+    if (this.owner === GAME.control && typeof UI !== 'undefined') UI.underAttack(this);
+    if (typeof AI !== 'undefined') AI.onAttacked(this, src);
+    // 반격
+    const idle = !this.orders.length;
+    if (idle && !this.tgt && !this.isBuilding) {
+      if (this.weaponVs(src) && targetableBy(src, this.owner)) { this.tgt = src; if (this.isWorker) this.retaliate = src; }
+      else if (!this.isWorker && !this.canAttack && this.speed > 0 && !this.burrowed) {
+        // 공격 못하는 유닛은 도망
+        const dx = this.x - src.x, dy = this.y - src.y, d = Math.hypot(dx, dy) || 1;
+        this.issue({ t: 'move', x: this.x + dx / d * 96, y: this.y + dy / d * 96 });
+      }
+    }
+    // 주변 대기 아군 호출
+    if (!this.isBuilding || this.def.townHall || true) {
+      if ((GAME.tick - (this.helpT || -99)) > 12) {
+        this.helpT = GAME.tick;
+        for (const e of SH.query(this.x, this.y, 5 * TILE)) {
+          if (e.dead || e.hidden || e.owner !== this.owner || e.isBuilding || e.isWorker || e.orders.length || e.tgt) continue;
+          if (e.weaponVs(src) && targetableBy(src, e.owner)) e.tgt = src;
+        }
+      }
+    }
+  }
+}
+
+// 위협도: 공격 가능한 유닛 우선
+function threat(e) {
+  if (e.isBuilding) return (e.def.gw || e.def.aw || e.def.bunker && e.cargo.length) ? 2 : 0;
+  if (e.type === 'larva' || e.type === 'egg' || e.type === 'lurker_egg') return -1;
+  if (e.def.gw || e.def.aw || e.def.healer || e.def.energy) return e.isWorker ? 1 : 3;
+  return 1;
+}
+
+function isPoweredCached(b) {
+  if (b.powT === GAME.tick >> 3) return b.powV;
+  b.powT = GAME.tick >> 3; b.powV = isPowered(b.owner, b.x, b.y);
+  return b.powV;
+}
+
+function findFreeMineral(x, y, worker, exclude) {
+  let best = null, bd = 1e9;
+  for (const e of SH.query(x, y, 10 * TILE)) {
+    if (e.dead || e.type !== 'mineral' || e === exclude) continue;
+    const dd = dist(e.x, e.y, x, y);
+    if (dd > 10 * TILE) continue;
+    const busy = e.miner && !e.miner.dead && e.miner !== worker && e.miner.orders[0] && e.miner.orders[0].tgt === e;
+    const score = dist(e.x, e.y, worker.x, worker.y) + (busy ? 400 : 0);
+    if (score < bd) { bd = score; best = e; }
+  }
+  if (exclude && best && best.miner && best.miner !== worker && !best.miner.dead) return null;
+  return best;
+}
+
+function larvaCount(h) {
+  let n = 0;
+  for (const e of GAME.entities) if (!e.dead && e.type === 'larva' && e.hatch === h) n++;
+  return n;
+}
+function spawnLarva(h) {
+  const l = createUnit('larva', h.owner, h.x + (Math.random() - 0.5) * h.hw, h.y + h.hh + 6);
+  l.hatch = h;
+  return l;
+}
+
+function applyRally(u, rally) {
+  if (!rally) return;
+  if (rally.tgt && !rally.tgt.dead) {
+    if (u.isWorker && (rally.tgt.type === 'mineral' || rally.tgt.def.onGeyser && rally.tgt.owner === u.owner)) { u.issue({ t: 'gather', tgt: rally.tgt, phase: 'go' }); return; }
+    u.issue({ t: 'follow', tgt: rally.tgt }); return;
+  }
+  u.issue({ t: 'move', x: rally.x, y: rally.y });
+}
+
+function startConstruction(worker, o) {
+  const d = BUILDINGS[o.bt];
+  if (!canPlace(o.bt, o.tx, o.ty, worker.owner, worker)) { worker.nextOrder(); return; }
+  if (!reqMet(worker.owner, d.req)) { worker.nextOrder(); return; }
+  if (costFail(worker.owner, d.cost)) { worker.nextOrder(); return; }
+  pay(worker.owner, d.cost);
+  let geyser = null;
+  if (d.onGeyser) {
+    geyser = GAME.entities.find(e => !e.dead && e.type === 'geyser' && e.tx0 === o.tx && e.ty0 === o.ty);
+    if (geyser) { occupy(geyser, false); geyser.hidden = true; }
+  }
+  const b = createBuilding(o.bt, worker.owner, o.tx, o.ty, false);
+  if (geyser) { b.geyser = geyser; geyser.refinery = b; }
+  SND.play('build', b.x, b.y);
+  if (worker.race === 'T') {
+    worker.orders[0] = { t: 'construct', tgt: b };
+    b.builder = worker; worker.noCollide = false;
+    const sp = findSpawnSpot(b, worker.r, worker.x, worker.y); worker.x = sp[0]; worker.y = sp[1];
+  } else if (worker.race === 'P') {
+    fx('warp', b.x, b.y, { life: 30, w: b.hw, h: b.hh });
+    worker.nextOrder();
+    const sp = findSpawnSpot(b, worker.r, worker.x, worker.y); worker.x = sp[0]; worker.y = sp[1];
+  } else {
+    // 드론은 건물로 변태
+    const sel = UI.selection.indexOf(worker);
+    if (sel >= 0) UI.selection[sel] = b;
+    removeEntity(worker);
+  }
+}
+
+function completeBuilding(b) {
+  b.done = true; b.prog = b.def.time;
+  b.hp = Math.max(b.hp, b.maxHp * 0.999); if (b.maxSh) b.sh = b.maxSh;
+  if (b.hp > b.maxHp * 0.99) b.hp = b.maxHp;
+  if (b.race === 'T' && b.builder && !b.builder.dead) { const w = b.builder; if (w.orders[0] && w.orders[0].tgt === b) w.nextOrder(); b.builder = null; }
+  notify(b.owner, 'done' + b.id, b.def.name + ' 건설 완료', 'done');
+  if (b.def.larvaHall) b.larvaT = 300;
+  if (b.def.onGeyser && b.geyser) b.geyser.amount = b.geyser.amount || 5000;
+  if (typeof AI !== 'undefined') AI.onBuilt(b);
+}
+
+function finishProduction(b, q) {
+  const p = P(b.owner);
+  if (q.kind === 'unit') {
+    const n = UNITS[q.type].pair ? 2 : 1;
+    for (let k = 0; k < n; k++) {
+      const u = createUnit(q.type, b.owner, b.x, b.y);
+      const sp = findSpawnSpot(b, u.r);
+      u.x = sp[0]; u.y = sp[1];
+      if (u.air) { u.x = b.x; u.y = b.y + b.hh; }
+      if (b.race === 'P') fx('warp', u.x, u.y, { life: 16, w: u.r, h: u.r });
+      if (b.rally) applyRally(u, b.rally);
+      if (typeof AI !== 'undefined') AI.onUnit(u);
+    }
+    notify(b.owner, 'unit' + b.id, '', null);
+  } else if (q.kind === 'tech') {
+    const t = TECH[q.type];
+    if (t.lv) p.upg[q.type] = (p.upg[q.type] || 0) + 1; else p.tech[q.type] = true;
+    delete p.researching[q.type];
+    notify(b.owner, 'tech' + q.type, t.name + ' 연구 완료', 'done');
+  }
+}
+
+// 수송 가능 여부 (transport t 가 unit u 를 태울 수 있나)
+function canLoad(t, u) {
+  if (!t.def.cargo || u.isBuilding || u.air || u.dead) return false;
+  if (t.isBuilding && !t.done) return false;
+  if (t.def.bunker && !(u.race === 'T' && u.def.bio)) return false;
+  if (t.type === 'overlord' && !hasTech(t.owner, 'ventral')) return false;
+  if (u.type === 'tank_siege' || u.burrowed || u.def.mine || u.type === 'larva' || u.type === 'egg' || u.type === 'lurker_egg') return false;
+  const used = t.cargo.reduce((s, e) => s + (e.def.trans || 1), 0);
+  return used + (u.def.trans || 1) <= t.def.cargo;
+}
+function loadUnit(t, u) {
+  if (!canLoad(t, u)) return false;
+  u.inside = t; u.hidden = true; u.orders = []; u.tgt = null; u.path = null;
+  t.cargo.push(u);
+  const i = UI.selection.indexOf(u); if (i >= 0) UI.selection.splice(i, 1);
+  SND.play('load', t.x, t.y);
+  return true;
+}
+function unloadAll(t) {
+  const out = t.cargo.slice();
+  for (const u of out) unloadUnit(t, u);
+}
+function unloadUnit(t, u) {
+  const tx = tileOf(t.x), ty = tileOf(t.y);
+  if (!t.isBuilding && !groundPassable(tx, ty)) { notify(t.owner, 'unl', '여기에는 내릴 수 없습니다.', 'err'); return false; }
+  const sp = t.isBuilding ? findSpawnSpot(t, u.r) : [t.x + (Math.random() - 0.5) * 20, t.y + (Math.random() - 0.5) * 20];
+  u.inside = null; u.hidden = false; u.x = sp[0]; u.y = sp[1];
+  t.cargo.splice(t.cargo.indexOf(u), 1);
+  return true;
+}
+
+function removeEntity(e) {
+  if (e.dead) return;
+  e.dead = true; e.removed = true;
+  if (e.isBuilding && !e.lifted) occupy(e, false);
+  GAME.byId.delete(e.id);
+}
+
+function killEntity(e, killer, silent) {
+  if (e.dead) return;
+  e.dead = true;
+  e.hp = 0;
+  if (e.isBuilding && !e.lifted) occupy(e, false);
+  if (e.type === 'mineral' || e.type === 'geyser') { GAME.byId.delete(e.id); return; }
+  if (killer && killer.owner !== e.owner && killer.owner < 2) { killer.kills++; P(killer.owner).kills++; }
+  if (e.owner < 2) P(e.owner).lost++;
+  // 가스 건물 → 간헐천 복원
+  if (e.geyser) { const g = e.geyser; g.hidden = false; g.refinery = null; occupy(g, true); }
+  // 수송물
+  if (e.cargo.length) {
+    if (e.def.bunker) { for (const u of e.cargo.slice()) unloadUnit(e, u); }
+    else for (const u of e.cargo) { u.inside = null; u.hidden = false; u.x = e.x; u.y = e.y; killEntity(u, killer); }
+    e.cargo = [];
+  }
+  if (e.gasUser && e.gasUser.hidden && !e.gasUser.dead) { const w = e.gasUser; w.hidden = false; w.orders = []; w.x = e.x; w.y = e.y + e.hh + 8; }
+  if (e.builder) e.builder = null;
+  if (e.queue.length) { for (const q of e.queue) if (q.kind === 'tech') delete P(e.owner).researching[q.type]; }
+  if (!silent) deathFx(e);
+  GAME.byId.delete(e.id);
+  if (typeof AI !== 'undefined') AI.onDeath(e, killer);
+}
+
+function deathFx(e) {
+  const big = e.isBuilding ? 2 : (e.def.size === 'large' ? 1.3 : e.def.size === 'medium' ? 1 : 0.7);
+  if (e.isBuilding) {
+    if (e.race === 'Z') { fx('zsplat', e.x, e.y, { life: 30, size: big * 1.2 }); GAME.decals.push({ kind: 'zgoo', x: e.x, y: e.y, t: 0, life: 1800, size: e.hw / 16 }); }
+    else if (e.race === 'P') { fx('pdeath', e.x, e.y, { life: 30, size: big * 1.5 }); }
+    else { for (let k = 0; k < 5; k++) fx('explode', e.x + (Math.random() - 0.5) * e.hw * 1.5, e.y + (Math.random() - 0.5) * e.hh * 1.5, { life: 20 + k * 3, size: 1.5, delay: k * 3 }); GAME.decals.push({ kind: 'rubble', x: e.x, y: e.y, t: 0, life: 2400, size: e.hw / 16 }); }
+    SND.play('bigboom', e.x, e.y);
+    return;
+  }
+  if (e.race === 'Z') {
+    fx('zsplat', e.x, e.y, { life: 18, size: big });
+    if (!e.air) GAME.decals.push({ kind: 'zgoo', x: e.x, y: e.y, t: 0, life: 900, size: big });
+    SND.play('splat', e.x, e.y);
+  } else if (e.race === 'P') { fx('pdeath', e.x, e.y, { life: 20, size: big }); SND.play('boom', e.x, e.y); }
+  else if (e.def.bio) {
+    fx('blood', e.x, e.y, { life: 18, size: big });
+    GAME.decals.push({ kind: 'blood', x: e.x, y: e.y, t: 0, life: 900, size: big });
+    SND.play('die', e.x, e.y);
+  } else { fx('explode', e.x, e.y, { life: 18, size: big }); SND.play('boom', e.x, e.y); }
+}
