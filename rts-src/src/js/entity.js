@@ -95,7 +95,7 @@ class Entity {
       this.releaseMining();
       this.orders = [o]; this.path = null; this.tgt = null; this.stuck = 0;
       this.vx = 0; this.vy = 0; this.lastD = undefined; this.giveUp = 0; this.avoidSide = 0; this.blockedTicks = 0;
-      this.unitPathUntil = 0;
+      this.unitPathUntil = 0; this.pathRetryAt = 0; this.pathDynamic = false;
     } else this.orders.push(o);
   }
   releaseMining() {
@@ -374,18 +374,19 @@ class Entity {
       this.dir = Math.atan2(dy, dx);
       return false;
     }
+    if (!this.path && GAME.tick < (this.pathRetryAt || 0)) { this.vx = 0; this.vy = 0; return false; }
     // 직선 통행 가능 시 경로 없이 이동
     if (this.blockedTicks >= 12) { this.unitPathUntil = GAME.tick + 120; this.path = null; this.blockedTicks = 0; }
     const avoidUnits = GAME.tick < (this.unitPathUntil || 0);
     const needRepath = !this.path || Math.abs((this.pgx || 0) - x) > 40 || Math.abs((this.pgy || 0) - y) > 40 || GAME.tick >= (this.repathAt || 0);
     if (needRepath) {
       if ((GAME.tick + this.id) % 4 === 0 || !this.path) {
-        if (!avoidUnits && PF.lineClear(this.x, this.y, x, y, Math.max(4, this.r - 3), 0)) { this.path = [[x, y]]; this.pi = 0; this.pgx = x; this.pgy = y; this.repathAt = GAME.tick + 24; this.pathExact = true; }
+        if (!avoidUnits && PF.lineClear(this.x, this.y, x, y, Math.max(3, this.r * 0.75), 0)) { this.path = [[x, y]]; this.pi = 0; this.pgx = x; this.pgy = y; this.repathAt = GAME.tick + 24; this.pathExact = true; this.pathDynamic = false; }
         else if (PF.budget > 0) {
-          const p = PF.worldPath(this.x, this.y, x, y, this.r, 0, avoidUnits ? PF.unitObstacles(this) : null);
+          const p = avoidUnits ? PF.unitPath(this.x, this.y, x, y, this.r, PF.unitObstacles(this)) : PF.worldPath(this.x, this.y, x, y, this.r, 0);
           this.pgx = x; this.pgy = y; this.repathAt = GAME.tick + 120;
-          if (!p || !p.length) { this.path = null; return true; }
-          this.path = p; this.pi = 0;
+          if (!p || !p.length) { this.path = null; this.vx = 0; this.vy = 0; if (avoidUnits) this.pathRetryAt = GAME.tick + 12 + this.id % 6; return !avoidUnits; }
+          this.path = p; this.pi = 0; this.pathDynamic = avoidUnits;
           this.pathExact = dist(p[p.length - 1][0], p[p.length - 1][1], x, y) < 1;
         }
       }
@@ -395,11 +396,17 @@ class Entity {
       // 목표가 움직이는 경우 마지막 점을 갱신
       const end = this.path[this.path.length - 1];
       if (this.pathExact && (tgtEnt || this.path.length === 1) || tgtEnt && tgtEnt.isBuilding && edgeDistPt(tgtEnt, end[0], end[1]) <= TILE) this.path[this.path.length - 1] = [x, y];
-      while (this.pi < this.path.length - 1 && dist(this.x, this.y, this.path[this.pi][0], this.path[this.pi][1]) < Math.max(10, sp * 1.5)) this.pi++;
+      while (this.pi < this.path.length - 1 && dist(this.x, this.y, this.path[this.pi][0], this.path[this.pi][1]) < (this.pathDynamic ? Math.max(1, sp * 0.6) : Math.max(10, sp * 1.5))) this.pi++;
       [wx, wy] = this.path[this.pi];
       if (this.pi === this.path.length - 1 && dist(this.x, this.y, wx, wy) < Math.max(4, sp)) {
         // 목적지가 막혀 있어 더 못 가는 경우
-        if (d > arrive) { this.path = null; return !tgtEnt ? true : false; }
+        if (d > arrive) {
+          this.path = null;
+          // 유닛 장애물의 거친 타일 경로가 여기서 끝나더라도 목적지 도착은 아니다.
+          // 지형 경로와 국소 회피를 다시 시도한다. 일시 정체로 명령을 지우지 않는다.
+          if (this.pathDynamic && !this.pathExact) { this.unitPathUntil = 0; this.blockedTicks = 0; return false; }
+          return !tgtEnt ? true : false;
+        }
       }
     }
     const wdx = wx - this.x, wdy = wy - this.y, wd = Math.hypot(wdx, wdy) || 1;
@@ -414,7 +421,7 @@ class Entity {
       this.stuck = 0; this.path = null; this.repathAt = 0;
       this.unitPathUntil = GAME.tick + 120;
       this.giveUp = (this.giveUp || 0) + 1;
-      if (this.giveUp > 3 && d < 160) { this.giveUp = 0; return true; }
+      // 정체 횟수만으로 이동 명령을 완료 처리하지 않는다.
     }
     return false;
   }

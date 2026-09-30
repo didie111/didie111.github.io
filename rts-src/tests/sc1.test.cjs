@@ -230,3 +230,12 @@ check('movement modifiers cancel rather than multiplying stim and ensnare', `
  const z=unit('zergling');const speed=z.speed;P(0).tech.metabolic=true;z.ensnareT=100;assert.equal(z.speed,speed);
  assert.ok(BUILDINGS.pool.research.includes('adrenal'));assert.deepEqual(Array.from(TECH.adrenal.req),['hive']);
 `);
+
+for (const seed of [20260930, 42, 1234]) check('all four starting marines spawn clear and accept a move, seed '+seed, `
+ GAME.entities=[];GAME.byId.clear();setupScenario(${seed});GAME.aiOn=[false,false];
+ const marines=GAME.entities.filter(e=>e.type==='marine'&&e.owner===0);assert.equal(marines.length,4);
+ for(const m of marines){assert.ok(PF.positionClear(m.x,m.y,m.r*.75,0));for(const other of marines)if(other!==m)assert.ok(dist(m.x,m.y,other.x,other.y)>=(m.r+other.r)*.85);}
+ const starts=marines.map(m=>[m.x,m.y]);
+ for(const m of marines){let goal=null;for(let radius=80;radius<200&&!goal;radius+=40)for(let angle=0;angle<Math.PI*2;angle+=Math.PI/8){const x=m.x+Math.cos(angle)*radius,y=m.y+Math.sin(angle)*radius;if(PF.lineClear(m.x,m.y,x,y,m.r*.75,0)){goal=[x,y];break;}}assert.ok(goal);m.issue({t:'move',x:goal[0],y:goal[1]});}
+ ticks(100);marines.forEach((m,i)=>assert.ok(dist(m.x,m.y,starts[i][0],starts[i][1])>30,'starting marine '+i+' trapped'));
+`);

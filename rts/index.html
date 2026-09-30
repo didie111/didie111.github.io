@@ -100,7 +100,7 @@ button.on { background: linear-gradient(#2c5a8c, #183050); border-color: #7ab0ff
   <div class="res"><img id="ico-min"><span id="r-min">0</span></div>
   <div class="res"><img id="ico-gas"><span id="r-gas">0</span></div>
   <div class="res"><img id="r-sup-ico"><span id="r-sup">0/0</span></div>
-  <div class="menu-btns"><span style="font-size:11px;color:#9ab">SC1.3</span><button onclick="UI.toggleTest()">테스트(F10)</button><button onclick="UI.el.help.classList.toggle('hidden')">도움말(F1)</button><button onclick="GAME.paused=!GAME.paused">일시정지(F9)</button></div>
+  <div class="menu-btns"><span style="font-size:11px;color:#9ab">SC1.4</span><button onclick="UI.toggleTest()">테스트(F10)</button><button onclick="UI.el.help.classList.toggle('hidden')">도움말(F1)</button><button onclick="GAME.paused=!GAME.paused">일시정지(F9)</button></div>
 </div>
 
 <div id="msgs"></div>
@@ -115,7 +115,7 @@ button.on { background: linear-gradient(#2c5a8c, #183050); border-color: #7ab0ff
 <div id="test" class="hidden"></div>
 
 <div id="help" class="hidden">
-  <h2>조작법 · SC1.3</h2>
+  <h2>조작법 · SC1.4</h2>
   <p>생산 건물에서 부속 건물을 연결하세요. 캐리어는 I로 인터셉터, 리버는 R로 스캐럽을 생산해야 공격합니다. 컴샛에서 S로 스캔할 수 있습니다.</p>
   <table>
     <tr><td>좌클릭 / 드래그</td><td>유닛 선택 · 박스 선택 (최대 12기)</td></tr>
@@ -528,7 +528,7 @@ function supplyText(v) { return (Math.round(v * 2) / 2).toString(); }
 'use strict';
 // 확장 데이터: Blizzard StarCraft Compendium 수치/역할을 참고한 웹게임 구현.
 // 원작 MPQ/엔진을 포함하지 않으며 투사체/애니메이션/길찾기는 자체 구현이다.
-const RTS_VERSION = '2026.09.30-sc1.3';
+const RTS_VERSION = '2026.09.30-sc1.4';
 Object.assign(UNITS, {
   valkyrie: { name: '발키리', race: 'T', hp: 200, armor: 2, size: 'large', air: true, speed: 6.6, sight: 8, r: 16,
     cost: [250, 125], supply: 3, time: 750, mech: true, from: 'starport', hotkey: 'V', req: ['armory'], addon: 'control_tower',
@@ -998,16 +998,22 @@ const PF = (() => {
   }
   function oct(ax, ay, bx, by) { const dx = Math.abs(ax - bx), dy = Math.abs(ay - by); return Math.max(dx, dy) + 0.4142 * Math.min(dx, dy); }
 
-  // 두 점(px) 사이 직선 통행 가능 여부 (반경 r 고려)
+  // 물리 보정과 동일한 원-타일 충돌 판정. 모서리에 접한 유닛도 바깥쪽으로 이동할 수 있다.
+  function positionClear(x, y, r, ignoreId) {
+    if (x - r < 0 || y - r < 0 || x + r > MAP_W * TILE || y + r > MAP_H * TILE) return false;
+    for (let ty = tileOf(y - r); ty <= tileOf(y + r); ty++) for (let tx = tileOf(x - r); tx <= tileOf(x + r); tx++) {
+      if (passable(tx, ty, ignoreId)) continue;
+      const qx = Math.max(tx * TILE, Math.min(x, (tx + 1) * TILE));
+      const qy = Math.max(ty * TILE, Math.min(y, (ty + 1) * TILE));
+      if (Math.hypot(x - qx, y - qy) < r - 0.001) return false;
+    }
+    return true;
+  }
   function lineClear(x0, y0, x1, y1, r, ignoreId) {
-    const d = Math.hypot(x1 - x0, y1 - y0);
-    const steps = Math.ceil(d / 8);
+    const steps = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 4);
     for (let i = 0; i <= steps; i++) {
       const t = steps ? i / steps : 0;
-      const x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t;
-      for (const [ox, oy] of [[-r, -r], [r, -r], [-r, r], [r, r], [0, 0]]) {
-        if (!passable(Math.floor((x + ox) / TILE), Math.floor((y + oy) / TILE), ignoreId)) return false;
-      }
+      if (!positionClear(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, r, ignoreId)) return false;
     }
     return true;
   }
@@ -1022,7 +1028,7 @@ const PF = (() => {
     // string pulling
     const out = [];
     let ax = x0, ay = y0, i = 0;
-    const rr = Math.max(4, r - 3);
+    const rr = Math.max(3, r * 0.75);
     while (i < pts.length) {
       let j = pts.length - 1;
       while (j > i && (!lineClear(ax, ay, pts[j][0], pts[j][1], rr, ignoreId) || obstacles && !unitsClear(ax, ay, pts[j][0], pts[j][1], r, obstacles.units))) j--;
@@ -1031,6 +1037,62 @@ const PF = (() => {
       i = j + 1;
     }
     return out;
+  }
+
+  function unitPath(x0, y0, x1, y1, r, obstacles) {
+    const fine = localPath(x0, y0, x1, y1, r, obstacles);
+    if (fine) return fine;
+    const coarse = worldPath(x0, y0, x1, y1, r, 0, obstacles);
+    if (coarse && coarse.length) {
+      const end = coarse[coarse.length - 1];
+      let ax = x0, ay = y0;
+      const valid = coarse.every(([bx, by]) => {
+        const clear = lineClear(ax, ay, bx, by, Math.max(3, r * 0.75), 0) && unitsClear(ax, ay, bx, by, r, obstacles.units);
+        ax = bx; ay = by; return clear;
+      });
+      if (Math.hypot(end[0] - x1, end[1] - y1) < 1 && valid) return coarse;
+    }
+    return null;
+  }
+
+  // 정체 구간에서는 실제 원형 유닛 사이의 틈을 8px 간격으로 찾는다.
+  // 기존 32px 타일 마스크가 통과 가능한 틈까지 막는 경우를 피한다.
+  function localPath(x0, y0, x1, y1, r, obstacles) {
+    const step = 8, limit = 16, width = limit * 2 + 1;
+    const key = (x, y) => (y + limit) * width + x + limit;
+    const units = obstacles.units.filter(u => Math.hypot(u.x - x0, u.y - y0) < 250 + u.r + r);
+    const rr = Math.max(3, r * 0.75), start = key(0, 0);
+    const scores = new Map([[start, 0]]), parents = new Map(), nodes = new Map();
+    const queue = [], closed = new Set();
+    function add(n) {
+      let lo = 0, hi = queue.length;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (queue[mid].f < n.f) lo = mid + 1; else hi = mid; }
+      queue.splice(lo, 0, n); nodes.set(n.k, n);
+    }
+    const heuristic = (x, y) => Math.hypot(x1 - x0 - x * step, y1 - y0 - y * step);
+    add({ x: 0, y: 0, k: start, g: 0, f: heuristic(0, 0) });
+    let best = start, bestH = heuristic(0, 0), reached = false, count = 0;
+    while (queue.length && count < 600) {
+      const n = queue.shift(); if (closed.has(n.k)) continue;
+      closed.add(n.k); count++;
+      const px = x0 + n.x * step, py = y0 + n.y * step, h = heuristic(n.x, n.y);
+      if (h < bestH) { bestH = h; best = n.k; }
+      if (h < 16 && lineClear(px, py, x1, y1, rr, 0) && unitsClear(px, py, x1, y1, r, units)) { best = n.k; reached = true; break; }
+      for (let d = 0; d < 8; d++) {
+        const nx = n.x + DX[d], ny = n.y + DY[d];
+        if (Math.abs(nx) > limit || Math.abs(ny) > limit) continue;
+        const k = key(nx, ny), gx = x0 + nx * step, gy = y0 + ny * step;
+        if (closed.has(k) || !lineClear(px, py, gx, gy, rr, 0) || !unitsClear(px, py, gx, gy, r, units)) continue;
+        const ng = n.g + COST[d] * step;
+        if (scores.has(k) && scores.get(k) <= ng) continue;
+        scores.set(k, ng); parents.set(k, n.k); add({ x: nx, y: ny, k, g: ng, f: ng + heuristic(nx, ny) });
+      }
+    }
+    budget -= count;
+    const out = [];
+    for (let k = best; k !== start && k !== undefined; k = parents.get(k)) { const n = nodes.get(k); out.push([x0 + n.x * step, y0 + n.y * step]); }
+    out.reverse(); if (reached) out.push([x1, y1]);
+    return out.length ? out : null;
   }
 
   function unitsClear(x0, y0, x1, y1, r, units) {
@@ -1057,7 +1119,7 @@ const PF = (() => {
     return { cells, units };
   }
   return {
-    find, worldPath, lineClear, nearestPassable, passable, unitsClear, unitObstacles,
+    find, worldPath, lineClear, positionClear, localPath, unitPath, nearestPassable, passable, unitsClear, unitObstacles,
     resetBudget() { budget = 24000; }, get budget() { return budget; },
   };
 })();
@@ -1491,7 +1553,7 @@ class Entity {
       this.releaseMining();
       this.orders = [o]; this.path = null; this.tgt = null; this.stuck = 0;
       this.vx = 0; this.vy = 0; this.lastD = undefined; this.giveUp = 0; this.avoidSide = 0; this.blockedTicks = 0;
-      this.unitPathUntil = 0;
+      this.unitPathUntil = 0; this.pathRetryAt = 0; this.pathDynamic = false;
     } else this.orders.push(o);
   }
   releaseMining() {
@@ -1770,18 +1832,19 @@ class Entity {
       this.dir = Math.atan2(dy, dx);
       return false;
     }
+    if (!this.path && GAME.tick < (this.pathRetryAt || 0)) { this.vx = 0; this.vy = 0; return false; }
     // 직선 통행 가능 시 경로 없이 이동
     if (this.blockedTicks >= 12) { this.unitPathUntil = GAME.tick + 120; this.path = null; this.blockedTicks = 0; }
     const avoidUnits = GAME.tick < (this.unitPathUntil || 0);
     const needRepath = !this.path || Math.abs((this.pgx || 0) - x) > 40 || Math.abs((this.pgy || 0) - y) > 40 || GAME.tick >= (this.repathAt || 0);
     if (needRepath) {
       if ((GAME.tick + this.id) % 4 === 0 || !this.path) {
-        if (!avoidUnits && PF.lineClear(this.x, this.y, x, y, Math.max(4, this.r - 3), 0)) { this.path = [[x, y]]; this.pi = 0; this.pgx = x; this.pgy = y; this.repathAt = GAME.tick + 24; this.pathExact = true; }
+        if (!avoidUnits && PF.lineClear(this.x, this.y, x, y, Math.max(3, this.r * 0.75), 0)) { this.path = [[x, y]]; this.pi = 0; this.pgx = x; this.pgy = y; this.repathAt = GAME.tick + 24; this.pathExact = true; this.pathDynamic = false; }
         else if (PF.budget > 0) {
-          const p = PF.worldPath(this.x, this.y, x, y, this.r, 0, avoidUnits ? PF.unitObstacles(this) : null);
+          const p = avoidUnits ? PF.unitPath(this.x, this.y, x, y, this.r, PF.unitObstacles(this)) : PF.worldPath(this.x, this.y, x, y, this.r, 0);
           this.pgx = x; this.pgy = y; this.repathAt = GAME.tick + 120;
-          if (!p || !p.length) { this.path = null; return true; }
-          this.path = p; this.pi = 0;
+          if (!p || !p.length) { this.path = null; this.vx = 0; this.vy = 0; if (avoidUnits) this.pathRetryAt = GAME.tick + 12 + this.id % 6; return !avoidUnits; }
+          this.path = p; this.pi = 0; this.pathDynamic = avoidUnits;
           this.pathExact = dist(p[p.length - 1][0], p[p.length - 1][1], x, y) < 1;
         }
       }
@@ -1791,11 +1854,17 @@ class Entity {
       // 목표가 움직이는 경우 마지막 점을 갱신
       const end = this.path[this.path.length - 1];
       if (this.pathExact && (tgtEnt || this.path.length === 1) || tgtEnt && tgtEnt.isBuilding && edgeDistPt(tgtEnt, end[0], end[1]) <= TILE) this.path[this.path.length - 1] = [x, y];
-      while (this.pi < this.path.length - 1 && dist(this.x, this.y, this.path[this.pi][0], this.path[this.pi][1]) < Math.max(10, sp * 1.5)) this.pi++;
+      while (this.pi < this.path.length - 1 && dist(this.x, this.y, this.path[this.pi][0], this.path[this.pi][1]) < (this.pathDynamic ? Math.max(1, sp * 0.6) : Math.max(10, sp * 1.5))) this.pi++;
       [wx, wy] = this.path[this.pi];
       if (this.pi === this.path.length - 1 && dist(this.x, this.y, wx, wy) < Math.max(4, sp)) {
         // 목적지가 막혀 있어 더 못 가는 경우
-        if (d > arrive) { this.path = null; return !tgtEnt ? true : false; }
+        if (d > arrive) {
+          this.path = null;
+          // 유닛 장애물의 거친 타일 경로가 여기서 끝나더라도 목적지 도착은 아니다.
+          // 지형 경로와 국소 회피를 다시 시도한다. 일시 정체로 명령을 지우지 않는다.
+          if (this.pathDynamic && !this.pathExact) { this.unitPathUntil = 0; this.blockedTicks = 0; return false; }
+          return !tgtEnt ? true : false;
+        }
       }
     }
     const wdx = wx - this.x, wdy = wy - this.y, wd = Math.hypot(wdx, wdy) || 1;
@@ -1810,7 +1879,7 @@ class Entity {
       this.stuck = 0; this.path = null; this.repathAt = 0;
       this.unitPathUntil = GAME.tick + 120;
       this.giveUp = (this.giveUp || 0) + 1;
-      if (this.giveUp > 3 && d < 160) { this.giveUp = 0; return true; }
+      // 정체 횟수만으로 이동 명령을 완료 처리하지 않는다.
     }
     return false;
   }
@@ -3113,7 +3182,7 @@ function steerGround(e) {
     }
     return true;
   }
-  for (const length of [Math.max(speed, e.r + speed * 6), speed]) {
+  for (const length of e.pathDynamic ? [speed] : [Math.max(speed, e.r + speed * 6), speed]) {
     for (const turn of [0, side, -side, 2 * side, -2 * side, 3 * side, -3 * side, 4 * side, -4 * side]) {
       const a = angle + turn * Math.PI / 8;
       if (!clear(a, length)) continue;
@@ -5675,7 +5744,10 @@ function unitRing(type, owner, cx, cy, n, r0) {
     for (let j = 0; j < cnt && out.length < n; j++, k++) {
       const a = j / cnt * Math.PI * 2 + ring * 0.3;
       const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r * 0.8;
-      if (!ud.air) { const tx = tileOf(x), ty = tileOf(y); if (!groundPassable(tx, ty) || MAP.occ[tIdx(tx, ty)]) continue; }
+      if (!ud.air) {
+        if (!PF.positionClear(x, y, Math.max(3, ud.r * 0.75) + 1, 0)) continue;
+        if (GAME.entities.some(e => groundCollider(e) && Math.hypot(e.x - x, e.y - y) < (e.r + ud.r) * 0.85 + 2)) continue;
+      }
       out.push(createUnit(type, owner, x, y));
     }
     ring++;
@@ -5701,7 +5773,7 @@ function setupScenario(seed) {
   for (let i = 0; i < 2; i++) { const s = findSetupSpot('depot', tb, 5, 12, away + (i ? 1.3 : -1.3)); if (s) createBuilding('depot', PLAYER, s[0], s[1], true); }
   const scvs = unitRing('scv', PLAYER, cc.x, cc.y + cc.hh + 14, 10, 4);
   const mar = unitRing('marine', PLAYER, cc.x + Math.cos(away) * 90, cc.y + Math.sin(away) * 90, 4, 6);
-  for (const m of mar) m.facing = away;
+  for (const m of mar) m.dir = away;
   // SCV 는 바로 미네랄 채취 시작
   const mins = GAME.entities.filter(e => e.type === 'mineral' && dist(e.x, e.y, cc.x, cc.y) < 12 * TILE);
   scvs.forEach((w, i) => { const m = mins[i % mins.length]; if (m) { w.issue({ t: 'gather', tgt: m, phase: 'go' }); w.lastRes = m; } });

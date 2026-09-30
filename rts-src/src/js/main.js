@@ -59,7 +59,10 @@ function unitRing(type, owner, cx, cy, n, r0) {
     for (let j = 0; j < cnt && out.length < n; j++, k++) {
       const a = j / cnt * Math.PI * 2 + ring * 0.3;
       const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r * 0.8;
-      if (!ud.air) { const tx = tileOf(x), ty = tileOf(y); if (!groundPassable(tx, ty) || MAP.occ[tIdx(tx, ty)]) continue; }
+      if (!ud.air) {
+        if (!PF.positionClear(x, y, Math.max(3, ud.r * 0.75) + 1, 0)) continue;
+        if (GAME.entities.some(e => groundCollider(e) && Math.hypot(e.x - x, e.y - y) < (e.r + ud.r) * 0.85 + 2)) continue;
+      }
       out.push(createUnit(type, owner, x, y));
     }
     ring++;
@@ -85,7 +88,7 @@ function setupScenario(seed) {
   for (let i = 0; i < 2; i++) { const s = findSetupSpot('depot', tb, 5, 12, away + (i ? 1.3 : -1.3)); if (s) createBuilding('depot', PLAYER, s[0], s[1], true); }
   const scvs = unitRing('scv', PLAYER, cc.x, cc.y + cc.hh + 14, 10, 4);
   const mar = unitRing('marine', PLAYER, cc.x + Math.cos(away) * 90, cc.y + Math.sin(away) * 90, 4, 6);
-  for (const m of mar) m.facing = away;
+  for (const m of mar) m.dir = away;
   // SCV 는 바로 미네랄 채취 시작
   const mins = GAME.entities.filter(e => e.type === 'mineral' && dist(e.x, e.y, cc.x, cc.y) < 12 * TILE);
   scvs.forEach((w, i) => { const m = mins[i % mins.length]; if (m) { w.issue({ t: 'gather', tgt: m, phase: 'go' }); w.lastRes = m; } });

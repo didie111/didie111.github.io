@@ -15,7 +15,7 @@ function world() {
     MAP.walk.fill(1); MAP.occ.fill(0);
     GAME.players = [newPlayer('T', 0), newPlayer('Z', 1), newPlayer('Z', 2)];
     GAME.sandbox = true;
-    return { GAME, MAP, TILE, MAP_W, SH, PF, physics, gameTick, cmdInstant,
+    return { GAME, MAP, TILE, MAP_W, SH, PF, physics, gameTick, cmdInstant, commandUnits,
       unit: (type, x, y) => createUnit(type, 0, x, y),
       building: (type, tx, ty) => createBuilding(type, 0, tx, ty, true),
       step() {
@@ -155,4 +155,51 @@ test('full game ticks keep an idle blocker and a sieged tank stationary', () => 
     w.gameTick(); assert.deepEqual(position(t), [300, 300]); assert.deepEqual(position(b), [240, 300]);
   }
   assert.ok(m.x > 430);
+});
+
+test('a marine touching a building corner can obey a fresh move command', () => {
+ const w=world();w.building('depot',7,7);const m=w.unit('marine',218,218);
+ m.issue({t:'move',x:100,y:100});for(let i=0;i<120;i++)w.step();
+ assert.ok(m.x<125&&m.y<125,`corner trap: ${position(m)}`);
+});
+test('units packed against a building can all move away on a fresh command', () => {
+ const w=world();w.building('depot',7,7);const units=[];
+ for(let i=0;i<12;i++)units.push(w.unit('marine',211-i%3*12,225+Math.floor(i/3)*12));
+ for(let i=0;i<15;i++)w.physicalStep();
+ for(const u of units)u.issue({t:'move',x:90,y:100});
+ for(let i=0;i<400;i++)w.step();
+ assert.ok(units.every(u=>Math.hypot(u.x-90,u.y-100)<80),units.map(position).join(' / '));
+});
+
+test('a temporarily blocked move resumes when the unit in the corridor leaves', () => {
+ const w=world();w.MAP.walk.fill(0);
+ for(let x=1;x<25;x++)w.MAP.walk[7*w.MAP_W+x]=1;
+ const blocker=w.unit('marine',240,240),m=w.unit('marine',100,240);blocker.issue({t:'hold'});
+ m.issue({t:'move',x:360,y:240});for(let i=0;i<300;i++)w.step();
+ assert.equal(m.orders[0]?.t,'move','unit collision must not discard the destination');
+ blocker.dead=true;for(let i=0;i<150;i++)w.step();
+ assert.ok(m.x>340,`failed to resume: ${position(m)}`);
+});
+for(const type of ['marine','vulture','tank','ultralisk']) {
+ for(const kind of ['building','terrain','mineral']) {
+  test(`${type} escapes ${kind} corners after a renewed move command`,()=>{
+   const w=world();const obstacle=w.building(kind==='mineral'?'mineral':'depot',7,7);
+   if(kind==='terrain'){w.GAME.entities.splice(w.GAME.entities.indexOf(obstacle),1);for(let y=7;y<9;y++)for(let x=7;x<10;x++){w.MAP.occ[y*w.MAP_W+x]=0;w.MAP.walk[y*w.MAP_W+x]=0;}}
+   const u=w.unit(type,100,100),r=u.r*.75;u.x=224-r;u.y=224-r;
+   u.issue({t:'move',x:400,y:400});for(let i=0;i<15;i++)w.step();
+   u.issue({t:'move',x:100,y:100});for(let i=0;i<200;i++)w.step();
+   assert.ok(Math.hypot(u.x-100,u.y-100)<20,`trapped: ${position(u)}`);
+  });
+ }
+}
+
+test('a mixed crowd can regroup after bunching against buildings and minerals',()=>{
+ const w=world();w.building('depot',7,7);w.building('mineral',10,9);
+ const units=[];for(let i=0;i<30;i++)units.push(w.unit(['marine','vulture','tank'][i%3],180-i%5*19,210+Math.floor(i/5)*19));
+ w.commandUnits(units,{t:'move',x:365,y:285});for(let i=0;i<250;i++)w.step();
+ w.commandUnits(units,{t:'move',x:110,y:450});for(let i=0;i<450;i++)w.step();
+ const destinations=units.map((u,i)=>[500+i%6*40,650+Math.floor(i/6)*40]);
+ units.forEach((u,i)=>u.issue({t:'move',x:destinations[i][0],y:destinations[i][1]}));
+ for(let i=0;i<450;i++)w.step();
+ assert.ok(units.every((u,i)=>Math.hypot(u.x-destinations[i][0],u.y-destinations[i][1])<20),units.map(position).join(' / '));
 });

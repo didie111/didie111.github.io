@@ -309,7 +309,7 @@ function steerGround(e) {
     }
     return true;
   }
-  for (const length of [Math.max(speed, e.r + speed * 6), speed]) {
+  for (const length of e.pathDynamic ? [speed] : [Math.max(speed, e.r + speed * 6), speed]) {
     for (const turn of [0, side, -side, 2 * side, -2 * side, 3 * side, -3 * side, 4 * side, -4 * side]) {
       const a = angle + turn * Math.PI / 8;
       if (!clear(a, length)) continue;

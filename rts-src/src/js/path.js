@@ -92,16 +92,22 @@ const PF = (() => {
   }
   function oct(ax, ay, bx, by) { const dx = Math.abs(ax - bx), dy = Math.abs(ay - by); return Math.max(dx, dy) + 0.4142 * Math.min(dx, dy); }
 
-  // 두 점(px) 사이 직선 통행 가능 여부 (반경 r 고려)
+  // 물리 보정과 동일한 원-타일 충돌 판정. 모서리에 접한 유닛도 바깥쪽으로 이동할 수 있다.
+  function positionClear(x, y, r, ignoreId) {
+    if (x - r < 0 || y - r < 0 || x + r > MAP_W * TILE || y + r > MAP_H * TILE) return false;
+    for (let ty = tileOf(y - r); ty <= tileOf(y + r); ty++) for (let tx = tileOf(x - r); tx <= tileOf(x + r); tx++) {
+      if (passable(tx, ty, ignoreId)) continue;
+      const qx = Math.max(tx * TILE, Math.min(x, (tx + 1) * TILE));
+      const qy = Math.max(ty * TILE, Math.min(y, (ty + 1) * TILE));
+      if (Math.hypot(x - qx, y - qy) < r - 0.001) return false;
+    }
+    return true;
+  }
   function lineClear(x0, y0, x1, y1, r, ignoreId) {
-    const d = Math.hypot(x1 - x0, y1 - y0);
-    const steps = Math.ceil(d / 8);
+    const steps = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 4);
     for (let i = 0; i <= steps; i++) {
       const t = steps ? i / steps : 0;
-      const x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t;
-      for (const [ox, oy] of [[-r, -r], [r, -r], [-r, r], [r, r], [0, 0]]) {
-        if (!passable(Math.floor((x + ox) / TILE), Math.floor((y + oy) / TILE), ignoreId)) return false;
-      }
+      if (!positionClear(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, r, ignoreId)) return false;
     }
     return true;
   }
@@ -116,7 +122,7 @@ const PF = (() => {
     // string pulling
     const out = [];
     let ax = x0, ay = y0, i = 0;
-    const rr = Math.max(4, r - 3);
+    const rr = Math.max(3, r * 0.75);
     while (i < pts.length) {
       let j = pts.length - 1;
       while (j > i && (!lineClear(ax, ay, pts[j][0], pts[j][1], rr, ignoreId) || obstacles && !unitsClear(ax, ay, pts[j][0], pts[j][1], r, obstacles.units))) j--;
@@ -125,6 +131,62 @@ const PF = (() => {
       i = j + 1;
     }
     return out;
+  }
+
+  function unitPath(x0, y0, x1, y1, r, obstacles) {
+    const fine = localPath(x0, y0, x1, y1, r, obstacles);
+    if (fine) return fine;
+    const coarse = worldPath(x0, y0, x1, y1, r, 0, obstacles);
+    if (coarse && coarse.length) {
+      const end = coarse[coarse.length - 1];
+      let ax = x0, ay = y0;
+      const valid = coarse.every(([bx, by]) => {
+        const clear = lineClear(ax, ay, bx, by, Math.max(3, r * 0.75), 0) && unitsClear(ax, ay, bx, by, r, obstacles.units);
+        ax = bx; ay = by; return clear;
+      });
+      if (Math.hypot(end[0] - x1, end[1] - y1) < 1 && valid) return coarse;
+    }
+    return null;
+  }
+
+  // 정체 구간에서는 실제 원형 유닛 사이의 틈을 8px 간격으로 찾는다.
+  // 기존 32px 타일 마스크가 통과 가능한 틈까지 막는 경우를 피한다.
+  function localPath(x0, y0, x1, y1, r, obstacles) {
+    const step = 8, limit = 16, width = limit * 2 + 1;
+    const key = (x, y) => (y + limit) * width + x + limit;
+    const units = obstacles.units.filter(u => Math.hypot(u.x - x0, u.y - y0) < 250 + u.r + r);
+    const rr = Math.max(3, r * 0.75), start = key(0, 0);
+    const scores = new Map([[start, 0]]), parents = new Map(), nodes = new Map();
+    const queue = [], closed = new Set();
+    function add(n) {
+      let lo = 0, hi = queue.length;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (queue[mid].f < n.f) lo = mid + 1; else hi = mid; }
+      queue.splice(lo, 0, n); nodes.set(n.k, n);
+    }
+    const heuristic = (x, y) => Math.hypot(x1 - x0 - x * step, y1 - y0 - y * step);
+    add({ x: 0, y: 0, k: start, g: 0, f: heuristic(0, 0) });
+    let best = start, bestH = heuristic(0, 0), reached = false, count = 0;
+    while (queue.length && count < 600) {
+      const n = queue.shift(); if (closed.has(n.k)) continue;
+      closed.add(n.k); count++;
+      const px = x0 + n.x * step, py = y0 + n.y * step, h = heuristic(n.x, n.y);
+      if (h < bestH) { bestH = h; best = n.k; }
+      if (h < 16 && lineClear(px, py, x1, y1, rr, 0) && unitsClear(px, py, x1, y1, r, units)) { best = n.k; reached = true; break; }
+      for (let d = 0; d < 8; d++) {
+        const nx = n.x + DX[d], ny = n.y + DY[d];
+        if (Math.abs(nx) > limit || Math.abs(ny) > limit) continue;
+        const k = key(nx, ny), gx = x0 + nx * step, gy = y0 + ny * step;
+        if (closed.has(k) || !lineClear(px, py, gx, gy, rr, 0) || !unitsClear(px, py, gx, gy, r, units)) continue;
+        const ng = n.g + COST[d] * step;
+        if (scores.has(k) && scores.get(k) <= ng) continue;
+        scores.set(k, ng); parents.set(k, n.k); add({ x: nx, y: ny, k, g: ng, f: ng + heuristic(nx, ny) });
+      }
+    }
+    budget -= count;
+    const out = [];
+    for (let k = best; k !== start && k !== undefined; k = parents.get(k)) { const n = nodes.get(k); out.push([x0 + n.x * step, y0 + n.y * step]); }
+    out.reverse(); if (reached) out.push([x1, y1]);
+    return out.length ? out : null;
   }
 
   function unitsClear(x0, y0, x1, y1, r, units) {
@@ -151,7 +213,7 @@ const PF = (() => {
     return { cells, units };
   }
   return {
-    find, worldPath, lineClear, nearestPassable, passable, unitsClear, unitObstacles,
+    find, worldPath, lineClear, positionClear, localPath, unitPath, nearestPassable, passable, unitsClear, unitObstacles,
     resetBudget() { budget = 24000; }, get budget() { return budget; },
   };
 })();
