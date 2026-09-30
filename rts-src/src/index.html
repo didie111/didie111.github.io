@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STARCRAFT 1 스타일 RTS — 테란 vs 저그</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="topbar">
+  <div class="res"><img id="ico-min"><span id="r-min">0</span></div>
+  <div class="res"><img id="ico-gas"><span id="r-gas">0</span></div>
+  <div class="res"><img id="r-sup-ico"><span id="r-sup">0/0</span></div>
+  <div class="menu-btns"><button onclick="UI.toggleTest()">테스트(F10)</button><button onclick="UI.el.help.classList.toggle('hidden')">도움말(F1)</button><button onclick="GAME.paused=!GAME.paused">일시정지(F9)</button></div>
+</div>
+
+<div id="msgs"></div>
+
+<div id="console">
+  <div id="mm-wrap"><canvas id="minimap" width="128" height="128"></canvas></div>
+  <div id="info"></div>
+  <div id="cmd"></div>
+</div>
+
+<div id="tip" class="hidden"></div>
+<div id="test" class="hidden"></div>
+
+<div id="help" class="hidden">
+  <h2>조작법</h2>
+  <table>
+    <tr><td>좌클릭 / 드래그</td><td>유닛 선택 · 박스 선택 (최대 12기)</td></tr>
+    <tr><td>Shift + 클릭</td><td>선택 추가 / 제거 · 명령 예약(웨이포인트)</td></tr>
+    <tr><td>Ctrl + 클릭 · 더블클릭</td><td>화면 내 같은 종류 전체 선택</td></tr>
+    <tr><td>우클릭</td><td>스마트 명령 (이동 / 공격 / 채취 / 탑승 / 집결)</td></tr>
+    <tr><td>A · M · S · H · P</td><td>공격(어택땅) · 이동 · 정지 · 위치 사수 · 정찰</td></tr>
+    <tr><td>Ctrl + 숫자 / 숫자</td><td>부대 지정 / 부대 선택 (두 번: 화면 이동)</td></tr>
+    <tr><td>B / V (SCV 선택)</td><td>기본 건물 / 고급 건물 메뉴</td></tr>
+    <tr><td>Space</td><td>마지막 경보 위치로 이동</td></tr>
+    <tr><td>방향키 · 화면 가장자리 · 미니맵</td><td>화면 스크롤</td></tr>
+    <tr><td>마우스 휠</td><td>확대 / 축소</td></tr>
+    <tr><td>F10 또는 `</td><td>테스트 패널 (적 스폰 · 적군 조작 · AI on/off · 맵 공개)</td></tr>
+    <tr><td>F9</td><td>일시정지</td></tr>
+  </table>
+  <p>승리 조건: 적 건물 전멸 · 패배 조건: 아군 건물 전멸</p>
+  <button onclick="UI.el.help.classList.add('hidden')">닫기</button>
+</div>
+
+<div id="title">
+  <div class="box">
+    <h1>STAR<span>CRAFT</span> <small>1 스타일 RTS</small></h1>
+    <p>1 vs 1 · 테란(나, 1시) vs 저그(적, AI)</p>
+    <p class="sub">시작: 커맨드 센터 · 배럭 · 서플라이 디팟 2 · 마린 4 · SCV 10<br>적: 해처리 3 · 저글링 10 · 히드라리스크 10</p>
+    <button id="start-btn">게임 시작</button>
+    <p class="sub">F1 도움말 · F10 테스트 패널</p>
+  </div>
+</div>
+
+<div id="end" class="hidden">
+  <div class="box"><h1></h1><div class="stats"></div><button id="restart">다시 시작</button><button id="continue">계속 플레이 (샌드박스)</button></div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/map.js"></script>
+<script src="js/path.js"></script>
+<script src="js/game.js"></script>
+<script src="js/entity.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/commands.js"></script>
+<script src="js/art.js"></script>
+<script src="js/render.js"></script>
+<script src="js/sound.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
