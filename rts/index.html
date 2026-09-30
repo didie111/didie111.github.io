@@ -100,7 +100,7 @@ button.on { background: linear-gradient(#2c5a8c, #183050); border-color: #7ab0ff
   <div class="res"><img id="ico-min"><span id="r-min">0</span></div>
   <div class="res"><img id="ico-gas"><span id="r-gas">0</span></div>
   <div class="res"><img id="r-sup-ico"><span id="r-sup">0/0</span></div>
-  <div class="menu-btns"><span style="font-size:11px;color:#9ab">SC1.2</span><button onclick="UI.toggleTest()">테스트(F10)</button><button onclick="UI.el.help.classList.toggle('hidden')">도움말(F1)</button><button onclick="GAME.paused=!GAME.paused">일시정지(F9)</button></div>
+  <div class="menu-btns"><span style="font-size:11px;color:#9ab">SC1.3</span><button onclick="UI.toggleTest()">테스트(F10)</button><button onclick="UI.el.help.classList.toggle('hidden')">도움말(F1)</button><button onclick="GAME.paused=!GAME.paused">일시정지(F9)</button></div>
 </div>
 
 <div id="msgs"></div>
@@ -115,7 +115,7 @@ button.on { background: linear-gradient(#2c5a8c, #183050); border-color: #7ab0ff
 <div id="test" class="hidden"></div>
 
 <div id="help" class="hidden">
-  <h2>조작법 · SC1.2</h2>
+  <h2>조작법 · SC1.3</h2>
   <p>생산 건물에서 부속 건물을 연결하세요. 캐리어는 I로 인터셉터, 리버는 R로 스캐럽을 생산해야 공격합니다. 컴샛에서 S로 스캔할 수 있습니다.</p>
   <table>
     <tr><td>좌클릭 / 드래그</td><td>유닛 선택 · 박스 선택 (최대 12기)</td></tr>
@@ -528,7 +528,7 @@ function supplyText(v) { return (Math.round(v * 2) / 2).toString(); }
 'use strict';
 // 확장 데이터: Blizzard StarCraft Compendium 수치/역할을 참고한 웹게임 구현.
 // 원작 MPQ/엔진을 포함하지 않으며 투사체/애니메이션/길찾기는 자체 구현이다.
-const RTS_VERSION = '2026.09.30-sc1.2';
+const RTS_VERSION = '2026.09.30-sc1.3';
 Object.assign(UNITS, {
   valkyrie: { name: '발키리', race: 'T', hp: 200, armor: 2, size: 'large', air: true, speed: 6.6, sight: 8, r: 16,
     cost: [250, 125], supply: 3, time: 750, mech: true, from: 'starport', hotkey: 'V', req: ['armory'], addon: 'control_tower',
@@ -589,7 +589,9 @@ BUILDINGS.fleet_beacon.research = ['carrier_capacity', 'disruption_web_t'];
 BUILD_MENU.Z[1].push('queens_nest'); BUILD_KEYS.queens_nest = 'Q';
 BUILD_MENU.P[1].push('robo_support', 'observatory', 'arbiter_tribunal');
 Object.assign(BUILD_KEYS, { robo_support: 'B', observatory: 'O', arbiter_tribunal: 'A' });
+BUILDINGS.pool.research.push('adrenal');
 Object.assign(TECH, {
+  adrenal: { name: '아드레날 글랜드', cost: [200, 200], time: 1500, req: ['hive'], hotkey: 'A', desc: '저글링 공격 간격 감소' },
   ensnare_t: { name: '인스네어', cost: [100, 100], time: 1200, hotkey: 'E', desc: '퀸의 이동 감속 능력' },
   broodlings_t: { name: '스폰 브루들링', cost: [100, 100], time: 1200, hotkey: 'B', desc: '지상 생체 유닛을 브루들링으로 변환' },
   maelstrom_t: { name: '메일스트롬', cost: [100, 100], time: 1500, hotkey: 'E', desc: '생체 유닛 일시 정지' },
@@ -935,13 +937,13 @@ const PF = (() => {
   const COST = [1, 1, 1, 1, 1.4142, 1.4142, 1.4142, 1.4142];
   let budget = 0;
 
-  function nearestPassable(tx, ty, maxR, ignoreId) {
-    if (passable(tx, ty, ignoreId)) return [tx, ty];
+  function nearestPassable(tx, ty, maxR, ignoreId, avoid) {
+    if (passable(tx, ty, ignoreId, avoid)) return [tx, ty];
     for (let r = 1; r <= maxR; r++) {
       let best = null, bd = 1e9;
       for (let y = ty - r; y <= ty + r; y++) for (let x = tx - r; x <= tx + r; x++) {
         if (Math.abs(x - tx) !== r && Math.abs(y - ty) !== r) continue;
-        if (!passable(x, y, ignoreId)) continue;
+        if (!passable(x, y, ignoreId, avoid)) continue;
         const d = (x - tx) * (x - tx) + (y - ty) * (y - ty);
         if (d < bd) { bd = d; best = [x, y]; }
       }
@@ -949,15 +951,15 @@ const PF = (() => {
     }
     return null;
   }
-  function passable(x, y, ignoreId) {
+  function passable(x, y, ignoreId, avoid) {
     if (!inMap(x, y)) return false;
     const i = tIdx(x, y);
-    return MAP.walk[i] === 1 && (MAP.occ[i] === 0 || MAP.occ[i] === ignoreId);
+    return MAP.walk[i] === 1 && (MAP.occ[i] === 0 || MAP.occ[i] === ignoreId) && !(avoid && avoid.has(i));
   }
 
-  function find(sx, sy, gx, gy, ignoreId) {
-    const st = nearestPassable(sx, sy, 4, ignoreId);
-    const gl = nearestPassable(gx, gy, 12, ignoreId);
+  function find(sx, sy, gx, gy, ignoreId, avoid) {
+    const st = nearestPassable(sx, sy, 4, ignoreId, avoid);
+    const gl = nearestPassable(gx, gy, 12, ignoreId, avoid);
     if (!st || !gl) return null;
     [sx, sy] = st; [gx, gy] = gl;
     if (sx === gx && sy === gy) return [[gx, gy]];
@@ -976,8 +978,8 @@ const PF = (() => {
       if (h < bestH) { bestH = h; best = cur; }
       for (let d = 0; d < 8; d++) {
         const nx = cx + DX[d], ny = cy + DY[d];
-        if (!passable(nx, ny, ignoreId)) continue;
-        if (d >= 4 && (!passable(cx + DX[d], cy, ignoreId) || !passable(cx, cy + DY[d], ignoreId))) continue;
+        if (!passable(nx, ny, ignoreId, avoid)) continue;
+        if (d >= 4 && (!passable(cx + DX[d], cy, ignoreId, avoid) || !passable(cx, cy + DY[d], ignoreId, avoid))) continue;
         const ni = tIdx(nx, ny);
         if (closedGen[ni] === gen) continue;
         const ng = g[cur] + COST[d];
@@ -1011,8 +1013,8 @@ const PF = (() => {
   }
 
   // 월드 좌표 경로 (스무딩 포함)
-  function worldPath(x0, y0, x1, y1, r, ignoreId) {
-    const tiles = find(Math.floor(x0 / TILE), Math.floor(y0 / TILE), Math.floor(x1 / TILE), Math.floor(y1 / TILE), ignoreId);
+  function worldPath(x0, y0, x1, y1, r, ignoreId, obstacles) {
+    const tiles = find(Math.floor(x0 / TILE), Math.floor(y0 / TILE), Math.floor(x1 / TILE), Math.floor(y1 / TILE), ignoreId, obstacles && obstacles.cells);
     if (!tiles) return null;
     const pts = tiles.map(([x, y]) => [x * TILE + 16, y * TILE + 16]);
     const last = tiles[tiles.length - 1];
@@ -1023,15 +1025,39 @@ const PF = (() => {
     const rr = Math.max(4, r - 3);
     while (i < pts.length) {
       let j = pts.length - 1;
-      while (j > i && !lineClear(ax, ay, pts[j][0], pts[j][1], rr, ignoreId)) j--;
+      while (j > i && (!lineClear(ax, ay, pts[j][0], pts[j][1], rr, ignoreId) || obstacles && !unitsClear(ax, ay, pts[j][0], pts[j][1], r, obstacles.units))) j--;
       out.push(pts[j]);
       ax = pts[j][0]; ay = pts[j][1];
       i = j + 1;
     }
     return out;
   }
+
+  function unitsClear(x0, y0, x1, y1, r, units) {
+    const dx = x1 - x0, dy = y1 - y0, len2 = dx * dx + dy * dy;
+    for (const u of units) {
+      if (u.dead || u.hidden || u.burrowed || u.noCollide) continue;
+      const ox = u.x - x0, oy = u.y - y0, min = (r + u.r) * 0.85 + 1;
+      if (Math.hypot(ox, oy) < min && ox * dx + oy * dy <= 0) continue;
+      const t = len2 ? Math.max(0, Math.min(1, (ox * dx + oy * dy) / len2)) : 0;
+      if (Math.hypot(ox - dx * t, oy - dy * t) < min) return false;
+    }
+    return true;
+  }
+  function unitObstacles(mover) {
+    const units = GAME.entities.filter(u => u !== mover && groundCollider(u) && !collisionMover(u));
+    const cells = new Set();
+    for (const u of units) {
+      const radius = (u.r + mover.r) * 0.85 + 2;
+      for (let ty = Math.max(0, tileOf(u.y - radius)); ty <= Math.min(MAP_H - 1, tileOf(u.y + radius)); ty++)
+        for (let tx = Math.max(0, tileOf(u.x - radius)); tx <= Math.min(MAP_W - 1, tileOf(u.x + radius)); tx++)
+          if (Math.hypot(Math.max(0, Math.abs(tx * TILE + TILE / 2 - u.x) - TILE / 2), Math.max(0, Math.abs(ty * TILE + TILE / 2 - u.y) - TILE / 2)) < radius) cells.add(tIdx(tx, ty));
+    }
+    cells.delete(tIdx(tileOf(mover.x), tileOf(mover.y)));
+    return { cells, units };
+  }
   return {
-    find, worldPath, lineClear, nearestPassable, passable,
+    find, worldPath, lineClear, nearestPassable, passable, unitsClear, unitObstacles,
     resetBudget() { budget = 24000; }, get budget() { return budget; },
   };
 })();
@@ -1405,17 +1431,13 @@ class Entity {
   get speed() {
     const d = this.def; let s = d.speed || 0;
     if (this.lifted) return 1.1;
-    const o = this.owner;
-    if (this.type === 'zergling' && hasTech(o, 'metabolic')) s *= 1.5;
-    if (this.type === 'hydra' && hasTech(o, 'muscular')) s *= 1.5;
-    if (this.type === 'zealot' && hasTech(o, 'legs')) s *= 1.5;
-    if (this.type === 'vulture' && hasTech(o, 'ion')) s *= 1.5;
-    if (this.type === 'overlord' && hasTech(o, 'pneumatized')) s *= 4;
-    if (this.type === 'ultralisk' && hasTech(o, 'anabolic')) s *= 1.25;
-    if (this.stimT > 0) s *= 1.5;
-    if (this.ensnareT > 0) s *= 0.5;
+    const upgrades = { zergling: 'metabolic', hydra: 'muscular', zealot: 'legs', vulture: 'ion', overlord: 'pneumatized', ultralisk: 'anabolic' };
+    const modifier = (hasTech(this.owner, upgrades[this.type]) ? 1 : 0) + (this.stimT > 0 ? 1 : 0) - (this.ensnareT > 0 ? 1 : 0);
+    if (modifier > 0) s = Math.max(s * 1.5, 10 / 3);
+    if (modifier < 0) s /= 2;
     return s;
   }
+
   get armor() {
     const d = this.def; let a = d.armor || 0;
     if (this.isBuilding) return a;
@@ -1451,6 +1473,7 @@ class Entity {
     return d;
   }
   acqRange() {
+    if (this.type === 'ghost' && this.cloaked && !(this.orders[0] && this.orders[0].t === 'hold')) return 0;
     let best = 0;
     for (const w of [this.def.gw, this.def.aw]) if (w) best = Math.max(best, this.range(w));
     if (this.type === 'tank_siege') return best;
@@ -1468,6 +1491,7 @@ class Entity {
       this.releaseMining();
       this.orders = [o]; this.path = null; this.tgt = null; this.stuck = 0;
       this.vx = 0; this.vy = 0; this.lastD = undefined; this.giveUp = 0; this.avoidSide = 0; this.blockedTicks = 0;
+      this.unitPathUntil = 0;
     } else this.orders.push(o);
   }
   releaseMining() {
@@ -1637,8 +1661,7 @@ class Entity {
         return;
       }
     }
-    // 가만히 있을 때 가끔 두리번거림 (원작 idle 애니메이션)
-    if (!this.isBuilding && !this.air && (GAME.tick + this.id * 7) % 170 === 0 && Math.random() < 0.5) this.dir += (Math.random() - 0.5) * 1.6;
+    // 명령/교전이 없으면 마지막 방향을 유지한다. 그래픽 자체의 대기 모션과 이동 회전은 분리한다.
   }
   inRangeOf(t) {
     const w = this.weaponVs(t); if (!w) return false;
@@ -1662,6 +1685,7 @@ class Entity {
   }
 
   findTarget(r) {
+    if (r <= 0) return null;
     let best = null, bs = -1e9;
     const list = SH.query(this.x, this.y, r + 40);
     for (const e of list) {
@@ -1701,12 +1725,19 @@ class Entity {
   fire(t, w) {
     if (this.def.ammo && !(this.ammo > 0)) return;
     if (this.type === 'reaver') this.ammo--;
-    let cd = w.cd * (1 + (this.acidSpores || 0) / 8);
-    if (this.stimT > 0) cd = Math.max(1, Math.round(cd / 2));
-    this.cooldown = cd + (Math.random() < 0.5 ? 0 : 1);
+    const cd = this.weaponCooldown(w);
+    // OpenBW 무기 쿨다운 처리의 -1..+2 프레임 편차를 따른다.
+    this.cooldown = Math.max(1, cd + Math.floor(Math.random() * 4) - 1);
     this.attackAnim = 6;
     if (this.cloaked && !this.def.permCloak) { /* 원작: 클로킹 유지 */ }
     fireWeapon(this, t, w);
+  }
+  weaponCooldown(w) {
+    let cd = w.cd + Math.max(Math.floor(w.cd / 8), 3) * (this.acidSpores || 0);
+    const mod = (this.stimT > 0 ? 1 : 0) + (this.type === 'zergling' && hasTech(this.owner, 'adrenal') ? 1 : 0) - (this.ensnareT > 0 ? 1 : 0);
+    if (mod > 0) cd = Math.floor(cd / 2);
+    if (mod < 0) cd += Math.floor(cd / 4);
+    return Math.max(5, Math.min(250, cd));
   }
 
   // ---------- 이동 ----------
@@ -1740,22 +1771,26 @@ class Entity {
       return false;
     }
     // 직선 통행 가능 시 경로 없이 이동
+    if (this.blockedTicks >= 12) { this.unitPathUntil = GAME.tick + 120; this.path = null; this.blockedTicks = 0; }
+    const avoidUnits = GAME.tick < (this.unitPathUntil || 0);
     const needRepath = !this.path || Math.abs((this.pgx || 0) - x) > 40 || Math.abs((this.pgy || 0) - y) > 40 || GAME.tick >= (this.repathAt || 0);
     if (needRepath) {
       if ((GAME.tick + this.id) % 4 === 0 || !this.path) {
-        if (PF.lineClear(this.x, this.y, x, y, Math.max(4, this.r - 3), 0)) { this.path = [[x, y]]; this.pi = 0; this.pgx = x; this.pgy = y; this.repathAt = GAME.tick + 24; }
+        if (!avoidUnits && PF.lineClear(this.x, this.y, x, y, Math.max(4, this.r - 3), 0)) { this.path = [[x, y]]; this.pi = 0; this.pgx = x; this.pgy = y; this.repathAt = GAME.tick + 24; this.pathExact = true; }
         else if (PF.budget > 0) {
-          const p = PF.worldPath(this.x, this.y, x, y, this.r, 0);
+          const p = PF.worldPath(this.x, this.y, x, y, this.r, 0, avoidUnits ? PF.unitObstacles(this) : null);
           this.pgx = x; this.pgy = y; this.repathAt = GAME.tick + 120;
           if (!p || !p.length) { this.path = null; return true; }
           this.path = p; this.pi = 0;
+          this.pathExact = dist(p[p.length - 1][0], p[p.length - 1][1], x, y) < 1;
         }
       }
     }
     let wx = x, wy = y;
     if (this.path && this.path.length) {
       // 목표가 움직이는 경우 마지막 점을 갱신
-      if (tgtEnt || this.path.length === 1) this.path[this.path.length - 1] = [x, y];
+      const end = this.path[this.path.length - 1];
+      if (this.pathExact && (tgtEnt || this.path.length === 1) || tgtEnt && tgtEnt.isBuilding && edgeDistPt(tgtEnt, end[0], end[1]) <= TILE) this.path[this.path.length - 1] = [x, y];
       while (this.pi < this.path.length - 1 && dist(this.x, this.y, this.path[this.pi][0], this.path[this.pi][1]) < Math.max(10, sp * 1.5)) this.pi++;
       [wx, wy] = this.path[this.pi];
       if (this.pi === this.path.length - 1 && dist(this.x, this.y, wx, wy) < Math.max(4, sp)) {
@@ -1773,6 +1808,7 @@ class Entity {
     this.lastD = d;
     if (this.stuck > 40) {
       this.stuck = 0; this.path = null; this.repathAt = 0;
+      this.unitPathUntil = GAME.tick + 120;
       this.giveUp = (this.giveUp || 0) + 1;
       if (this.giveUp > 3 && d < 160) { this.giveUp = 0; return true; }
     }
@@ -3084,10 +3120,12 @@ function steerGround(e) {
       e.vx = Math.cos(a) * speed; e.vy = Math.sin(a) * speed;
       e.dir = a;
       if (turn) e.avoidSide = Math.sign(turn);
+      e.blockedTicks = turn ? (e.blockedTicks || 0) + 1 : 0;
       return;
     }
   }
   e.vx = 0; e.vy = 0;
+  e.blockedTicks = (e.blockedTicks || 0) + 1;
 }
 
 function physics() {

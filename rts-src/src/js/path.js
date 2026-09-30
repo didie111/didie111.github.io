@@ -31,13 +31,13 @@ const PF = (() => {
   const COST = [1, 1, 1, 1, 1.4142, 1.4142, 1.4142, 1.4142];
   let budget = 0;
 
-  function nearestPassable(tx, ty, maxR, ignoreId) {
-    if (passable(tx, ty, ignoreId)) return [tx, ty];
+  function nearestPassable(tx, ty, maxR, ignoreId, avoid) {
+    if (passable(tx, ty, ignoreId, avoid)) return [tx, ty];
     for (let r = 1; r <= maxR; r++) {
       let best = null, bd = 1e9;
       for (let y = ty - r; y <= ty + r; y++) for (let x = tx - r; x <= tx + r; x++) {
         if (Math.abs(x - tx) !== r && Math.abs(y - ty) !== r) continue;
-        if (!passable(x, y, ignoreId)) continue;
+        if (!passable(x, y, ignoreId, avoid)) continue;
         const d = (x - tx) * (x - tx) + (y - ty) * (y - ty);
         if (d < bd) { bd = d; best = [x, y]; }
       }
@@ -45,15 +45,15 @@ const PF = (() => {
     }
     return null;
   }
-  function passable(x, y, ignoreId) {
+  function passable(x, y, ignoreId, avoid) {
     if (!inMap(x, y)) return false;
     const i = tIdx(x, y);
-    return MAP.walk[i] === 1 && (MAP.occ[i] === 0 || MAP.occ[i] === ignoreId);
+    return MAP.walk[i] === 1 && (MAP.occ[i] === 0 || MAP.occ[i] === ignoreId) && !(avoid && avoid.has(i));
   }
 
-  function find(sx, sy, gx, gy, ignoreId) {
-    const st = nearestPassable(sx, sy, 4, ignoreId);
-    const gl = nearestPassable(gx, gy, 12, ignoreId);
+  function find(sx, sy, gx, gy, ignoreId, avoid) {
+    const st = nearestPassable(sx, sy, 4, ignoreId, avoid);
+    const gl = nearestPassable(gx, gy, 12, ignoreId, avoid);
     if (!st || !gl) return null;
     [sx, sy] = st; [gx, gy] = gl;
     if (sx === gx && sy === gy) return [[gx, gy]];
@@ -72,8 +72,8 @@ const PF = (() => {
       if (h < bestH) { bestH = h; best = cur; }
       for (let d = 0; d < 8; d++) {
         const nx = cx + DX[d], ny = cy + DY[d];
-        if (!passable(nx, ny, ignoreId)) continue;
-        if (d >= 4 && (!passable(cx + DX[d], cy, ignoreId) || !passable(cx, cy + DY[d], ignoreId))) continue;
+        if (!passable(nx, ny, ignoreId, avoid)) continue;
+        if (d >= 4 && (!passable(cx + DX[d], cy, ignoreId, avoid) || !passable(cx, cy + DY[d], ignoreId, avoid))) continue;
         const ni = tIdx(nx, ny);
         if (closedGen[ni] === gen) continue;
         const ng = g[cur] + COST[d];
@@ -107,8 +107,8 @@ const PF = (() => {
   }
 
   // 월드 좌표 경로 (스무딩 포함)
-  function worldPath(x0, y0, x1, y1, r, ignoreId) {
-    const tiles = find(Math.floor(x0 / TILE), Math.floor(y0 / TILE), Math.floor(x1 / TILE), Math.floor(y1 / TILE), ignoreId);
+  function worldPath(x0, y0, x1, y1, r, ignoreId, obstacles) {
+    const tiles = find(Math.floor(x0 / TILE), Math.floor(y0 / TILE), Math.floor(x1 / TILE), Math.floor(y1 / TILE), ignoreId, obstacles && obstacles.cells);
     if (!tiles) return null;
     const pts = tiles.map(([x, y]) => [x * TILE + 16, y * TILE + 16]);
     const last = tiles[tiles.length - 1];
@@ -119,15 +119,39 @@ const PF = (() => {
     const rr = Math.max(4, r - 3);
     while (i < pts.length) {
       let j = pts.length - 1;
-      while (j > i && !lineClear(ax, ay, pts[j][0], pts[j][1], rr, ignoreId)) j--;
+      while (j > i && (!lineClear(ax, ay, pts[j][0], pts[j][1], rr, ignoreId) || obstacles && !unitsClear(ax, ay, pts[j][0], pts[j][1], r, obstacles.units))) j--;
       out.push(pts[j]);
       ax = pts[j][0]; ay = pts[j][1];
       i = j + 1;
     }
     return out;
   }
+
+  function unitsClear(x0, y0, x1, y1, r, units) {
+    const dx = x1 - x0, dy = y1 - y0, len2 = dx * dx + dy * dy;
+    for (const u of units) {
+      if (u.dead || u.hidden || u.burrowed || u.noCollide) continue;
+      const ox = u.x - x0, oy = u.y - y0, min = (r + u.r) * 0.85 + 1;
+      if (Math.hypot(ox, oy) < min && ox * dx + oy * dy <= 0) continue;
+      const t = len2 ? Math.max(0, Math.min(1, (ox * dx + oy * dy) / len2)) : 0;
+      if (Math.hypot(ox - dx * t, oy - dy * t) < min) return false;
+    }
+    return true;
+  }
+  function unitObstacles(mover) {
+    const units = GAME.entities.filter(u => u !== mover && groundCollider(u) && !collisionMover(u));
+    const cells = new Set();
+    for (const u of units) {
+      const radius = (u.r + mover.r) * 0.85 + 2;
+      for (let ty = Math.max(0, tileOf(u.y - radius)); ty <= Math.min(MAP_H - 1, tileOf(u.y + radius)); ty++)
+        for (let tx = Math.max(0, tileOf(u.x - radius)); tx <= Math.min(MAP_W - 1, tileOf(u.x + radius)); tx++)
+          if (Math.hypot(Math.max(0, Math.abs(tx * TILE + TILE / 2 - u.x) - TILE / 2), Math.max(0, Math.abs(ty * TILE + TILE / 2 - u.y) - TILE / 2)) < radius) cells.add(tIdx(tx, ty));
+    }
+    cells.delete(tIdx(tileOf(mover.x), tileOf(mover.y)));
+    return { cells, units };
+  }
   return {
-    find, worldPath, lineClear, nearestPassable, passable,
+    find, worldPath, lineClear, nearestPassable, passable, unitsClear, unitObstacles,
     resetBudget() { budget = 24000; }, get budget() { return budget; },
   };
 })();

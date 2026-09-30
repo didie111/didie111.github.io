@@ -1,7 +1,7 @@
 'use strict';
 // 확장 데이터: Blizzard StarCraft Compendium 수치/역할을 참고한 웹게임 구현.
 // 원작 MPQ/엔진을 포함하지 않으며 투사체/애니메이션/길찾기는 자체 구현이다.
-const RTS_VERSION = '2026.09.30-sc1.2';
+const RTS_VERSION = '2026.09.30-sc1.3';
 Object.assign(UNITS, {
   valkyrie: { name: '발키리', race: 'T', hp: 200, armor: 2, size: 'large', air: true, speed: 6.6, sight: 8, r: 16,
     cost: [250, 125], supply: 3, time: 750, mech: true, from: 'starport', hotkey: 'V', req: ['armory'], addon: 'control_tower',
@@ -62,7 +62,9 @@ BUILDINGS.fleet_beacon.research = ['carrier_capacity', 'disruption_web_t'];
 BUILD_MENU.Z[1].push('queens_nest'); BUILD_KEYS.queens_nest = 'Q';
 BUILD_MENU.P[1].push('robo_support', 'observatory', 'arbiter_tribunal');
 Object.assign(BUILD_KEYS, { robo_support: 'B', observatory: 'O', arbiter_tribunal: 'A' });
+BUILDINGS.pool.research.push('adrenal');
 Object.assign(TECH, {
+  adrenal: { name: '아드레날 글랜드', cost: [200, 200], time: 1500, req: ['hive'], hotkey: 'A', desc: '저글링 공격 간격 감소' },
   ensnare_t: { name: '인스네어', cost: [100, 100], time: 1200, hotkey: 'E', desc: '퀸의 이동 감속 능력' },
   broodlings_t: { name: '스폰 브루들링', cost: [100, 100], time: 1200, hotkey: 'B', desc: '지상 생체 유닛을 브루들링으로 변환' },
   maelstrom_t: { name: '메일스트롬', cost: [100, 100], time: 1500, hotkey: 'E', desc: '생체 유닛 일시 정지' },

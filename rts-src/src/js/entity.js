@@ -35,17 +35,13 @@ class Entity {
   get speed() {
     const d = this.def; let s = d.speed || 0;
     if (this.lifted) return 1.1;
-    const o = this.owner;
-    if (this.type === 'zergling' && hasTech(o, 'metabolic')) s *= 1.5;
-    if (this.type === 'hydra' && hasTech(o, 'muscular')) s *= 1.5;
-    if (this.type === 'zealot' && hasTech(o, 'legs')) s *= 1.5;
-    if (this.type === 'vulture' && hasTech(o, 'ion')) s *= 1.5;
-    if (this.type === 'overlord' && hasTech(o, 'pneumatized')) s *= 4;
-    if (this.type === 'ultralisk' && hasTech(o, 'anabolic')) s *= 1.25;
-    if (this.stimT > 0) s *= 1.5;
-    if (this.ensnareT > 0) s *= 0.5;
+    const upgrades = { zergling: 'metabolic', hydra: 'muscular', zealot: 'legs', vulture: 'ion', overlord: 'pneumatized', ultralisk: 'anabolic' };
+    const modifier = (hasTech(this.owner, upgrades[this.type]) ? 1 : 0) + (this.stimT > 0 ? 1 : 0) - (this.ensnareT > 0 ? 1 : 0);
+    if (modifier > 0) s = Math.max(s * 1.5, 10 / 3);
+    if (modifier < 0) s /= 2;
     return s;
   }
+
   get armor() {
     const d = this.def; let a = d.armor || 0;
     if (this.isBuilding) return a;
@@ -81,6 +77,7 @@ class Entity {
     return d;
   }
   acqRange() {
+    if (this.type === 'ghost' && this.cloaked && !(this.orders[0] && this.orders[0].t === 'hold')) return 0;
     let best = 0;
     for (const w of [this.def.gw, this.def.aw]) if (w) best = Math.max(best, this.range(w));
     if (this.type === 'tank_siege') return best;
@@ -98,6 +95,7 @@ class Entity {
       this.releaseMining();
       this.orders = [o]; this.path = null; this.tgt = null; this.stuck = 0;
       this.vx = 0; this.vy = 0; this.lastD = undefined; this.giveUp = 0; this.avoidSide = 0; this.blockedTicks = 0;
+      this.unitPathUntil = 0;
     } else this.orders.push(o);
   }
   releaseMining() {
@@ -267,8 +265,7 @@ class Entity {
         return;
       }
     }
-    // 가만히 있을 때 가끔 두리번거림 (원작 idle 애니메이션)
-    if (!this.isBuilding && !this.air && (GAME.tick + this.id * 7) % 170 === 0 && Math.random() < 0.5) this.dir += (Math.random() - 0.5) * 1.6;
+    // 명령/교전이 없으면 마지막 방향을 유지한다. 그래픽 자체의 대기 모션과 이동 회전은 분리한다.
   }
   inRangeOf(t) {
     const w = this.weaponVs(t); if (!w) return false;
@@ -292,6 +289,7 @@ class Entity {
   }
 
   findTarget(r) {
+    if (r <= 0) return null;
     let best = null, bs = -1e9;
     const list = SH.query(this.x, this.y, r + 40);
     for (const e of list) {
@@ -331,12 +329,19 @@ class Entity {
   fire(t, w) {
     if (this.def.ammo && !(this.ammo > 0)) return;
     if (this.type === 'reaver') this.ammo--;
-    let cd = w.cd * (1 + (this.acidSpores || 0) / 8);
-    if (this.stimT > 0) cd = Math.max(1, Math.round(cd / 2));
-    this.cooldown = cd + (Math.random() < 0.5 ? 0 : 1);
+    const cd = this.weaponCooldown(w);
+    // OpenBW 무기 쿨다운 처리의 -1..+2 프레임 편차를 따른다.
+    this.cooldown = Math.max(1, cd + Math.floor(Math.random() * 4) - 1);
     this.attackAnim = 6;
     if (this.cloaked && !this.def.permCloak) { /* 원작: 클로킹 유지 */ }
     fireWeapon(this, t, w);
+  }
+  weaponCooldown(w) {
+    let cd = w.cd + Math.max(Math.floor(w.cd / 8), 3) * (this.acidSpores || 0);
+    const mod = (this.stimT > 0 ? 1 : 0) + (this.type === 'zergling' && hasTech(this.owner, 'adrenal') ? 1 : 0) - (this.ensnareT > 0 ? 1 : 0);
+    if (mod > 0) cd = Math.floor(cd / 2);
+    if (mod < 0) cd += Math.floor(cd / 4);
+    return Math.max(5, Math.min(250, cd));
   }
 
   // ---------- 이동 ----------
@@ -370,22 +375,26 @@ class Entity {
       return false;
     }
     // 직선 통행 가능 시 경로 없이 이동
+    if (this.blockedTicks >= 12) { this.unitPathUntil = GAME.tick + 120; this.path = null; this.blockedTicks = 0; }
+    const avoidUnits = GAME.tick < (this.unitPathUntil || 0);
     const needRepath = !this.path || Math.abs((this.pgx || 0) - x) > 40 || Math.abs((this.pgy || 0) - y) > 40 || GAME.tick >= (this.repathAt || 0);
     if (needRepath) {
       if ((GAME.tick + this.id) % 4 === 0 || !this.path) {
-        if (PF.lineClear(this.x, this.y, x, y, Math.max(4, this.r - 3), 0)) { this.path = [[x, y]]; this.pi = 0; this.pgx = x; this.pgy = y; this.repathAt = GAME.tick + 24; }
+        if (!avoidUnits && PF.lineClear(this.x, this.y, x, y, Math.max(4, this.r - 3), 0)) { this.path = [[x, y]]; this.pi = 0; this.pgx = x; this.pgy = y; this.repathAt = GAME.tick + 24; this.pathExact = true; }
         else if (PF.budget > 0) {
-          const p = PF.worldPath(this.x, this.y, x, y, this.r, 0);
+          const p = PF.worldPath(this.x, this.y, x, y, this.r, 0, avoidUnits ? PF.unitObstacles(this) : null);
           this.pgx = x; this.pgy = y; this.repathAt = GAME.tick + 120;
           if (!p || !p.length) { this.path = null; return true; }
           this.path = p; this.pi = 0;
+          this.pathExact = dist(p[p.length - 1][0], p[p.length - 1][1], x, y) < 1;
         }
       }
     }
     let wx = x, wy = y;
     if (this.path && this.path.length) {
       // 목표가 움직이는 경우 마지막 점을 갱신
-      if (tgtEnt || this.path.length === 1) this.path[this.path.length - 1] = [x, y];
+      const end = this.path[this.path.length - 1];
+      if (this.pathExact && (tgtEnt || this.path.length === 1) || tgtEnt && tgtEnt.isBuilding && edgeDistPt(tgtEnt, end[0], end[1]) <= TILE) this.path[this.path.length - 1] = [x, y];
       while (this.pi < this.path.length - 1 && dist(this.x, this.y, this.path[this.pi][0], this.path[this.pi][1]) < Math.max(10, sp * 1.5)) this.pi++;
       [wx, wy] = this.path[this.pi];
       if (this.pi === this.path.length - 1 && dist(this.x, this.y, wx, wy) < Math.max(4, sp)) {
@@ -403,6 +412,7 @@ class Entity {
     this.lastD = d;
     if (this.stuck > 40) {
       this.stuck = 0; this.path = null; this.repathAt = 0;
+      this.unitPathUntil = GAME.tick + 120;
       this.giveUp = (this.giveUp || 0) + 1;
       if (this.giveUp > 3 && d < 160) { this.giveUp = 0; return true; }
     }

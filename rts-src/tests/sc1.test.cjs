@@ -189,3 +189,44 @@ for(const [worker,base,structure,race] of [['scv','cc','depot','T'],['drone','ha
  if('${race}'==='P')assert.equal(b.builder,undefined);
  `);
 }
+
+check('idle ground units keep their position and facing without arbitrary rotation', `
+ Math.random=()=>0;const u=unit('marine');u.dir=0.75;const x=u.x,y=u.y;ticks(700);
+ assert.equal(u.x,x);assert.equal(u.y,y);assert.equal(u.dir,0.75);
+`);
+check('Move crosses an enemy without auto-attacking while attack move engages', `
+ const m=unit('marine',300,300),e=unit('zergling',350,300,1);e.orders=[{t:'hold'}];refresh();
+ m.issue({t:'move',x:600,y:300});m.update();assert.equal(e.hp,e.maxHp);assert.equal(m.tgt,null);assert.ok(m.moving);
+ m.issue({t:'amove',x:600,y:300});GAME.tick=(6-m.id%6)%6;refresh();m.update();assert.ok(e.hp<e.maxHp);assert.equal(m.vx,0);
+`);
+check('ground path replans around a dense stationary unit wall without displacing it', `
+ const wall=[];for(let y=160;y<=480;y+=16){const u=unit('marine',320,y);u.issue({t:'hold'});wall.push(u);}
+ const mover=unit('marine',160,320);mover.issue({t:'move',x:500,y:320});let usedUnitPath=false;
+ for(let i=0;i<500;i++){ticks(1);usedUnitPath ||= mover.unitPathUntil>GAME.tick;}
+ assert.ok(usedUnitPath);assert.ok(mover.x>475,'mover failed to route around the wall: '+mover.x+','+mover.y);
+ for(let i=0;i<wall.length;i++){assert.equal(wall[i].x,320);assert.equal(wall[i].y,160+i*16);}
+`);
+check('path endpoint in unreachable terrain stays reachable instead of being overwritten', `
+ for(let y=0;y<MAP_H;y++)MAP.walk[tIdx(12,y)]=0;
+ const m=unit('marine',200,300);m.issue({t:'move',x:600,y:300});ticks(150);
+ assert.ok(m.x<384);assert.ok(groundPassable(tileOf(m.x),tileOf(m.y)));assert.ok(!m.moving);
+`);
+
+check('cloaked ghost stays passive in Guard, but Hold and explicit attack can fire', `
+ const g=unit('ghost');g.cloaked=true;g.energy=200;const e=unit('marine',350,300,1);refresh();GAME.tick=(6-g.id%6)%6;
+ g.update();assert.equal(e.hp,e.maxHp);assert.equal(g.tgt,null);
+ g.issue({t:'hold'});g.update();assert.ok(e.hp<e.maxHp);
+`);
+check('weapon cooldown combines stim, adrenal, ensnare and acid spores like the reference formula', `
+ const m=unit('marine');const w={cd:15};assert.equal(m.weaponCooldown(w),15);
+ m.stimT=100;assert.equal(m.weaponCooldown(w),7);m.ensnareT=100;assert.equal(m.weaponCooldown(w),15);
+ m.stimT=0;assert.equal(m.weaponCooldown(w),18);m.acidSpores=2;assert.equal(m.weaponCooldown(w),26);
+ const z=unit('zergling');P(0).tech.adrenal=true;assert.equal(z.weaponCooldown({cd:8}),5);
+`);
+
+check('movement modifiers cancel rather than multiplying stim and ensnare', `
+ const m=unit('marine');const base=m.speed;m.stimT=100;m.ensnareT=100;assert.equal(m.speed,base);
+ m.stimT=0;assert.equal(m.speed,base/2);
+ const z=unit('zergling');const speed=z.speed;P(0).tech.metabolic=true;z.ensnareT=100;assert.equal(z.speed,speed);
+ assert.ok(BUILDINGS.pool.research.includes('adrenal'));assert.deepEqual(Array.from(TECH.adrenal.req),['hive']);
+`);

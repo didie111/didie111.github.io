@@ -316,10 +316,12 @@ function steerGround(e) {
       e.vx = Math.cos(a) * speed; e.vy = Math.sin(a) * speed;
       e.dir = a;
       if (turn) e.avoidSide = Math.sign(turn);
+      e.blockedTicks = turn ? (e.blockedTicks || 0) + 1 : 0;
       return;
     }
   }
   e.vx = 0; e.vy = 0;
+  e.blockedTicks = (e.blockedTicks || 0) + 1;
 }
 
 function physics() {
