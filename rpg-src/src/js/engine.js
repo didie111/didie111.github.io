@@ -544,7 +544,7 @@ function animateMonster(mon, dt) {
   if (mon.atkAnim > 0) mon.atkAnim -= dt * 2;
   if (mon.hurt > 0) { mon.hurt -= dt; mon.node.style.filter = 'brightness(2.4)'; }
   else mon.node.style.filter = '';
-  mon.node.setAttribute('transform', `translate(${mon.x.toFixed(1)},${mon.y.toFixed(1)}) scale(${mon.facing},1)`);
+  mon.node.setAttribute('transform', `translate(${mon.x.toFixed(1)},${mon.y.toFixed(1)}) scale(${mon.facing * (mon.def.artFace || 1)},1)`);
   // hp bar
   if (mon.hp < mon.maxHp) {
     mon.bar.style.opacity = 1;
