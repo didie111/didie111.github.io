@@ -138,7 +138,7 @@ const ETC_ITEMS = {
 const MONSTERS = {
   snail: {
     id: 'snail', name: '달팽이', art: 'snail', lv: 1, hp: 30, atk: 8, def: 1, exp: 12,
-    w: 44, h: 34, spd: 32, meso: [4, 14], sight: 180,
+    w: 44, h: 34, spd: 32, meso: [4, 14], sight: 180, artFace: -1,
     drops: [{ item: 'jelly', p: 0.25 }, { item: 'redPotion', p: 0.18 }, { equip: 1, p: 0.10 }],
   },
   slime: {
@@ -153,7 +153,7 @@ const MONSTERS = {
   },
   wolf: {
     id: 'wolf', name: '들개', art: 'wolf', lv: 14, hp: 240, atk: 38, def: 11, exp: 105,
-    w: 62, h: 44, spd: 118, meso: [30, 80], sight: 420,
+    w: 62, h: 44, spd: 118, meso: [30, 80], sight: 420, artFace: -1,
     drops: [{ item: 'fang', p: 0.35 }, { item: 'bluePotion', p: 0.2 }, { equip: 2, p: 0.18 }],
   },
   golem: {
