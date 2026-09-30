@@ -1,40 +1,22 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
-    <title>실시간 RSI 모니터링</title>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <style>
-        body { max-width: 800px; margin: 20px auto; padding: 20px; }
-        .alert { color: red; font-weight: bold; }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="0;url=/rts/">
+  <title>STARCRAFT 1 스타일 RTS — 게임 시작</title>
+  <link rel="canonical" href="https://didie111.github.io/rts/">
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #10151c; color: #eef2f7; font-family: sans-serif; text-align: center; }
+    main { padding: 24px; }
+    a { display: inline-block; padding: 14px 28px; background: #2363c7; border-radius: 8px; color: white; text-decoration: none; }
+  </style>
 </head>
 <body>
-    <h1>💰 비트코인 RSI 현황</h1>
-    <div id="chart"></div>
-    <div id="status"></div>
-
-    <script>
-        // 5분마다 차트 자동 갱신
-        function updateChart() {
-            fetch('https://didie111.github.io/rsi_chart.html')
-                .then(response => response.text())
-                .then(html => {
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(html, 'text/html');
-                    const plotlyDiv = doc.querySelector('.plotly-graph-div');
-                    document.getElementById('chart').innerHTML = plotlyDiv.innerHTML;
-                    
-                    const latestRSI = parseFloat(
-                        plotlyDiv.querySelector('.trace.scatter').__data__.y.slice(-1)
-                    document.getElementById('status').innerHTML = 
-                        `<p>최종 업데이트: ${new Date().toLocaleString()}</p>
-                         <p class="${latestRSI > 70 ? 'alert' : ''}">현재 RSI: ${latestRSI.toFixed(2)}</p>`;
-                });
-        }
-        
-        // 초기 실행 + 5분 간격 실행
-        updateChart();
-        setInterval(updateChart, 300000);
-    </script>
+  <main>
+    <h1>STARCRAFT 1 스타일 RTS</h1>
+    <p>게임 화면으로 이동합니다.</p>
+    <a href="/rts/">게임 시작</a>
+  </main>
 </body>
 </html>
