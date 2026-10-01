@@ -23,11 +23,71 @@ function world() {
   return code => vm.runInContext(code,ctx);
 }
 function check(name, code) { test(name, () => world()(code)); }
+for (const [workerType, gasType, hallType] of [['scv','refinery','cc'],['drone','extractor','hatchery'],['probe','assimilator','nexus']]) {
+ for (const [side, dx, dy] of [['left',-180,0],['right',180,0],['top',0,-140],['bottom',0,140]])
+ check(workerType+' builds gas from '+side, `
+  const g=building('geyser',20,20,NEUTRAL); g.amount=5000;
+  const w=unit('${workerType}',g.x+${dx},g.y+${dy}); refresh();
+  UI.selection=[w]; UI.mode={kind:'place',bt:'${gasType}'};
+  UI.execMode(g.x,g.y,false,false); GAME.buildSpeed=8; ticks(350);
+  const b=g.refinery; assert.ok(b,'worker must reach geyser and begin construction');
+  assert.equal(b.type,'${gasType}'); assert.equal(b.done,true,'gas building must finish');
+  assert.equal(g.hidden,true); assert.equal(!!w.dead,${workerType==='drone'});
+  assert.equal(P(0).min,5000-BUILDINGS['${gasType}'].cost[0]);
+  assert.equal(canPlace('${gasType}',g.tx0,g.ty0,0,null,true),false);
+ `);
+ check(workerType+' delivers gas after construction and restores geyser on removal', `
+  const g=building('geyser',20,20,NEUTRAL); g.amount=5000;
+  building('${hallType}',10,20); const w=unit('${workerType}',g.x,g.y+140); refresh();
+  w.issue({t:'build',bt:'${gasType}',tx:g.tx0,ty:g.ty0}); GAME.buildSpeed=8; ticks(350);
+  const b=g.refinery; assert.ok(b&&b.done);
+  const miner=${workerType==='drone' ? "unit('drone',g.x,g.y+100)" : 'w'};
+  smartCommand([miner],b.x,b.y,b,false); const before=P(0).gas; ticks(400);
+  assert.ok(P(0).gas>before,'gas must be returned to town hall'); assert.ok(g.amount<5000);
+  miner.issue({t:'stop'}); killEntity(b,null);
+  assert.equal(g.hidden,false); assert.equal(g.refinery,null);
+  assert.equal(MAP.occ[tIdx(g.tx0,g.ty0)],g.id);
+  assert.equal(canPlace('${gasType}',g.tx0,g.ty0,0,null,true),true);
+ `);
+ check(workerType+' approaches gas around a blocked side without occupying the geyser', `
+  const g=building('geyser',20,20,NEUTRAL); g.amount=5000;
+  for(let y=19;y<=22;y++) MAP.walk[tIdx(19,y)]=0;
+  const w=unit('${workerType}',g.x-180,g.y); refresh();
+  w.issue({t:'build',bt:'${gasType}',tx:g.tx0,ty:g.ty0}); GAME.buildSpeed=8; ticks(500);
+  assert.ok(g.refinery&&g.refinery.done,'must use another reachable edge');
+ `);
+ check(workerType+' cannot build inaccessible gas or spend resources', `
+  const g=building('geyser',20,20,NEUTRAL);
+  for(let y=19;y<=22;y++) for(let x=19;x<=24;x++)
+   if(x===19||x===24||y===19||y===22) MAP.walk[tIdx(x,y)]=0;
+  const w=unit('${workerType}',g.x-180,g.y); refresh();
+  w.issue({t:'build',bt:'${gasType}',tx:g.tx0,ty:g.ty0}); ticks(150);
+  assert.ok(!g.refinery); assert.equal(P(0).min,5000); assert.ok(!w.orders.length);
+ `);
+ check(workerType+' cancels gas construction and can reuse the geyser', `
+  const g=building('geyser',20,20,NEUTRAL); g.amount=5000;
+  const w=unit('${workerType}',g.x,g.y+g.hh+10); refresh();
+  w.issue({t:'build',bt:'${gasType}',tx:g.tx0,ty:g.ty0}); ticks(2);
+  const b=g.refinery; assert.ok(b&&!b.done); cmdCancelConstruction(b);
+  assert.ok(b.dead); assert.equal(g.hidden,false); assert.equal(g.refinery,null);
+  assert.equal(MAP.occ[tIdx(g.tx0,g.ty0)],g.id);
+  assert.equal(canPlace('${gasType}',g.tx0,g.ty0,0,null,true),true);
+ `);
+}
 check('move command shares destination and immediately clears stale velocity', `
  const a=unit('marine'),b=unit('marine',340,340); a.vx=5;
  commandUnits([a,b],{t:'move',x:600,y:500});
  assert.equal(a.vx,0); assert.equal(a.orders[0].x,b.orders[0].x); assert.equal(a.orders[0].y,b.orders[0].y);
  commandUnits([a],{t:'hold'}); assert.equal(a.vx,0);
+`);
+for (const seed of [20260930,42,1234]) check('starting mining SCV builds refinery on scenario terrain, seed '+seed, `
+ GAME.entities=[]; GAME.byId.clear(); setupScenario(${seed}); GAME.aiOn=[false,false]; P(0).min=5000;
+ const cc=GAME.entities.find(e=>e.owner===0&&e.type==='cc');
+ const g=GAME.entities.filter(e=>e.type==='geyser').sort((a,b)=>dist(cc.x,cc.y,a.x,a.y)-dist(cc.x,cc.y,b.x,b.y))[0];
+ const w=GAME.entities.filter(e=>e.owner===0&&e.type==='scv').sort((a,b)=>dist(g.x,g.y,a.x,a.y)-dist(g.x,g.y,b.x,b.y))[0];
+ UI.selection=[w]; UI.mode={kind:'place',bt:'refinery'}; refresh();
+ UI.execMode(g.x,g.y-20,false); GAME.buildSpeed=8; ticks(1200);
+ assert.ok(g.refinery&&g.refinery.done,'initial SCV must build on the actual map');
 `);
 check('hold acquires an in-range target without chasing an old target', `
  const a=unit('marine'), far=unit('zergling',520,300,1), near=unit('zergling',350,300,1);

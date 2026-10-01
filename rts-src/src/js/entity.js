@@ -511,6 +511,25 @@ class Entity {
     const d = BUILDINGS[o.bt];
     const cx = (o.tx + d.w / 2) * TILE, cy = (o.ty + d.h / 2) * TILE;
     const box = { x: cx, y: cy, hw: d.w * 16, hh: d.h * 16 };
+    if (d.onGeyser) {
+      // 간헐천 내부는 점유된 타일이다. 내부 목표의 대체 타일 중심에서
+      // 멈추면 건설 거리(6px)에 닿지 못하므로 바깥의 실제 작업점을 찾는다.
+      if (!canPlace(o.bt, o.tx, o.ty, this.owner, this)) { this.nextOrder(); return; }
+      this.noCollide = false;
+      if (edgeDist(this, box) <= 6) { startConstruction(this, o); return; }
+      if (!o.approach || !PF.positionClear(...o.approach, this.r, 0)) {
+        o.approach = gasBuildApproach(this, box, o.failedApproaches);
+        this.path = null;
+      }
+      if (!o.approach) {
+        notify(this.owner, 'place', '간헐천으로 접근할 수 없습니다.', 'err'); this.nextOrder(); return;
+      }
+      if (this.moveTo(...o.approach, 1) && edgeDist(this, box) > 6) {
+        (o.failedApproaches ||= new Set()).add(o.approach.join(','));
+        o.approach = null;
+      }
+      return;
+    }
     if (edgeDist(this, box) > 6) {
       this.noCollide = false;
       // 목적지는 건물 영역 가장자리
@@ -853,6 +872,21 @@ function applyRally(u, rally) {
     u.issue({ t: 'follow', tgt: rally.tgt }); return;
   }
   u.issue({ t: 'move', x: rally.x, y: rally.y });
+}
+
+function gasBuildApproach(worker, box, failed) {
+  const gap = worker.r + 2;
+  const left = box.x - box.hw - gap, right = box.x + box.hw + gap;
+  const top = box.y - box.hh - gap, bottom = box.y + box.hh + gap;
+  const points = [];
+  const xs = [Math.max(box.x - box.hw, Math.min(box.x + box.hw, worker.x))];
+  const ys = [Math.max(box.y - box.hh, Math.min(box.y + box.hh, worker.y))];
+  for (let x = box.x - box.hw; x <= box.x + box.hw; x += TILE / 2) xs.push(x);
+  for (let y = box.y - box.hh; y <= box.y + box.hh; y += TILE / 2) ys.push(y);
+  for (const x of xs) points.push([x, top], [x, bottom]);
+  for (const y of ys) points.push([left, y], [right, y]);
+  return points.filter(p => !(failed && failed.has(p.join(','))) && PF.positionClear(...p, worker.r, 0))
+    .sort((a, b) => dist(worker.x, worker.y, ...a) - dist(worker.x, worker.y, ...b))[0];
 }
 
 function startConstruction(worker, o) {
