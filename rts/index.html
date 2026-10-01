@@ -530,7 +530,7 @@ function supplyText(v) { return (Math.round(v * 2) / 2).toString(); }
 'use strict';
 // 확장 데이터: Blizzard StarCraft Compendium 수치/역할을 참고한 웹게임 구현.
 // 원작 MPQ/엔진을 포함하지 않으며 투사체/애니메이션/길찾기는 자체 구현이다.
-const RTS_VERSION = '2026.10.01-sc1.9';
+const RTS_VERSION = '2026.10.01-sc1.10';
 Object.assign(UNITS, {
   valkyrie: { name: '발키리', race: 'T', hp: 200, armor: 2, size: 'large', air: true, speed: 6.6, sight: 8, r: 16,
     cost: [250, 125], supply: 3, time: 750, mech: true, from: 'starport', hotkey: 'V', req: ['armory'], addon: 'control_tower',
@@ -1599,6 +1599,7 @@ class Entity {
         const b = this.orders[0].tgt; if (b && b.builder === this) b.builder = null;
       }
       this.releaseMining();
+      this.yieldHome = null; this.yieldRequest = null; this.escapeAngle = undefined;
       this.orders = [o]; this.path = null; this.tgt = null; this.stuck = 0;
       this.vx = 0; this.vy = 0; this.lastD = undefined; this.giveUp = 0; this.avoidSide = 0; this.blockedTicks = 0;
       this.unitPathUntil = 0; this.pathRetryAt = 0; this.pathDynamic = false;
@@ -3328,62 +3329,133 @@ function steerGround(e) {
   e.blockedTicks = (e.blockedTicks || 0) + 1;
 }
 
+// 기존 겹침은 좌표 보정 대신 속도 제한 안에서 빈 방향으로 걸어서 해소한다.
+// 명령 큐/채취 목표는 건드리지 않는다. 정상 접근에서는 정지/Hold 병력이 양보하지 않는다.
+function recoverGround(e, blockers) {
+  const speed = e.speed;
+  if (collisionFixed(e) || speed <= 0) return false;
+  const overlaps = blockers.filter(o => Math.hypot(e.x - o.x, e.y - o.y) < (e.r + o.r) * 0.85 - 1e-6);
+  if (!overlaps.length) { e.escapeAngle = undefined; return false; }
+  // 정상 명령으로 이동하는 쪽이 기존 정지 병력의 겹침도 처리한다.
+  if (!e.collisionMoving && overlaps.some(o => o.collisionMoving && !collisionFixed(o))) {
+    e.vx = 0; e.vy = 0; return true;
+  }
+  const penetration = (x, y) => blockers.reduce((sum, o) => {
+    const depth = Math.max(0, (e.r + o.r) * 0.85 - Math.hypot(x - o.x, y - o.y));
+    return sum + depth * depth;
+  }, 0);
+  const before = penetration(e.x, e.y);
+  let bestScore = before, best = null;
+  // 같은 위치의 유닛도 ID별 방향을 갖는다. 탈출 중에는 이전 방향을 먼저 검사한다.
+  const angles = [];
+  if (e.escapeAngle !== undefined) angles.push(e.escapeAngle);
+  if (e.moving) angles.push(Math.atan2(e.vy, e.vx));
+  for (const o of overlaps) if (e.x !== o.x || e.y !== o.y) angles.push(Math.atan2(e.y - o.y, e.x - o.x));
+  const base = (e.id * 2.399963229728653) % (Math.PI * 2);
+  for (let i = 0; i < 16; i++) angles.push(base + i * Math.PI / 8);
+  for (const angle of angles) for (const length of [speed, speed / 2, speed / 4]) {
+    const dx = Math.cos(angle) * length, dy = Math.sin(angle) * length;
+    const x = e.x + dx, y = e.y + dy;
+    if (!PF.lineClear(e.x, e.y, x, y, Math.max(3, e.r * 0.75), 0)) continue;
+    // 탈출로 인해 멀쩡한 이웃과 새로 겹치지 않는다.
+    if (blockers.some(o => !overlaps.includes(o) && Math.hypot(x - o.x, y - o.y) < (e.r + o.r) * 0.85 - 1e-6)) continue;
+    const score = penetration(x, y);
+    if (score >= bestScore - 1e-8) continue;
+    bestScore = score; best = { dx, dy, angle };
+  }
+  e.vx = best ? best.dx : 0; e.vy = best ? best.dy : 0;
+  if (best) { e.dir = best.angle; e.escapeAngle = best.angle; }
+  return true;
+}
+
+// 경로를 찾지 못하고 오래 기다리는 병력 앞에서는 일반 대기 유닛만 짧게 양보한다.
+// Hold/활성 명령/시즈 상태는 대상이 아니며, 양보도 정상 속도·몸체 검사로 이동한다.
+function yieldGround(e, blockers) {
+  if (e.orders.length || e.tgt || collisionFixed(e) || e.speed <= 0) return false;
+  const pendingMove = o => !collisionFixed(o) && o.orders[0] &&
+    ['move', 'attackmove', 'patrol'].includes(o.orders[0].t);
+  const old = e.yieldRequest;
+  const requester = old && blockers.includes(old) && pendingMove(old) &&
+    Math.hypot(old.x - e.x, old.y - e.y) < (e.r + old.r) * 0.85 + 12 ? old :
+    blockers.find(o => pendingMove(o) && ((o.stuck || 0) >= 20 || (o.giveUp || 0) > 0) &&
+      Math.hypot(o.x - e.x, o.y - e.y) < (e.r + o.r) * 0.85 + 8);
+  if (!requester) {
+    e.yieldRequest = null;
+    if (!e.yieldHome) return false;
+    const [x, y] = e.yieldHome, distance = Math.hypot(x - e.x, y - e.y);
+    if (distance < 0.001) { e.yieldHome = null; return false; }
+    const length = Math.min(e.speed, distance), dx = (x - e.x) / distance * length, dy = (y - e.y) / distance * length;
+    if (!PF.lineClear(e.x, e.y, e.x + dx, e.y + dy, Math.max(3, e.r * 0.75), 0) ||
+        !PF.unitsClear(e.x, e.y, e.x + dx, e.y + dy, e.r, blockers)) return false;
+    e.vx = dx; e.vy = dy; e.dir = Math.atan2(dy, dx); return true;
+  }
+  const current = Math.hypot(e.x - requester.x, e.y - requester.y);
+  const base = Math.atan2(e.y - requester.y, e.x - requester.x);
+  let best = null, bestDistance = current;
+  for (let i = 0; i < 16; i++) {
+    const angle = base + i * Math.PI / 8;
+    const dx = Math.cos(angle) * e.speed, dy = Math.sin(angle) * e.speed;
+    if (!PF.lineClear(e.x, e.y, e.x + dx, e.y + dy, Math.max(3, e.r * 0.75), 0)) continue;
+    if (!PF.unitsClear(e.x, e.y, e.x + dx, e.y + dy, e.r, blockers)) continue;
+    const distance = Math.hypot(e.x + dx - requester.x, e.y + dy - requester.y);
+    if (distance <= bestDistance + 1e-6) continue;
+    bestDistance = distance; best = { dx, dy, angle };
+  }
+  if (!best) return false;
+  if (!e.yieldHome) e.yieldHome = [e.x, e.y];
+  e.yieldRequest = requester;
+  e.vx = best.dx; e.vy = best.dy; e.dir = best.angle;
+  return true;
+}
+
 function physics() {
   const ents = GAME.entities;
-  // 회피 결과가 0이어도 이동 시도 중인 유닛이 분리 보정을 부담한다.
   for (const e of ents) {
     e.collisionMoving = collisionMover(e);
-    if (!e.dead && !e.hidden && groundCollider(e) && e.collisionMoving) steerGround(e);
+    e.recovering = false;
+    if (groundCollider(e) && e.collisionMoving) steerGround(e);
   }
+  // 순차 충돌 검사: 먼저 움직인 상대의 현재 위치를 사용하며 새 겹침은 대기한다.
+  // 공간 해시는 틱 시작 위치이므로 최대 이동량만큼 검색 여유를 확보한다.
   for (const e of ents) {
     if (e.dead || e.hidden) continue;
     if (collisionFixed(e)) { e.vx = 0; e.vy = 0; continue; }
-    if (groundCollider(e) && !e.collisionMoving) continue;
+    if (groundCollider(e)) {
+      const blockers = SH.query(e.x, e.y, e.r + 48).filter(o => o !== e && groundCollider(o));
+      e.recovering = recoverGround(e, blockers);
+      if (!e.recovering) {
+        if (!e.collisionMoving && !yieldGround(e, blockers)) continue;
+        // 회피에서 놓친 접촉도 좌표를 밀지 않고 이번 틱의 이동을 기다린다.
+        if (blockers.some(o => {
+          const ox = o.x - e.x, oy = o.y - e.y;
+          // 나란히 움직이는 상대가 이번 이동으로 비울 위치는 허용한다.
+          let rx = e.vx, ry = e.vy;
+          if (collisionMover(o) && Math.abs(Math.hypot(rx, ry) - Math.hypot(o.vx, o.vy)) < 0.001 &&
+              rx * o.vx + ry * o.vy > 0.97 * Math.hypot(rx, ry) * Math.hypot(o.vx, o.vy) && !o.physicsMoved) {
+            rx -= o.vx; ry -= o.vy;
+          }
+          const rr = rx * rx + ry * ry;
+          const t = rr ? Math.max(0, Math.min(1, (ox * rx + oy * ry) / rr)) : 0;
+          return Math.hypot(ox - rx * t, oy - ry * t) < (e.r + o.r) * 0.85 - 1e-6;
+        })) { e.vx = 0; e.vy = 0; e.blockedTicks = (e.blockedTicks || 0) + 1; }
+      }
+    }
     e.x += e.vx; e.y += e.vy;
+    e.physicsMoved = true;
   }
   const buf = [];
   for (const e of ents) {
-    if (e.dead || e.hidden || e.isBuilding) continue;
-    if (e.air) {
-      if (e.moving) continue;
-      buf.length = 0; SH.query(e.x, e.y, e.r + 30, buf);
-      for (const o of buf) {
-        if (o === e || !o.air || o.dead || o.hidden || o.isBuilding) continue;
-        const dx = e.x - o.x, dy = e.y - o.y, d = Math.hypot(dx, dy) || 0.01, m = (e.r + o.r) * 0.7;
-        if (d < m) { const f = Math.min(0.6, (m - d) * 0.04); e.x += dx / d * f; e.y += dy / d * f; }
-      }
-      continue;
-    }
-    if (!groundCollider(e)) continue;
-    buf.length = 0; SH.query(e.x, e.y, e.r + 24, buf);
+    e.physicsMoved = false;
+    if (e.dead || e.hidden || e.isBuilding || !e.air || e.moving) continue;
+    buf.length = 0; SH.query(e.x, e.y, e.r + 30, buf);
     for (const o of buf) {
-      if (o.id <= e.id || !groundCollider(o)) continue;
-      let dx = o.x - e.x, dy = o.y - e.y;
-      let d = Math.hypot(dx, dy);
-      const min = (e.r + o.r) * 0.85;
-      if (d >= min) continue;
-      const ov = min - d;
-      if (d < 0.01) {
-        // 같은 좌표의 군집을 전부 수평으로 밀면 벽 옆에서 한 줄로 다시 낀다.
-        const a = ((e.id * 13 + o.id * 7) % 16) * Math.PI / 8;
-        dx = Math.cos(a); dy = Math.sin(a); d = 1;
-      }
-      let me = e.collisionMoving ? 1 : 0, mo = o.collisionMoving ? 1 : 0;
-      // 이미 겹친 대기 유닛은 홀드 중이어도 몸체 겹침을 해소한다.
-      // 정상 접근은 이동하는 쪽만 회피하며 시즈/변태/상태이상은 계속 고정한다.
-      if (!me && !mo) {
-        me = !collisionFixed(e) ? 1 : 0;
-        mo = !collisionFixed(o) ? 1 : 0;
-      }
-      const total = me + mo;
-      if (!total) continue;
-      e.x -= dx / d * ov * me / total; e.y -= dy / d * ov * me / total;
-      o.x += dx / d * ov * mo / total; o.y += dy / d * ov * mo / total;
+      if (o === e || !o.air || o.dead || o.hidden || o.isBuilding) continue;
+      const dx = e.x - o.x, dy = e.y - o.y, d = Math.hypot(dx, dy) || 0.01, m = (e.r + o.r) * 0.7;
+      if (d < m) { const f = Math.min(0.6, (m - d) * 0.04); e.x += dx / d * f; e.y += dy / d * f; }
     }
   }
   for (const e of ents) {
-    if (e.dead || e.hidden) continue;
-    if (collisionFixed(e)) continue;
+    if (e.dead || e.hidden || collisionFixed(e)) continue;
     e.x = Math.max(8, Math.min(MAP_W * TILE - 8, e.x));
     e.y = Math.max(8, Math.min(MAP_H * TILE - 8, e.y));
     if (!e.air && !e.lifted) resolveTerrain(e);

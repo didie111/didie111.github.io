@@ -93,6 +93,7 @@ class Entity {
         const b = this.orders[0].tgt; if (b && b.builder === this) b.builder = null;
       }
       this.releaseMining();
+      this.yieldHome = null; this.yieldRequest = null; this.escapeAngle = undefined;
       this.orders = [o]; this.path = null; this.tgt = null; this.stuck = 0;
       this.vx = 0; this.vy = 0; this.lastD = undefined; this.giveUp = 0; this.avoidSide = 0; this.blockedTicks = 0;
       this.unitPathUntil = 0; this.pathRetryAt = 0; this.pathDynamic = false;

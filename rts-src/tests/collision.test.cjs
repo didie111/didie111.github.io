@@ -40,7 +40,7 @@ test('all mobile ground types recover from exact overlap even when both units ho
   for (const type of catalogue.groundTypes) {
     const w = world(), a = w.unit(type,240,240), b = w.unit(type,240,240);
     a.issue({t:'hold'}); b.issue({t:'hold'});
-    for(let i=0;i<10;i++) w.physicalStep();
+    for(let i=0;i<40;i++) w.physicalStep();
     finite(a); finite(b);
     assert.ok(Math.hypot(a.x-b.x,a.y-b.y)>=(a.r+b.r)*0.85-1e-6,type+' stays stacked');
   }
@@ -52,9 +52,43 @@ test(type+' restores collision immediately after gathering -> '+order, () => {
   worker.orders=[{t:'gather',phase:'go'}]; worker.noCollide=true;
   worker.issue({t:order,x:400,y:240});
   assert.ok(!worker.noCollide,'ordinary order must restore body collision');
-  for(let i=0;i<10;i++) w.physicalStep();
+  for(let i=0;i<40;i++) w.physicalStep();
   assert.deepEqual(position(blocker),[240,240]); finite(worker);
   assert.ok(Math.hypot(worker.x-blocker.x,worker.y-blocker.y)>=(worker.r+blocker.r)*0.85-1e-6);
+});
+
+for (const type of ['scv', 'drone', 'probe', 'marine', 'hydra', 'zealot', 'ultralisk'])
+test(type + ' walks out of a stack at its own speed without replacing its command', () => {
+  const w = world(), tank = w.unit('tank_siege', 240, 240), u = w.unit(type, 240, 240);
+  const order = { t: 'hold' }; u.issue(order);
+  let travelled = 0;
+  for (let i = 0; i < 60; i++) {
+    const start = position(u); w.step();
+    const distance = Math.hypot(u.x - start[0], u.y - start[1]);
+    assert.ok(distance <= u.speed + 1e-6, 'overlap recovery jumps beyond movement speed');
+    travelled += distance;
+    assert.deepEqual(position(tank), [240, 240]);
+    assert.equal(u.orders[0], order, 'recovery replaces original hold');
+  }
+  assert.ok(travelled > 0);
+  assert.ok(Math.hypot(u.x - tank.x, u.y - tank.y) >= (u.r + tank.r) * 0.85 - 1e-6);
+  const end = position(u); for (let i = 0; i < 20; i++) w.step();
+  assert.deepEqual(position(u), end, 'unit continues wandering after escape');
+});
+
+test('an already overlapping mover walks out without displacing a held blocker', () => {
+  for (const reverse of [false, true]) {
+    const w = world(); let b, m;
+    if (reverse) { m = w.unit('scv', 240, 240); b = w.unit('marine', 240, 240); }
+    else { b = w.unit('marine', 240, 240); m = w.unit('scv', 240, 240); }
+    b.issue({ t: 'hold' }); m.issue({ t: 'move', x: 420, y: 240 });
+    for (let i = 0; i < 160; i++) {
+      const start = position(m); w.step();
+      assert.deepEqual(position(b), [240, 240]);
+      assert.ok(Math.hypot(m.x-start[0], m.y-start[1]) <= m.speed + 1e-6);
+    }
+    assert.ok(m.x > 400, 'original destination is not resumed after escape');
+  }
 });
 
 test('mixed held ground army untangles a dense stack beside terrain', () => {
@@ -204,14 +238,14 @@ test('moving units meet head-on and both reach their destinations', () => {
 
 test('pre-existing exact overlap resolves without moving a fixed tank', () => {
   const w = world(), t = w.unit('tank_siege', 240, 240), a = w.unit('marine', 240, 240);
-  for (let i = 0; i < 3; i++) w.physicalStep();
+  for (let i = 0; i < 30; i++) w.physicalStep();
   assert.deepEqual(position(t), [240, 240]); finite(a);
   assert.ok(Math.hypot(a.x - t.x, a.y - t.y) >= (a.r + t.r) * 0.85 - 1e-6);
 });
 
 test('two overlapping ordinary idle units separate deterministically', () => {
   const w = world(), a = w.unit('marine', 240, 240), b = w.unit('marine', 240, 240);
-  w.physicalStep(); finite(a); finite(b);
+  for (let i = 0; i < 30; i++) w.physicalStep(); finite(a); finite(b);
   assert.ok(Math.hypot(a.x - b.x, a.y - b.y) >= (a.r + b.r) * 0.85 - 1e-6);
 });
 
@@ -312,4 +346,27 @@ test('a mixed crowd can regroup after bunching against buildings and minerals',(
  units.forEach((u,i)=>u.issue({t:'move',x:destinations[i][0],y:destinations[i][1]}));
  for(let i=0;i<450;i++)w.step();
  assert.ok(units.every((u,i)=>Math.hypot(u.x-destinations[i][0],u.y-destinations[i][1])<20),units.map(position).join(' / '));
+});
+
+for (const hold of [false, true]) test('blocked corridor: ' + (hold ? 'hold stays put' : 'idle unit walks aside'), () => {
+  const w = world(); w.MAP.walk.fill(0);
+  for (let x = 1; x < 25; x++) w.MAP.walk[7 * w.MAP_W + x] = 1;
+  const blocker = w.unit('marine', 240, 240), mover = w.unit('marine', 100, 240);
+  if (hold) blocker.issue({ t: 'hold' });
+  mover.issue({ t: 'move', x: 400, y: 240 });
+  let blockerDistance = 0;
+  for (let i = 0; i < 320; i++) {
+    const start = position(blocker); w.step();
+    const step = Math.hypot(blocker.x - start[0], blocker.y - start[1]);
+    assert.ok(step <= blocker.speed + 1e-6, 'yield teleports the blocker');
+    blockerDistance += step;
+    assert.ok(Math.hypot(blocker.x - mover.x, blocker.y - mover.y) >= (blocker.r + mover.r) * 0.85 - 1e-6);
+  }
+  if (hold) {
+    assert.deepEqual(position(blocker), [240, 240]); assert.ok(mover.x < 240);
+    assert.equal(mover.orders[0]?.t, 'move');
+  } else {
+    assert.ok(blockerDistance > 0, 'idle blocker never walks aside');
+    assert.ok(mover.x > 380, 'waiting mover cannot pass after yield');
+  }
 });
