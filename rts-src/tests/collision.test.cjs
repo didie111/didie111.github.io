@@ -390,6 +390,88 @@ test('a mixed crowd can regroup after bunching against buildings and minerals',(
  assert.ok(units.every((u,i)=>Math.hypot(u.x-destinations[i][0],u.y-destinations[i][1])<20),units.map(position).join(' / '));
 });
 
+test('contact with a distant arrived group member does not complete a move', () => {
+  const w = world(), stopped = w.unit('marine', 725, 600), mover = w.unit('marine', 740, 600);
+  stopped.arrivedGroup = 77;
+  mover.issue({ t: 'move', x: 600, y: 600, group: 77, gsize: 28 });
+  w.step();
+  assert.equal(mover.orders[0]?.t, 'move', 'arrival must not propagate through a distant neighbour');
+  for (let i = 0; i < 150; i++) w.step();
+  assert.ok(Math.hypot(mover.x - 600, mover.y - 600) < 12);
+});
+
+test('28 Protoss units gather at a reachable destination and obey a fresh dispersal command', () => {
+  const w = world(), army = [];
+  for (let i = 0; i < 28; i++) army.push(w.unit(i < 12 ? 'dragoon' : i < 24 ? 'zealot' : 'archon',
+    600 + i % 4 * 40, 400 + Math.floor(i / 4) * 40));
+  w.commandUnits(army, { t: 'move', x: 650, y: 660 });
+  for (let tick = 0; tick < 800; tick++) {
+    const before = army.map(position); w.step();
+    for (let i = 0; i < army.length; i++) {
+      const a = army[i]; finite(a);
+      assert.ok(Math.hypot(a.x - before[i][0], a.y - before[i][1]) <= a.speed + 1e-6);
+      for (const b of army) if (a.id < b.id)
+        assert.ok(Math.hypot(a.x - b.x, a.y - b.y) >= (a.r + b.r) * 0.85 - 1e-6, 'gathering creates an overlap');
+    }
+  }
+  const distances = army.map(u => Math.hypot(u.x - 650, u.y - 660));
+  assert.ok(distances.reduce((a, b) => a + b, 0) / army.length < 55, 'arrival stops an unnecessarily spread-out army');
+  assert.ok(Math.max(...distances) < 100, 'a far-away body was falsely marked arrived');
+  assert.ok(army.every(u => !u.orders.length), 'gathering never settles');
+  const targets = army.map((u, i) => [1200 + i % 7 * 40, 1000 + Math.floor(i / 7) * 40]);
+  army.forEach((u, i) => u.issue({ t: 'move', x: targets[i][0], y: targets[i][1] }));
+  for (let i = 0; i < 450; i++) w.step();
+  assert.ok(army.every((u, i) => Math.hypot(u.x - targets[i][0], u.y - targets[i][1]) < 20), 'new command retains a previous adjusted destination');
+});
+
+test('an occupied shared destination uses a reachable endpoint without moving a fixed body', () => {
+  const w = world(), fixed = w.unit('tank_siege', 650, 660), mover = w.unit('marine', 550, 660);
+  fixed.arrivedGroup = 77;
+  mover.issue({ t: 'move', x: 650, y: 660, group: 77, gsize: 2 });
+  for (let i = 0; i < 200; i++) {
+    w.step(); assert.deepEqual(position(fixed), [650, 660]);
+    assert.ok(Math.hypot(mover.x - fixed.x, mover.y - fixed.y) >= (mover.r + fixed.r) * 0.85 - 1e-6);
+  }
+  assert.ok(!mover.orders.length, 'reachable adjusted endpoint never completes');
+  assert.ok(Math.hypot(mover.x - fixed.x, mover.y - fixed.y) < 32, 'endpoint is not near the actual occupied destination');
+});
+
+test('an adjusted destination is discarded when the occupying body disappears', () => {
+  const w = world(), fixed = w.unit('tank_siege', 650, 660), mover = w.unit('marine', 590, 640);
+  fixed.arrivedGroup = 77;
+  mover.issue({ t: 'move', x: 650, y: 660, group: 77, gsize: 2 });
+  w.PF.resetBudget();
+  const route = w.PF.unitPath(mover.x, mover.y, 650, 660, mover.r, w.PF.unitObstacles(mover), 77, mover.owner);
+  assert.equal(route.goalBlocker, fixed);
+  mover.path = route; mover.pi = 0; mover.pgx = 650; mover.pgy = 660;
+  mover.pathDynamic = true; mover.pathExact = false; mover.repathAt = 999; mover.unitPathUntil = 999;
+  fixed.dead = true;
+  for (let i = 0; i < 80; i++) w.step();
+  assert.ok(Math.hypot(mover.x - 650, mover.y - 660) <= 8, 'unit stops at the obsolete endpoint');
+});
+
+test('a clear short forward step is used before turning beside a ground body', () => {
+  const w = world(), fixed = w.unit('tank_siege', 240, 240), mover = w.unit('marine', 219, 240);
+  mover.issue({ t: 'move', x: 400, y: 240 }); w.step();
+  assert.deepEqual(position(fixed), [240, 240]);
+  assert.ok(Math.abs(mover.y - 240) < 1e-6, 'full-speed sidestep replaced a legal short approach');
+  assert.ok(mover.x > 219 && mover.x < 223);
+  assert.ok(Math.hypot(mover.x - fixed.x, mover.y - fixed.y) >= (mover.r + fixed.r) * 0.85 - 1e-6);
+});
+
+test('a faster follower waits for a moving body and then resumes its original destination', () => {
+  const w = world(), front = w.unit('marine', 130, 600), rear = w.unit('vulture', 112.8, 600);
+  front.issue({ t: 'move', x: 600, y: 600 }); rear.issue({ t: 'move', x: 580, y: 600 });
+  const start = position(rear); w.step();
+  assert.deepEqual(position(rear), start, 'waiting follower makes an unnecessary sidestep');
+  assert.equal(rear.orders[0]?.t, 'move');
+  for (let i = 0; i < 170; i++) {
+    w.step();
+    assert.ok(Math.hypot(front.x - rear.x, front.y - rear.y) >= (front.r + rear.r) * 0.85 - 1e-6);
+  }
+  assert.ok(rear.x > 560, 'follower never resumes after the moving body clears');
+});
+
 for (const hold of [false, true]) test('blocked corridor: ' + (hold ? 'hold stays put' : 'idle unit walks aside'), () => {
   const w = world(); w.MAP.walk.fill(0);
   for (let x = 1; x < 25; x++) w.MAP.walk[7 * w.MAP_W + x] = 1;

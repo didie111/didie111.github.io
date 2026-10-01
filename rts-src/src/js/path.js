@@ -133,10 +133,17 @@ const PF = (() => {
     return out;
   }
 
-  function unitPath(x0, y0, x1, y1, r, obstacles) {
+  function goalBlocker(x, y, r, units, group, owner) {
+    if (!group) return null;
+    return units.find(u => groundCollider(u) && !collisionMover(u) && !u.yieldHome && u.owner === owner &&
+      u.arrivedGroup === group && !u.orders.length &&
+      Math.hypot(u.x - x, u.y - y) < (r + u.r) * 0.85 + 0.1) || null;
+  }
+
+  function unitPath(x0, y0, x1, y1, r, obstacles, group, owner) {
     const escape = circlePath(x0, y0, x1, y1, r, obstacles);
     if (escape) return escape;
-    const fine = localPath(x0, y0, x1, y1, r, obstacles);
+    const fine = localPath(x0, y0, x1, y1, r, obstacles, goalBlocker(x1, y1, r, obstacles.units, group, owner));
     if (fine) return fine;
     const coarse = worldPath(x0, y0, x1, y1, r, 0, obstacles);
     if (coarse && coarse.length) {
@@ -197,7 +204,7 @@ const PF = (() => {
 
   // 정체 구간에서는 실제 원형 유닛 사이의 틈을 8px 간격으로 찾는다.
   // 기존 32px 타일 마스크가 통과 가능한 틈까지 막는 경우를 피한다.
-  function localPath(x0, y0, x1, y1, r, obstacles) {
+  function localPath(x0, y0, x1, y1, r, obstacles, occupiedGoal) {
     const step = 8, limit = 16, width = limit * 2 + 1;
     const key = (x, y) => (y + limit) * width + x + limit;
     const units = obstacles.units.filter(u => Math.hypot(u.x - x0, u.y - y0) < 250 + u.r + r);
@@ -232,6 +239,13 @@ const PF = (() => {
     const out = [];
     for (let k = best; k !== start && k !== undefined; k = parents.get(k)) { const n = nodes.get(k); out.push([x0 + n.x * step, y0 + n.y * step]); }
     out.reverse(); if (reached) out.push([x1, y1]);
+    // OpenBW pathfinder_find_next_short_path / path_progress는 막힌 목적지를
+    // 탐색으로 얻은 도달 가능한 끝점으로 조정한다. 현재 원형·8px 탐색 모델에
+    // 적용하되 같은 명령으로 도착한 아군이 실제 목표를 점유한 경우만 허용한다.
+    if (!reached && occupiedGoal && Math.abs(x1 - x0) <= limit * step && Math.abs(y1 - y0) <= limit * step) {
+      if (!out.length) out.push([x0, y0]);
+      out.goalBlocker = occupiedGoal;
+    }
     return out.length ? out : null;
   }
 
@@ -240,14 +254,14 @@ const PF = (() => {
     for (const u of units) {
       if (u.dead || u.hidden || u.burrowed || u.noCollide || u.type === 'larva') continue;
       const ox = u.x - x0, oy = u.y - y0, min = (r + u.r) * 0.85 + 0.1;
-      if (Math.hypot(ox, oy) < min && ox * dx + oy * dy <= 0) continue;
+      if (len2 > 0 && Math.hypot(ox, oy) < min && ox * dx + oy * dy <= 0) continue;
       const t = len2 ? Math.max(0, Math.min(1, (ox * dx + oy * dy) / len2)) : 0;
       if (Math.hypot(ox - dx * t, oy - dy * t) < min) return false;
     }
     return true;
   }
-  function unitObstacles(mover) {
-    const units = GAME.entities.filter(u => u !== mover && groundCollider(u) && !collisionMover(u));
+  function unitObstacles(mover, includeMoving) {
+    const units = GAME.entities.filter(u => u !== mover && groundCollider(u) && (includeMoving || !collisionMover(u)));
     const cells = new Set();
     for (const u of units) {
       const radius = (u.r + mover.r) * 0.85 + 2;
@@ -259,7 +273,7 @@ const PF = (() => {
     return { cells, units };
   }
   return {
-    find, worldPath, lineClear, positionClear, localPath, unitPath, nearestPassable, passable, unitsClear, unitObstacles,
+    find, worldPath, lineClear, positionClear, localPath, unitPath, nearestPassable, passable, unitsClear, unitObstacles, goalBlocker,
     resetBudget() { budget = 24000; }, get budget() { return budget; },
   };
 })();

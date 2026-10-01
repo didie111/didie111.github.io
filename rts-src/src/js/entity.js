@@ -97,6 +97,7 @@ class Entity {
       this.orders = [o]; this.path = null; this.tgt = null; this.stuck = 0;
       this.vx = 0; this.vy = 0; this.lastD = undefined; this.giveUp = 0; this.avoidSide = 0; this.blockedTicks = 0;
       this.unitPathUntil = 0; this.pathRetryAt = 0; this.pathDynamic = false;
+      this.collisionWait = 0; this.repathMoversUntil = 0;
     } else this.orders.push(o);
     this.syncHarvestCollision();
   }
@@ -118,6 +119,7 @@ class Entity {
   nextOrder() {
     this.releaseMining();
     this.orders.shift(); this.path = null; this.tgt = null; this.stuck = 0;
+    this.collisionWait = 0; this.repathMoversUntil = 0;
     this.syncHarvestCollision();
   }
   stopAll() { this.issue({ t: 'stop' }); this.orders = []; }
@@ -361,22 +363,27 @@ class Entity {
   // ---------- 이동 ----------
   moveGroup(o) {
     const arr = o.arrive || 8;
-    if (this.moveTo(o.x, o.y, arr)) { this.arrivedGroup = o.group; return true; }
-    // 그룹 도착 처리: 목적지 근처에서 이미 도착한 동료와 붙으면 정지
-    if (o.group && o.gsize > 1) {
-      const dd = dist(this.x, this.y, o.x, o.y);
-      const gr = 10 + Math.sqrt(o.gsize) * 14 + this.r;
-      if (dd < gr * 1.6) {
-        for (const e of SH.query(this.x, this.y, this.r + 20)) {
-          if (e === this || e.dead || e.owner !== this.owner || e.arrivedGroup !== o.group || e.air !== this.air) continue;
-          if (dist(e.x, e.y, this.x, this.y) <= e.r + this.r + 3) { this.arrivedGroup = o.group; this.path = null; this.vx = 0; this.vy = 0; return true; }
+    // UM_FixCollision state 2: 충돌한 몸체가 실제 목표를 점유하면 접촉에서
+    // 멈춘다. 전속력·반·사분의 일 접근 뒤 남는 거리만 허용하므로 먼 동료에게
+    // 도착 처리를 전파하지 않는다. 이미 겹친 몸체는 먼저 탈출해야 한다.
+    if (groundCollider(this)) {
+      const blocker = PF.goalBlocker(o.x, o.y, this.r, SH.query(o.x, o.y, this.r + 48), o.group, this.owner);
+      if (blocker) {
+        const gap = (this.r + blocker.r) * 0.85, d = dist(this.x, this.y, blocker.x, blocker.y);
+        const length = this.speed / 4, dx = o.x - this.x, dy = o.y - this.y, targetDistance = Math.hypot(dx, dy) || 1;
+        if (d >= gap - 1e-6 && d <= gap + length + 0.1 &&
+            !PF.unitsClear(this.x, this.y, this.x + dx / targetDistance * length, this.y + dy / targetDistance * length, this.r, [blocker])) {
+          this.arrivedGroup = o.group; this.path = null; this.vx = 0; this.vy = 0; return true;
         }
       }
     }
+    // OpenBW order_Move / path_progress: 실제 목표 또는 탐색으로 조정한
+    // 도달 지점에 도착해야 완료한다. 동료 접촉을 도착으로 전파하지 않는다.
+    if (this.moveTo(o.x, o.y, arr, null, o.group)) { this.arrivedGroup = o.group; return true; }
     return false;
   }
 
-  moveTo(x, y, arrive, tgtEnt) {
+  moveTo(x, y, arrive, tgtEnt, group) {
     const dx = x - this.x, dy = y - this.y, d = Math.hypot(dx, dy);
     const edge = tgtEnt ? edgeDist(this, tgtEnt) : d;
     if (edge <= arrive) { this.path = null; this.vx = 0; this.vy = 0; return true; }
@@ -388,7 +395,18 @@ class Entity {
       this.dir = Math.atan2(dy, dx);
       return false;
     }
-    if (!this.path && GAME.tick < (this.pathRetryAt || 0)) { this.vx = 0; this.vy = 0; return false; }
+    // 목표를 막던 몸체가 움직이면 이전의 조정된 도착점은 더 이상 유효하지 않다.
+    if (this.path && this.path.goalBlocker &&
+        !PF.goalBlocker(x, y, this.r, [this.path.goalBlocker], group, this.owner)) {
+      this.path = null; this.pathRetryAt = 0; this.unitPathUntil = 0;
+    }
+    // OpenBW UM_RetryPath / UM_WaitFree는 대기 중에도 충돌 카운터를 진행한다.
+    // 여기서 빠져나오는 틱을 빼먹으면 갇힌 병력의 양보 요청이 영원히 발생하지 않는다.
+    const waitForPath = () => {
+      this.vx = 0; this.vy = 0; this.lastD = d;
+      this.stuck = Math.min(255, (this.stuck || 0) + 1); return false;
+    };
+    if (!this.path && GAME.tick < (this.pathRetryAt || 0)) return waitForPath();
     // 직선 통행 가능 시 경로 없이 이동
     if (this.blockedTicks >= 12) { this.unitPathUntil = GAME.tick + 120; this.path = null; this.blockedTicks = 0; }
     const avoidUnits = GAME.tick < (this.unitPathUntil || 0);
@@ -397,9 +415,14 @@ class Entity {
       if ((GAME.tick + this.id) % 4 === 0 || !this.path) {
         if (!avoidUnits && PF.lineClear(this.x, this.y, x, y, Math.max(3, this.r * 0.75), 0)) { this.path = [[x, y]]; this.pi = 0; this.pgx = x; this.pgy = y; this.repathAt = GAME.tick + 24; this.pathExact = true; this.pathDynamic = false; }
         else if (PF.budget > 0) {
-          const p = avoidUnits ? PF.unitPath(this.x, this.y, x, y, this.r, PF.unitObstacles(this)) : PF.worldPath(this.x, this.y, x, y, this.r, 0);
+          const p = avoidUnits ? PF.unitPath(this.x, this.y, x, y, this.r,
+            PF.unitObstacles(this, GAME.tick < (this.repathMoversUntil || 0)), group, this.owner) : PF.worldPath(this.x, this.y, x, y, this.r, 0);
           this.pgx = x; this.pgy = y; this.repathAt = GAME.tick + 120;
-          if (!p || !p.length) { this.path = null; this.vx = 0; this.vy = 0; if (avoidUnits) this.pathRetryAt = GAME.tick + 12 + this.id % 6; return !avoidUnits; }
+          if (!p || !p.length) {
+            this.path = null; this.vx = 0; this.vy = 0;
+            if (avoidUnits) { this.pathRetryAt = GAME.tick + 12 + this.id % 6; return waitForPath(); }
+            return true;
+          }
           this.path = p; this.pi = 0; this.pathDynamic = avoidUnits;
           this.pathExact = dist(p[p.length - 1][0], p[p.length - 1][1], x, y) < 1;
         }
@@ -412,7 +435,10 @@ class Entity {
       if (this.pathExact && (tgtEnt || this.path.length === 1) || tgtEnt && tgtEnt.isBuilding && edgeDistPt(tgtEnt, end[0], end[1]) <= TILE) this.path[this.path.length - 1] = [x, y];
       while (this.pi < this.path.length - 1 && dist(this.x, this.y, this.path[this.pi][0], this.path[this.pi][1]) < (this.pathDynamic ? 0.001 : Math.max(10, sp * 1.5))) this.pi++;
       [wx, wy] = this.path[this.pi];
-      if (this.pi === this.path.length - 1 && dist(this.x, this.y, wx, wy) < Math.max(4, sp)) {
+      if (this.path.goalBlocker && this.pi === this.path.length - 1 && dist(this.x, this.y, wx, wy) < 0.001) {
+        this.path = null; this.vx = 0; this.vy = 0; return true;
+      }
+      if (!this.path.goalBlocker && this.pi === this.path.length - 1 && dist(this.x, this.y, wx, wy) < Math.max(4, sp)) {
         // 목적지가 막혀 있어 더 못 가는 경우
         if (d > arrive) {
           this.path = null;

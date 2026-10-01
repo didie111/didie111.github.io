@@ -329,7 +329,33 @@ function steerGround(e) {
     const ox = o.x - e.x, oy = o.y - e.y, t = Math.max(0, Math.min(look, ox * ux + oy * uy));
     return Math.hypot(ox - ux * t, oy - uy * t) < (e.r + o.r) * 0.85 + 0.1;
   });
-  if (!e.pathDynamic && follows && !fixedAhead && clear(angle, speed)) { e.blockedTicks = 0; return; }
+  if (!e.pathDynamic && follows && !fixedAhead && clear(angle, speed)) { e.blockedTicks = 0; e.collisionWait = 0; return; }
+  // OpenBW UM_FollowPath: 접촉 직전에는 반·사분의 일 이동도 검사한다.
+  // 한 틱의 전속력 이동이 막혔다고 즉시 옆으로 돌지 않고 남은 틈으로 접근한다.
+  if (!clear(angle, speed)) {
+    for (const fraction of [0.5, 0.25]) {
+      const length = speed * fraction;
+      if (!clear(angle, length)) continue;
+      e.vx = ux * length; e.vy = uy * length; e.dir = angle;
+      e.collisionWait = 0; return;
+    }
+    const movingAhead = blockers.some(o => {
+      if (!collisionMover(o) || e.vx * o.vx + e.vy * o.vy <= 0) return false;
+      const ox = o.x - e.x, oy = o.y - e.y;
+      const t = Math.max(0, Math.min(speed, ox * ux + oy * uy));
+      return ox * ux + oy * uy > 0 && Math.hypot(ox - ux * t, oy - uy * t) < (e.r + o.r) * 0.85 + 0.1;
+    });
+    // UM_WaitFree의 이동 중 몸체 대기와 25회 접촉 뒤 UM_RepathMovers 전환.
+    if (movingAhead) {
+      e.vx = 0; e.vy = 0; e.collisionWait = (e.collisionWait || 0) + 1;
+      if (e.collisionWait >= 25) {
+        e.collisionWait = 0; e.path = null; e.pathRetryAt = 0;
+        e.unitPathUntil = GAME.tick + 120; e.repathMoversUntil = GAME.tick + 120;
+      }
+      return;
+    }
+  }
+  e.collisionWait = 0;
   for (const length of e.pathDynamic ? [speed] : [look, speed]) {
     for (const turn of [0, side, -side, 2 * side, -2 * side, 3 * side, -3 * side, 4 * side, -4 * side]) {
       const a = angle + turn * Math.PI / 8;
@@ -386,7 +412,7 @@ function recoverGround(e, blockers) {
 function yieldGround(e, blockers) {
   if (e.orders.length || e.tgt || collisionFixed(e) || e.speed <= 0) return false;
   const pendingMove = o => !collisionFixed(o) && o.orders[0] &&
-    ['move', 'attackmove', 'patrol'].includes(o.orders[0].t);
+    ['move', 'amove', 'patrol', 'follow'].includes(o.orders[0].t);
   const old = e.yieldRequest;
   const requester = old && blockers.includes(old) && pendingMove(old) &&
     Math.hypot(old.x - e.x, old.y - e.y) < (e.r + old.r) * 0.85 + 12 ? old :
@@ -395,12 +421,10 @@ function yieldGround(e, blockers) {
   if (!requester) {
     e.yieldRequest = null;
     if (!e.yieldHome) return false;
-    const [x, y] = e.yieldHome, distance = Math.hypot(x - e.x, y - e.y);
-    if (distance < 0.001) { e.yieldHome = null; return false; }
-    const length = Math.min(e.speed, distance), dx = (x - e.x) / distance * length, dy = (y - e.y) / distance * length;
-    if (!PF.lineClear(e.x, e.y, e.x + dx, e.y + dy, Math.max(3, e.r * 0.75), 0) ||
-        !PF.unitsClear(e.x, e.y, e.x + dx, e.y + dy, e.r, blockers)) return false;
-    e.vx = dx; e.vy = dy; e.dir = Math.atan2(dy, dx); return true;
+    const [x, y] = e.yieldHome;
+    if (e.moveTo(x, y, 0.001)) { e.yieldHome = null; e.path = null; return false; }
+    if (e.moving) steerGround(e);
+    return e.moving;
   }
   const current = Math.hypot(e.x - requester.x, e.y - requester.y);
   const base = Math.atan2(e.y - requester.y, e.x - requester.x);
@@ -441,12 +465,9 @@ function physics() {
         // 회피에서 놓친 접촉도 좌표를 밀지 않고 이번 틱의 이동을 기다린다.
         if (blockers.some(o => {
           const ox = o.x - e.x, oy = o.y - e.y;
-          // 나란히 움직이는 상대가 이번 이동으로 비울 위치는 허용한다.
-          let rx = e.vx, ry = e.vy;
-          if (collisionMover(o) && Math.abs(Math.hypot(rx, ry) - Math.hypot(o.vx, o.vy)) < 0.001 &&
-              rx * o.vx + ry * o.vy > 0.97 * Math.hypot(rx, ry) * Math.hypot(o.vx, o.vy) && !o.physicsMoved) {
-            rx -= o.vx; ry -= o.vy;
-          }
+          // OpenBW의 실제 이동 충돌처럼 현재 몸체를 검사한다. 아직 적용되지
+          // 않은 상대 속도를 미리 빼면 상대가 감속/재탐색할 때 새 겹침이 생긴다.
+          const rx = e.vx, ry = e.vy;
           const rr = rx * rx + ry * ry;
           const t = rr ? Math.max(0, Math.min(1, (ox * rx + oy * ry) / rr)) : 0;
           return Math.hypot(ox - rx * t, oy - ry * t) < (e.r + o.r) * 0.85 - 1e-6;
@@ -454,11 +475,9 @@ function physics() {
       }
     }
     e.x += e.vx; e.y += e.vy;
-    e.physicsMoved = true;
   }
   const buf = [];
   for (const e of ents) {
-    e.physicsMoved = false;
     if (e.dead || e.hidden || e.isBuilding || !e.air || e.moving) continue;
     buf.length = 0; SH.query(e.x, e.y, e.r + 30, buf);
     for (const o of buf) {
