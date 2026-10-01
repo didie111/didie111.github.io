@@ -277,7 +277,7 @@ const UI = {
       this.clickFx(wx, wy, 'attack');
     } else if (c === 'patrol') { commandUnits(us, { t: 'patrol', x: wx, y: wy }, shift); this.clickFx(wx, wy, 'move'); }
     else if (c === 'gather') {
-      if (!tgt || !(tgt.type === 'mineral' || (tgt.def.onGeyser && tgt.owner === p && tgt.done))) { this.message('자원을 선택해야 합니다.'); SND.play('err'); return; }
+      if (!tgt || !(tgt.type === 'mineral' || tgt.type === 'geyser' || (tgt.def.onGeyser && tgt.owner === p && tgt.done))) { this.message('자원을 선택해야 합니다.'); SND.play('err'); return; }
       for (const u of us) if (u.isWorker) { u.issue({ t: 'gather', tgt, phase: 'go' }, shift); u.lastRes = tgt; }
       this.clickFx(tgt.x, tgt.y, 'gather');
     } else if (c === 'repair') {

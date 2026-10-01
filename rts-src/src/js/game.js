@@ -10,6 +10,7 @@ const GAME = {
   ghosts: [new Map(), new Map()],
   control: PLAYER, revealAll: false, aiOn: [false, true], over: false, paused: false,
   speed: 1, buildSpeed: 1, running: false, msgCooldown: {},
+  recoveryRandState: 42,
 };
 
 function newPlayer(race, idx) {

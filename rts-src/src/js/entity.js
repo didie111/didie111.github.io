@@ -93,7 +93,7 @@ class Entity {
         const b = this.orders[0].tgt; if (b && b.builder === this) b.builder = null;
       }
       this.releaseMining();
-      this.yieldHome = null; this.yieldRequest = null; this.escapeAngle = undefined;
+      this.groundRecovery = null;
       this.orders = [o]; this.path = null; this.tgt = null; this.stuck = 0;
       this.vx = 0; this.vy = 0; this.lastD = undefined; this.giveUp = 0; this.avoidSide = 0; this.blockedTicks = 0;
       this.unitPathUntil = 0; this.pathRetryAt = 0; this.pathDynamic = false;
@@ -103,7 +103,7 @@ class Entity {
   }
   syncHarvestCollision() {
     const o = this.orders[0];
-    if (!(this.isWorker && o && (o.t === 'gather' || o.t === 'ret'))) this.noCollide = !!this.burrowed;
+    this.noCollide = !!this.burrowed || !!(this.isWorker && o && (o.t === 'gather' || o.t === 'ret'));
   }
   releaseMining() {
     const o = this.orders[0];
@@ -401,7 +401,7 @@ class Entity {
       this.path = null; this.pathRetryAt = 0; this.unitPathUntil = 0;
     }
     // OpenBW UM_RetryPath / UM_WaitFree는 대기 중에도 충돌 카운터를 진행한다.
-    // 여기서 빠져나오는 틱을 빼먹으면 갇힌 병력의 양보 요청이 영원히 발생하지 않는다.
+    // 경로 재시도도 막힘 시간에 포함하지만 정지한 이웃에게 이동을 강제하지 않는다.
     const waitForPath = () => {
       this.vx = 0; this.vy = 0; this.lastD = d;
       this.stuck = Math.min(255, (this.stuck || 0) + 1); return false;
@@ -501,6 +501,11 @@ class Entity {
       res = o.tgt = res && res.type === 'mineral' ? findFreeMineral(o.lx || this.x, o.ly || this.y, this, null) : null;
       if (!res) { this.nextOrder(); this.noCollide = false; return; }
     }
+    // 원작은 가스통 자체가 정제소로 바뀌므로 기존 접근 목표가 유지된다.
+    // 여기서는 새 건물을 생성하므로 완성된 아군 정제소로 목표를 연결한다.
+    if (res.type === 'geyser' && res.refinery && !res.refinery.dead && res.refinery.done && res.refinery.owner === this.owner) {
+      res = o.tgt = res.refinery; this.lastRes = res; this.path = null;
+    }
     o.lx = res.x; o.ly = res.y;
     this.noCollide = true;
     if (res.type === 'mineral') {
@@ -526,6 +531,12 @@ class Entity {
       }
     } else {
       // 가스
+      // get_default_gather_order / MoveToGas: 미정제 가스도 채취 충돌로 접근한다.
+      // 도착 후 채취 가능 여부를 검사하며, 정제소가 없으면 충돌을 복원한다.
+      if (res.type === 'geyser') {
+        if (this.moveTo(res.x, res.y, 3, res)) this.nextOrder();
+        return;
+      }
       if (res.dead || res.owner !== this.owner || !res.done || !res.def.onGeyser) { this.nextOrder(); this.noCollide = false; return; }
       if (o.phase === 'in') {
         if (--this.gasT <= 0) {

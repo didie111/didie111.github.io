@@ -134,9 +134,8 @@ const PF = (() => {
   }
 
   function goalBlocker(x, y, r, units, group, owner) {
-    if (!group) return null;
-    return units.find(u => groundCollider(u) && !collisionMover(u) && !u.yieldHome && u.owner === owner &&
-      u.arrivedGroup === group && !u.orders.length &&
+    return units.find(u => groundCollider(u) && !collisionMover(u) && !u.groundRecovery &&
+      (!u.orders.length || ['hold', 'stop'].includes(u.orders[0].t) || collisionFixed(u)) &&
       Math.hypot(u.x - x, u.y - y) < (r + u.r) * 0.85 + 0.1) || null;
   }
 
@@ -162,14 +161,16 @@ const PF = (() => {
   // 격자 경로의 '목표에 더 가까운 부분 경로'만 반복하면 탈출하지 못한다.
   // 원 둘레의 안전한 점을 연결해 목표까지 도달하는 경로를 찾는다.
   function circlePath(x0, y0, x1, y1, r, obstacles) {
-    if (Math.hypot(x1 - x0, y1 - y0) > 160 || !obstacles.units.length) return null;
-    const rr = Math.max(3, r * 0.75), units = obstacles.units.filter(u => Math.hypot(u.x - x0, u.y - y0) < 220 + r + u.r);
+    if (!obstacles.units.length) return null;
+    // 먼 목적지로 재분산할 때도 정지한 이웃을 움직이지 않고 가까운 둘레를 경유한다.
+    // 경로 전체는 모든 정지 몸체로 검사하고 둘레 후보만 가까운 16기에 제한한다.
+    const rr = Math.max(3, r * 0.75), units = obstacles.units;
     const clear = (a, b) => lineClear(...a, ...b, rr, 0) && unitsClear(...a, ...b, r, units);
     const goal = [x1, y1];
     if (!positionClear(x1, y1, rr, 0) || !unitsClear(x1, y1, x1, y1, r, units)) return null;
     if (clear([x0, y0], goal)) return [goal];
     const points = [[x0, y0], goal];
-    const nearest = units.slice().sort((a, b) => Math.hypot(a.x - x0, a.y - y0) - Math.hypot(b.x - x0, b.y - y0)).slice(0, 8);
+    const nearest = units.slice().sort((a, b) => Math.hypot(a.x - x0, a.y - y0) - Math.hypot(b.x - x0, b.y - y0)).slice(0, 16);
     for (const u of nearest) {
       const radius = ((r + u.r) * 0.85 + 0.2) / Math.cos(Math.PI / 16);
       const bearing = Math.atan2(y0 - u.y, x0 - u.x);
@@ -241,7 +242,7 @@ const PF = (() => {
     out.reverse(); if (reached) out.push([x1, y1]);
     // OpenBW pathfinder_find_next_short_path / path_progress는 막힌 목적지를
     // 탐색으로 얻은 도달 가능한 끝점으로 조정한다. 현재 원형·8px 탐색 모델에
-    // 적용하되 같은 명령으로 도착한 아군이 실제 목표를 점유한 경우만 허용한다.
+    // 적용하되 정지 몸체가 실제 목표를 점유한 경우만 허용한다.
     if (!reached && occupiedGoal && Math.abs(x1 - x0) <= limit * step && Math.abs(y1 - y0) <= limit * step) {
       if (!out.length) out.push([x0, y0]);
       out.goalBlocker = occupiedGoal;

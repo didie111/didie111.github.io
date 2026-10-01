@@ -72,6 +72,7 @@ function unitRing(type, owner, cx, cy, n, r0) {
 
 function setupScenario(seed) {
   generateMap(seed);
+  GAME.recoveryRandState = 42;
   ART.resetTerrain();
   GAME.players = [newPlayer('T', 0), newPlayer('Z', 1), newPlayer('N', 2)];
   GAME.players[0].min = 50; GAME.players[1].min = 50;

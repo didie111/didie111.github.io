@@ -253,7 +253,7 @@ function smartCommand(units, x, y, target, queued) {
         plain.push(u); continue;
       }
       if (u.isWorker) {
-        if (t.type === 'mineral') { u.issue({ t: 'gather', tgt: t, phase: 'go' }, queued); u.lastRes = t; fxKind = 'gather'; continue; }
+        if (t.type === 'mineral' || t.type === 'geyser') { u.issue({ t: 'gather', tgt: t, phase: 'go' }, queued); u.lastRes = t; fxKind = 'gather'; continue; }
         if (t.def.onGeyser && t.owner === u.owner && t.done) { u.issue({ t: 'gather', tgt: t, phase: 'go' }, queued); u.lastRes = t; fxKind = 'gather'; continue; }
         if (t.def.townHall && t.owner === u.owner && u.carry > 0) { u.issue({ t: 'ret' }, queued); continue; }
         if (u.race === 'T' && t.owner === u.owner && t.isBuilding && !t.done && t.race === 'T') { u.issue({ t: 'construct', tgt: t }, queued); continue; }
@@ -371,82 +371,89 @@ function steerGround(e) {
   e.blockedTicks = (e.blockedTicks || 0) + 1;
 }
 
-// 기존 겹침은 좌표 보정 대신 속도 제한 안에서 빈 방향으로 걸어서 해소한다.
-// OpenBW UM_AtRest -> UM_CheckIllegal -> UM_MoveToLegal처럼 명령과 탈출은 별개다.
-// Hold/Stop도 이동하는 상대와 이미 겹쳤으면 탈출한다. 명령 큐/채취 목표는 유지한다.
-function recoverGround(e, blockers) {
-  const speed = e.speed;
-  if (collisionFixed(e) || speed <= 0) return false;
-  const overlaps = blockers.filter(o => Math.hypot(e.x - o.x, e.y - o.y) < (e.r + o.r) * 0.85 - 1e-6);
-  if (!overlaps.length) { e.escapeAngle = undefined; return false; }
-  const penetration = (x, y) => blockers.reduce((sum, o) => {
-    const depth = Math.max(0, (e.r + o.r) * 0.85 - Math.hypot(x - o.x, y - o.y));
-    return sum + depth * depth;
-  }, 0);
-  const before = penetration(e.x, e.y);
-  let bestScore = before, best = null;
-  // 같은 위치의 유닛도 ID별 방향을 갖는다. 탈출 중에는 이전 방향을 먼저 검사한다.
-  const angles = [];
-  if (e.escapeAngle !== undefined) angles.push(e.escapeAngle);
-  if (e.moving) angles.push(Math.atan2(e.vy, e.vx));
-  for (const o of overlaps) if (e.x !== o.x || e.y !== o.y) angles.push(Math.atan2(e.y - o.y, e.x - o.x));
-  const base = (e.id * 2.399963229728653) % (Math.PI * 2);
-  for (let i = 0; i < 16; i++) angles.push(base + i * Math.PI / 8);
-  for (const angle of angles) for (const length of [speed, speed / 2, speed / 4]) {
-    const dx = Math.cos(angle) * length, dy = Math.sin(angle) * length;
-    const x = e.x + dx, y = e.y + dy;
-    if (!PF.lineClear(e.x, e.y, x, y, Math.max(3, e.r * 0.75), 0)) continue;
-    // 탈출로 인해 멀쩡한 이웃과 새로 겹치지 않는다.
-    if (blockers.some(o => !overlaps.includes(o) && Math.hypot(x - o.x, y - o.y) < (e.r + o.r) * 0.85 - 1e-6)) continue;
-    const score = penetration(x, y);
-    if (score >= bestScore - 1e-8) continue;
-    bestScore = score; best = { dx, dy, angle };
-  }
-  e.vx = best ? best.dx : 0; e.vy = best ? best.dy : 0;
-  if (best) { e.dir = best.angle; e.escapeAngle = best.angle; }
-  return true;
+// OpenBW lcg_rand의 수식·구간 변환. 겹침 복구용 상태만 사용하므로 원작의
+// 다른 시스템까지 포함한 난수 소비 순서와 같다는 뜻은 아니다.
+function recoveryRand(from, to) {
+  GAME.recoveryRandState = (Math.imul(GAME.recoveryRandState, 22695477) + 1) >>> 0;
+  const value = (GAME.recoveryRandState >>> 16) & 0x7fff;
+  return from + ((value * (to - from + 1)) >> 15);
 }
 
-// 경로를 찾지 못하고 오래 기다리는 병력 앞에서는 일반 대기 유닛만 짧게 양보한다.
-// Hold/활성 명령/시즈 상태는 대상이 아니며, 양보도 정상 속도·몸체 검사로 이동한다.
-function yieldGround(e, blockers) {
-  if (e.orders.length || e.tgt || collisionFixed(e) || e.speed <= 0) return false;
-  const pendingMove = o => !collisionFixed(o) && o.orders[0] &&
-    ['move', 'amove', 'patrol', 'follow'].includes(o.orders[0].t);
-  const old = e.yieldRequest;
-  const requester = old && blockers.includes(old) && pendingMove(old) &&
-    Math.hypot(old.x - e.x, old.y - e.y) < (e.r + old.r) * 0.85 + 12 ? old :
-    blockers.find(o => pendingMove(o) && ((o.stuck || 0) >= 20 || (o.giveUp || 0) > 0) &&
-      Math.hypot(o.x - e.x, o.y - e.y) < (e.r + o.r) * 0.85 + 8);
-  if (!requester) {
-    e.yieldRequest = null;
-    if (!e.yieldHome) return false;
-    const [x, y] = e.yieldHome;
-    if (e.moveTo(x, y, 0.001)) { e.yieldHome = null; e.path = null; return false; }
-    if (e.moving) steerGround(e);
-    return e.moving;
+// CheckIllegal에서 기다리거나 탈출 지점을 정하고, MoveToLegal에서 그 지점으로
+// 걸어간 다음 다시 검사한다. 명령 큐는 유지하며 겹침이 없는 대기 몸체는 건드리지 않는다.
+function recoverGround(e, blockers) {
+  const speed = e.speed;
+  if (collisionFixed(e) || speed <= 0) { e.groundRecovery = null; return false; }
+  const overlaps = blockers.filter(o => Math.hypot(e.x - o.x, e.y - o.y) < (e.r + o.r) * 0.85 - 1e-6);
+  let state = e.groundRecovery;
+  if (!state && !overlaps.length) return false;
+  if (!state) state = e.groundRecovery = { phase: 'check' };
+  const requestedAngle = e.moving ? Math.atan2(e.vy, e.vx) : e.dir || 0;
+  e.vx = 0; e.vy = 0;
+  const rr = Math.max(3, e.r * 0.75);
+  const newlyBlocked = (x, y) => !PF.unitsClear(e.x, e.y, x, y, e.r, blockers.filter(o => !overlaps.includes(o)));
+  if (state.phase === 'move') {
+    const dx = state.x - e.x, dy = state.y - e.y, distance = Math.hypot(dx, dy);
+    if (distance > 1e-6) {
+      const step = Math.min(speed, distance), x = e.x + dx / distance * step, y = e.y + dy / distance * step;
+      if (PF.lineClear(e.x, e.y, x, y, rr, 0) && !newlyBlocked(x, y)) {
+        e.vx = x - e.x; e.vy = y - e.y; e.dir = Math.atan2(dy, dx); return true;
+      }
+    }
+    state.phase = 'check'; // 도착 또는 새 장애물: 다음 검사에서 탈출 지점을 다시 선택한다.
+    return true;
   }
-  const current = Math.hypot(e.x - requester.x, e.y - requester.y);
-  const base = Math.atan2(e.y - requester.y, e.x - requester.x);
-  let best = null, bestDistance = current;
-  for (let i = 0; i < 16; i++) {
-    const angle = base + i * Math.PI / 8;
-    const dx = Math.cos(angle) * e.speed, dy = Math.sin(angle) * e.speed;
-    if (!PF.lineClear(e.x, e.y, e.x + dx, e.y + dy, Math.max(3, e.r * 0.75), 0)) continue;
-    if (!PF.unitsClear(e.x, e.y, e.x + dx, e.y + dy, e.r, blockers)) continue;
-    const distance = Math.hypot(e.x + dx - requester.x, e.y + dy - requester.y);
-    if (distance <= bestDistance + 1e-6) continue;
-    bestDistance = distance; best = { dx, dy, angle };
+  if (!overlaps.length) { e.groundRecovery = null; return false; }
+  const blocking = overlaps.reduce((a, b) => a.r >= b.r ? a : b);
+  // UM_CheckIllegal: 움직이거나 CheckIllegal/MoveToLegal 중인 상대이면
+  // 0..31 중 24 미만에서 기다린다. 전체 유닛의 속도나 고정 지속시간을 바꾸지 않는다.
+  const otherMoving = !collisionFixed(blocking) && (blocking.groundRecovery || collisionMover(blocking));
+  if (otherMoving && recoveryRand(0, 31) < 24) return true;
+  const legal = (x, y) => PF.positionClear(x, y, rr, 0) && PF.lineClear(e.x, e.y, x, y, rr, 0) &&
+    PF.unitsClear(x, y, x, y, e.r, blockers) && !newlyBlocked(x, y);
+  // 원작의 확장 사각형 둘레에서 가장 가까운 유효 지점을 찾는 분기를 원형 몸체에 적용한다.
+  let target = null, bestDistance = Infinity;
+  if (!otherMoving) {
+    const radius = (e.r + blocking.r) * 0.85 + 0.11;
+    const bearing = e.x === blocking.x && e.y === blocking.y ? requestedAngle : Math.atan2(e.y - blocking.y, e.x - blocking.x);
+    for (let i = 0; i < 16; i++) {
+      const angle = bearing + i * Math.PI / 8, x = blocking.x + Math.cos(angle) * radius, y = blocking.y + Math.sin(angle) * radius;
+      const distance = Math.hypot(x - e.x, y - e.y);
+      if (distance < bestDistance - 1e-6 && legal(x, y)) { bestDistance = distance; target = [x, y]; }
+    }
   }
-  if (!best) return false;
-  if (!e.yieldHome) e.yieldHome = [e.x, e.y];
-  e.yieldRequest = requester;
-  e.vx = best.dx; e.vy = best.dy; e.dir = best.angle;
+  if (!target) {
+    const penetration = (x, y) => overlaps.reduce((sum, o) => sum + Math.max(0, (e.r + o.r) * .85 - Math.hypot(x - o.x, y - o.y)) ** 2, 0);
+    let bestScore = penetration(e.x, e.y);
+    const base = requestedAngle + recoveryRand(-3, 3) * Math.PI / 8, length = recoveryRand(2, 4) * 4;
+    // CheckIllegal의 짧은 대체 지점을 선택한다. 막힌 후보는 현재 지형·몸체로 검사한다.
+    for (let i = 0; i < 16; i++) {
+      const angle = base + i * Math.PI / 8, x = e.x + Math.cos(angle) * length, y = e.y + Math.sin(angle) * length;
+      if (!PF.lineClear(e.x, e.y, x, y, rr, 0) || newlyBlocked(x, y)) continue;
+      const score = penetration(x, y);
+      if (score < bestScore - 1e-8) { bestScore = score; target = [x, y]; }
+    }
+    // 원형 몸체·새 겹침 금지 때문에 8..16px 후보가 모두 막힐 때도 작은 틈으로
+    // 접근할 수 있다. 이 후보도 지점을 선택한 뒤 다음 이동 단계에서 실행한다.
+    if (!target) for (let i = 0; i < 16; i++) for (const step of [speed, speed / 2, speed / 4]) {
+      const angle = base + i * Math.PI / 8, x = e.x + Math.cos(angle) * step, y = e.y + Math.sin(angle) * step;
+      if (!PF.lineClear(e.x, e.y, x, y, rr, 0) || newlyBlocked(x, y)) continue;
+      const score = penetration(x, y);
+      if (score < bestScore - 1e-8) { bestScore = score; target = [x, y]; }
+    }
+  }
+  if (target) { state.phase = 'move'; [state.x, state.y] = target; }
   return true;
 }
 
 function physics() {
   const ents = GAME.entities;
+  // 모든 겹침 상태를 먼저 표시해야 처리 순서와 무관하게 상대의 CheckIllegal을 볼 수 있다.
+  for (const e of ents) {
+    if (!groundCollider(e) || collisionFixed(e)) { e.groundRecovery = null; continue; }
+    if (!e.groundRecovery && SH.query(e.x, e.y, e.r + 48).some(o => o !== e && groundCollider(o) &&
+        Math.hypot(e.x - o.x, e.y - o.y) < (e.r + o.r) * .85 - 1e-6)) e.groundRecovery = { phase: 'check' };
+  }
   for (const e of ents) {
     e.collisionMoving = collisionMover(e);
     e.recovering = false;
@@ -461,7 +468,7 @@ function physics() {
       const blockers = SH.query(e.x, e.y, e.r + 48).filter(o => o !== e && groundCollider(o));
       e.recovering = recoverGround(e, blockers);
       if (!e.recovering) {
-        if (!e.collisionMoving && !yieldGround(e, blockers)) continue;
+        if (!e.collisionMoving) continue;
         // 회피에서 놓친 접촉도 좌표를 밀지 않고 이번 틱의 이동을 기다린다.
         if (blockers.some(o => {
           const ox = o.x - e.x, oy = o.y - e.y;

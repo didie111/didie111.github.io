@@ -7,7 +7,7 @@ const { test } = require('node:test');
 
 // 실제 게임 모듈을 로드하고 렌더러 없이 동일한 이동/물리 코드를 실행한다.
 function world() {
-  const ctx = vm.createContext({ console, SND: { play() {} } });
+  const ctx = vm.createContext({ console, SND: { play() {} }, UI: { clickFx() {}, message() {} } });
   for (const name of ['data', 'content', 'map', 'path', 'game', 'entity', 'combat', 'commands']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/js', name + '.js'), 'utf8'), ctx);
   }
@@ -15,7 +15,7 @@ function world() {
     MAP.walk.fill(1); MAP.occ.fill(0);
     GAME.players = [newPlayer('T', 0), newPlayer('Z', 1), newPlayer('Z', 2)];
     GAME.sandbox = true;
-    return { GAME, MAP, TILE, MAP_W, SH, PF, physics, gameTick, cmdInstant, commandUnits,
+    return { GAME, MAP, TILE, MAP_W, SH, PF, physics, gameTick, cmdInstant, commandUnits, smartCommand,
       groundTypes: Object.keys(UNITS).filter(t => UNITS[t].speed > 0 && !UNITS[t].air && !UNITS[t].mine && t !== 'larva'),
       unit: (type, x, y) => createUnit(type, 0, x, y),
       building: (type, tx, ty) => createBuilding(type, 0, tx, ty, true),
@@ -472,11 +472,11 @@ test('a faster follower waits for a moving body and then resumes its original de
   assert.ok(rear.x > 560, 'follower never resumes after the moving body clears');
 });
 
-for (const hold of [false, true]) test('blocked corridor: ' + (hold ? 'hold stays put' : 'idle unit walks aside'), () => {
+for (const mode of ['idle', 'stop', 'hold']) test('blocked corridor: non-overlapping ' + mode + ' body stays put', () => {
   const w = world(); w.MAP.walk.fill(0);
   for (let x = 1; x < 25; x++) w.MAP.walk[7 * w.MAP_W + x] = 1;
   const blocker = w.unit('marine', 240, 240), mover = w.unit('marine', 100, 240);
-  if (hold) blocker.issue({ t: 'hold' });
+  if (mode !== 'idle') blocker.issue({ t: mode });
   mover.issue({ t: 'move', x: 400, y: 240 });
   let blockerDistance = 0;
   for (let i = 0; i < 320; i++) {
@@ -486,11 +486,60 @@ for (const hold of [false, true]) test('blocked corridor: ' + (hold ? 'hold stay
     blockerDistance += step;
     assert.ok(Math.hypot(blocker.x - mover.x, blocker.y - mover.y) >= (blocker.r + mover.r) * 0.85 - 1e-6);
   }
-  if (hold) {
-    assert.deepEqual(position(blocker), [240, 240]); assert.ok(mover.x < 240);
-    assert.equal(mover.orders[0]?.t, 'move');
-  } else {
-    assert.ok(blockerDistance > 0, 'idle blocker never walks aside');
-    assert.ok(mover.x > 380, 'waiting mover cannot pass after yield');
+  assert.equal(blockerDistance, 0, 'mere approach moves a stopped body');
+  assert.deepEqual(position(blocker), [240, 240]); assert.ok(mover.x < 240);
+  assert.equal(mover.orders[0]?.t, 'move');
+});
+
+for (const type of ['scv', 'drone', 'probe']) test(type + ' uses harvest collision while approaching a raw geyser, then restores it', () => {
+  const w = world(), gas = w.building('geyser', 20, 10), blocker = w.unit('marine', 450, gas.y);
+  gas.owner = 2; blocker.issue({ t: 'hold' });
+  const workers = Array.from({ length: 8 }, (_, i) => w.unit(type, 270 - i * 2, gas.y));
+  w.smartCommand(workers, gas.x, gas.y, gas);
+  assert.ok(workers.every(u => u.orders[0]?.t === 'gather'), 'raw gas click became an ordinary move');
+  let crossed = false, stacked = false;
+  for (let i = 0; i < 200; i++) {
+    w.step();
+    assert.deepEqual(position(blocker), [450, gas.y], 'gas approach displaces a non-overlapping hold body');
+    for (const a of workers) {
+      if (a.orders.length) assert.equal(a.noCollide, true, 'gas approach restores collision before arrival');
+      else assert.equal(a.noCollide, false, 'raw gas arrival leaves harvest collision permanently disabled');
+      assert.equal(a.carry, 0, 'a geyser without a refinery produces cargo');
+      if (a.noCollide && Math.hypot(a.x - blocker.x, a.y - blocker.y) < (a.r + blocker.r) * .85) crossed = true;
+      if (a.noCollide && workers.some(b => b !== a && b.noCollide && Math.hypot(a.x - b.x, a.y - b.y) < (a.r + b.r) * .85)) stacked = true;
+    }
   }
+  assert.ok(crossed && stacked, 'gas workers did not pass through ground bodies and each other');
+  assert.ok(workers.every(u => !u.orders.length && !u.noCollide), 'invalid gas arrival never restores collision');
+});
+
+test('an overlapping hold body waits for a moving neighbour before taking its own escape steps', () => {
+  const w = world(), held = w.unit('marine', 240, 240), mover = w.unit('marine', 240, 240);
+  held.issue({ t: 'hold' }); mover.issue({ t: 'move', x: 420, y: 240 });
+  w.step();
+  assert.deepEqual(position(held), [240, 240], 'overlap recovery lacks the moving-neighbour wait');
+  let travelled = 0;
+  for (let i = 0; i < 100; i++) {
+    const start = position(held); w.step();
+    const step = Math.hypot(held.x - start[0], held.y - start[1]);
+    assert.ok(step <= held.speed + 1e-6); travelled += step;
+    assert.equal(held.orders[0]?.t, 'hold');
+  }
+  assert.ok(travelled > 0, 'moving-neighbour wait permanently freezes overlap recovery');
+  assert.ok(Math.hypot(held.x - mover.x, held.y - mover.y) >= (held.r + mover.r) * .85);
+  const end = position(held); for (let i = 0; i < 60; i++) w.step();
+  assert.deepEqual(position(held), end, 'legal hold body continues to spread after escape');
+});
+
+test('a stopped body occupying the destination completes an approach without automatic yielding', () => {
+  const w = world(), stopped = w.unit('marine', 650, 660), mover = w.unit('marine', 550, 660);
+  w.commandUnits([mover], { t: 'move', x: stopped.x, y: stopped.y });
+  for (let i = 0; i < 200; i++) {
+    w.step(); assert.deepEqual(position(stopped), [650, 660]);
+    assert.ok(Math.hypot(mover.x - stopped.x, mover.y - stopped.y) >= (mover.r + stopped.r) * .85 - 1e-6);
+  }
+  assert.ok(!mover.orders.length, 'an occupied destination causes perpetual movement');
+  assert.ok(Math.hypot(mover.x - stopped.x, mover.y - stopped.y) < 24);
+  const end = position(mover); for (let i = 0; i < 120; i++) w.step();
+  assert.deepEqual(position(mover), end, 'settled destination spreads without a new command');
 });
