@@ -76,18 +76,60 @@ test(type + ' walks out of a stack at its own speed without replacing its comman
   assert.deepEqual(position(u), end, 'unit continues wandering after escape');
 });
 
-test('an already overlapping mover walks out without displacing a held blocker', () => {
+for (const type of ['scv', 'drone', 'probe']) for (const order of ['hold', 'stop'])
+test(type + ' leaving harvest collision makes an overlapping ' + order + ' unit recover too', () => {
   for (const reverse of [false, true]) {
     const w = world(); let b, m;
-    if (reverse) { m = w.unit('scv', 240, 240); b = w.unit('marine', 240, 240); }
-    else { b = w.unit('marine', 240, 240); m = w.unit('scv', 240, 240); }
-    b.issue({ t: 'hold' }); m.issue({ t: 'move', x: 420, y: 240 });
+    if (reverse) { m = w.unit(type, 240, 240); b = w.unit('marine', 240, 240); }
+    else { b = w.unit('marine', 240, 240); m = w.unit(type, 240, 240); }
+    const heldOrder = { t: order }, moveOrder = { t: 'move', x: 420, y: 240 };
+    b.issue(heldOrder);
+    m.orders = [{ t: 'gather', phase: 'go' }]; m.noCollide = true;
+    for (let i = 0; i < 5; i++) w.physicalStep();
+    assert.deepEqual(position(b), [240, 240], 'mineral walking alone must not push hold');
+    m.issue(moveOrder);
+    let heldTravel = 0;
     for (let i = 0; i < 160; i++) {
-      const start = position(m); w.step();
-      assert.deepEqual(position(b), [240, 240]);
-      assert.ok(Math.hypot(m.x-start[0], m.y-start[1]) <= m.speed + 1e-6);
+      const start = position(m), heldStart = position(b); w.step();
+      const heldDistance = Math.hypot(b.x - heldStart[0], b.y - heldStart[1]);
+      heldTravel += heldDistance;
+      assert.ok(heldDistance <= b.speed + 1e-6, 'held body was instantaneously pushed');
+      assert.ok(Math.hypot(m.x - start[0], m.y - start[1]) <= m.speed + 1e-6);
+      if (order === 'hold') assert.equal(b.orders[0], heldOrder, 'escape must retain hold');
+      if (m.recovering) assert.equal(m.orders[0], moveOrder, 'escape replaces move intent');
     }
+    assert.ok(heldTravel > 0, 'hold/stop was incorrectly treated as an immobile body');
     assert.ok(m.x > 400, 'original destination is not resumed after escape');
+    const end = position(b); for (let i = 0; i < 20; i++) w.step();
+    assert.deepEqual(position(b), end, 'hold/stop keeps wandering after overlap ends');
+  }
+});
+
+for (const state of ['sieged', 'sieging', 'unsieging', 'egg', 'lurker_egg', 'archon_warp', 'burrowed', 'lockdown', 'stasis', 'maelstrom'])
+test(state + ' remains physically fixed while overlapping mobile bodies recover', () => {
+  for (const reverse of [false, true]) {
+    const w = world(); let fixed, mover;
+    const type = state === 'sieged' || state === 'unsieging' ? 'tank_siege' :
+      state === 'sieging' || state === 'lockdown' ? 'tank' :
+      state === 'egg' || state === 'lurker_egg' ? state :
+      state === 'burrowed' ? 'lurker' : state === 'archon_warp' ? 'archon' : 'marine';
+    const makeFixed = () => fixed = w.unit(type, 240, 240);
+    const makeMover = () => mover = w.unit('marine', 240, 240);
+    if (reverse) { makeMover(); makeFixed(); } else { makeFixed(); makeMover(); }
+    if (state === 'sieging' || state === 'unsieging') {
+      fixed.sieging = true; fixed.xform = { to: state === 'sieging' ? 'tank_siege' : 'tank', t: 1000 };
+    }
+    if (state === 'archon_warp') fixed.xform = { to: 'archon', t: 1000 };
+    if (state === 'egg' || state === 'lurker_egg') { fixed.prog = 0; fixed.total = 1000; }
+    if (state === 'burrowed') fixed.burrowed = true;
+    if (state === 'lockdown') fixed.lockT = 1000;
+    if (state === 'stasis') fixed.stasisT = 1000;
+    if (state === 'maelstrom') fixed.maelstromT = 1000;
+    mover.issue({ t: 'move', x: 420, y: 240 });
+    for (let i = 0; i < 80; i++) {
+      w.step(); assert.deepEqual(position(fixed), [240, 240]);
+    }
+    assert.ok(mover.x > 400, 'mobile body cannot leave the fixed body');
   }
 });
 

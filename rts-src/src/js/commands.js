@@ -272,6 +272,7 @@ function smartCommand(units, x, y, target, queued) {
 
 // ---------------- 시뮬레이션 ----------------
 // 완전 고정 상태는 속도 적용, 유닛 분리, 지형 보정 모두에서 제외한다.
+// Hold/Stop은 명령 상태이며 몸체의 이동 능력을 없애지 않는다.
 function collisionFixed(e) {
   return (e.isBuilding && !e.lifted) || e.type === 'tank_siege' ||
     e.sieging || !!e.xform || e.type === 'egg' || e.type === 'lurker_egg' ||
@@ -345,16 +346,13 @@ function steerGround(e) {
 }
 
 // 기존 겹침은 좌표 보정 대신 속도 제한 안에서 빈 방향으로 걸어서 해소한다.
-// 명령 큐/채취 목표는 건드리지 않는다. 정상 접근에서는 정지/Hold 병력이 양보하지 않는다.
+// OpenBW UM_AtRest -> UM_CheckIllegal -> UM_MoveToLegal처럼 명령과 탈출은 별개다.
+// Hold/Stop도 이동하는 상대와 이미 겹쳤으면 탈출한다. 명령 큐/채취 목표는 유지한다.
 function recoverGround(e, blockers) {
   const speed = e.speed;
   if (collisionFixed(e) || speed <= 0) return false;
   const overlaps = blockers.filter(o => Math.hypot(e.x - o.x, e.y - o.y) < (e.r + o.r) * 0.85 - 1e-6);
   if (!overlaps.length) { e.escapeAngle = undefined; return false; }
-  // 정상 명령으로 이동하는 쪽이 기존 정지 병력의 겹침도 처리한다.
-  if (!e.collisionMoving && overlaps.some(o => o.collisionMoving && !collisionFixed(o))) {
-    e.vx = 0; e.vy = 0; return true;
-  }
   const penetration = (x, y) => blockers.reduce((sum, o) => {
     const depth = Math.max(0, (e.r + o.r) * 0.85 - Math.hypot(x - o.x, y - o.y));
     return sum + depth * depth;
