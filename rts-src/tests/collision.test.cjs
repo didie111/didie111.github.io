@@ -33,6 +33,71 @@ function world() {
 function position(e) { return [e.x, e.y]; }
 function finite(e) { assert.ok(Number.isFinite(e.x) && Number.isFinite(e.y)); }
 
+test('ground units walk straight through friendly and enemy larvae in a corridor', () => {
+  for (const type of ['marine', 'scv', 'hydra', 'tank']) for (const owner of [0, 1]) {
+    const w = world(); w.MAP.walk.fill(0);
+    for (let x = 1; x < 25; x++) w.MAP.walk[7 * w.MAP_W + x] = 1;
+    const larvae = [210, 240, 270].map(x => {
+      const l = w.unit('larva', x, 240); l.owner = owner;
+      l.hatch = { x, y: 190, hw: 10, hh: 44, dead: false }; l.home = [x, 240];
+      return l;
+    });
+    const m = w.unit(type, 100, 240); m.issue({ t: 'move', x: 450, y: 240 });
+    let crossed = false;
+    for (let i = 0; i < 180; i++) {
+      w.step(); assert.ok(Math.abs(m.y - 240) < 1e-6, `${type} sidestepped a larva`);
+      if (larvae.some(l => Math.hypot(m.x - l.x, m.y - l.y) < m.r + l.r)) crossed = true;
+    }
+    assert.ok(m.x > 430, `${type} blocked by larvae`); assert.ok(crossed);
+  }
+});
+
+test('morphing eggs still block ground movement after the larva collision exception', () => {
+  const w = world(), egg = w.unit('egg', 240, 240), m = w.unit('marine', 100, 240);
+  egg.prog = 0; egg.total = 1000;
+  m.issue({ t: 'move', x: 450, y: 240 }); let maxY = 0;
+  for (let i = 0; i < 150; i++) {
+    w.step(); maxY = Math.max(maxY, Math.abs(m.y - 240));
+    assert.ok(Math.hypot(m.x - egg.x, m.y - egg.y) >= (m.r + egg.r) * 0.85 - 1e-6);
+  }
+  assert.ok(maxY > 8); assert.ok(m.x > 430); assert.deepEqual(position(egg), [240, 240]);
+});
+
+test('close same-speed followers keep a straight heading on an unobstructed route', () => {
+  const w = world(), front = w.unit('marine', 116, 240), rear = w.unit('marine', 100, 240);
+  front.issue({ t: 'move', x: 616, y: 240 }); rear.issue({ t: 'move', x: 600, y: 240 });
+  for (let i = 0; i < 140; i++) {
+    w.step();
+    for (const u of [front, rear]) assert.ok(Math.abs(u.y - 240) < 1, 'following must not weave on a clear straight route');
+    assert.ok(Math.hypot(front.x - rear.x, front.y - rear.y) >= (front.r + rear.r) * 0.85 - 1e-6);
+  }
+  assert.ok(front.x > 596 && rear.x > 580);
+});
+
+test('a subpixel unit-obstacle waypoint is reached without overshoot or a turn loop', () => {
+  const w = world(), m = w.unit('marine', 100, 240);
+  m.path = [[100.1, 240], [400, 240]]; m.pi = 0; m.pgx = 400; m.pgy = 240;
+  m.pathDynamic = true; m.pathExact = true; m.repathAt = 999; m.unitPathUntil = 999;
+  m.issue({ t: 'move', x: 400, y: 240 }, true);
+  w.step(); assert.ok(Math.abs(m.x - 100.1) < 1e-6);
+  for (let i = 0; i < 100; i++) w.step();
+  assert.ok(m.x > 380); assert.ok(Math.abs(m.y - 240) < 1e-6);
+});
+
+test('close followers detour around a stopped marine without rapid alternating headings', () => {
+  const w = world(), front = w.unit('marine', 116, 240), blocker = w.unit('marine', 240, 240), rear = w.unit('marine', 100, 240);
+  front.issue({ t: 'move', x: 516, y: 240 }); rear.issue({ t: 'move', x: 500, y: 240 });
+  let last = 0, flips = 0;
+  for (let i = 0; i < 180; i++) {
+    w.step(); assert.deepEqual(position(blocker), [240, 240]);
+    if (rear.moving && Math.abs(rear.vy) > 0.3) {
+      const side = Math.sign(rear.vy); if (last && side !== last) flips++; last = side;
+    }
+  }
+  assert.ok(flips <= 4, `repeated left/right turns: ${flips}`);
+  assert.ok(front.x > 496 && rear.x > 480);
+});
+
 for (const blocker of ['idle', 'stop', 'hold', 'tank_siege', 'sieging', 'unsieging']) {
   for (const reverse of [false, true]) {
     test(`${blocker} stays fixed while a moving unit passes (reverse IDs=${reverse})`, () => {

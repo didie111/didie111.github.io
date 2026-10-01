@@ -134,6 +134,8 @@ const PF = (() => {
   }
 
   function unitPath(x0, y0, x1, y1, r, obstacles) {
+    const escape = circlePath(x0, y0, x1, y1, r, obstacles);
+    if (escape) return escape;
     const fine = localPath(x0, y0, x1, y1, r, obstacles);
     if (fine) return fine;
     const coarse = worldPath(x0, y0, x1, y1, r, 0, obstacles);
@@ -145,6 +147,50 @@ const PF = (() => {
         ax = bx; ay = by; return clear;
       });
       if (Math.hypot(end[0] - x1, end[1] - y1) < 1 && valid) return coarse;
+    }
+    return null;
+  }
+
+  // 가까운 정지 유닛 사이에서 잠깐 목표의 반대 방향으로 나가야 하는 경우,
+  // 격자 경로의 '목표에 더 가까운 부분 경로'만 반복하면 탈출하지 못한다.
+  // 원 둘레의 안전한 점을 연결해 목표까지 도달하는 경로를 찾는다.
+  function circlePath(x0, y0, x1, y1, r, obstacles) {
+    if (Math.hypot(x1 - x0, y1 - y0) > 160 || !obstacles.units.length) return null;
+    const rr = Math.max(3, r * 0.75), units = obstacles.units.filter(u => Math.hypot(u.x - x0, u.y - y0) < 220 + r + u.r);
+    const clear = (a, b) => lineClear(...a, ...b, rr, 0) && unitsClear(...a, ...b, r, units);
+    const goal = [x1, y1];
+    if (!positionClear(x1, y1, rr, 0) || !unitsClear(x1, y1, x1, y1, r, units)) return null;
+    if (clear([x0, y0], goal)) return [goal];
+    const points = [[x0, y0], goal];
+    const nearest = units.slice().sort((a, b) => Math.hypot(a.x - x0, a.y - y0) - Math.hypot(b.x - x0, b.y - y0)).slice(0, 8);
+    for (const u of nearest) {
+      const radius = ((r + u.r) * 0.85 + 0.2) / Math.cos(Math.PI / 16);
+      const bearing = Math.atan2(y0 - u.y, x0 - u.x);
+      for (let i = 0; i < 16; i++) {
+        const a = bearing + i * Math.PI / 8, x = u.x + Math.cos(a) * radius, y = u.y + Math.sin(a) * radius;
+        if (positionClear(x, y, rr, 0) && unitsClear(x, y, x, y, r, units)) points.push([x, y]);
+      }
+    }
+    const costs = points.map(() => Infinity), previous = points.map(() => -1), closed = new Set();
+    costs[0] = 0;
+    for (let count = 0; count < points.length; count++) {
+      let cur = -1, score = Infinity;
+      for (let i = 0; i < points.length; i++) {
+        const f = costs[i] + Math.hypot(points[i][0] - x1, points[i][1] - y1);
+        if (!closed.has(i) && f < score) { cur = i; score = f; }
+      }
+      if (cur < 0) break;
+      if (cur === 1) {
+        const out = []; for (let i = 1; i > 0; i = previous[i]) out.push(points[i]);
+        return out.reverse();
+      }
+      closed.add(cur); budget--;
+      for (let i = 1; i < points.length; i++) {
+        if (closed.has(i)) continue;
+        const cost = costs[cur] + Math.hypot(points[cur][0] - points[i][0], points[cur][1] - points[i][1]);
+        if (cost >= costs[i]) continue;
+        if (clear(points[cur], points[i])) { costs[i] = cost; previous[i] = cur; }
+      }
     }
     return null;
   }
@@ -192,8 +238,8 @@ const PF = (() => {
   function unitsClear(x0, y0, x1, y1, r, units) {
     const dx = x1 - x0, dy = y1 - y0, len2 = dx * dx + dy * dy;
     for (const u of units) {
-      if (u.dead || u.hidden || u.burrowed || u.noCollide) continue;
-      const ox = u.x - x0, oy = u.y - y0, min = (r + u.r) * 0.85 + 1;
+      if (u.dead || u.hidden || u.burrowed || u.noCollide || u.type === 'larva') continue;
+      const ox = u.x - x0, oy = u.y - y0, min = (r + u.r) * 0.85 + 0.1;
       if (Math.hypot(ox, oy) < min && ox * dx + oy * dy <= 0) continue;
       const t = len2 ? Math.max(0, Math.min(1, (ox * dx + oy * dy) / len2)) : 0;
       if (Math.hypot(ox - dx * t, oy - dy * t) < min) return false;

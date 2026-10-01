@@ -156,6 +156,9 @@ function boot() {
   const seed = +(new URLSearchParams(location.search).get('seed') || 20260930);
   setupScenario(seed);
   RENDER.resize();
+  for (const el of document.querySelectorAll('[data-rts-version]')) {
+    el.textContent = el.dataset.rtsVersion === 'short' ? RTS_VERSION.split('-')[1].toUpperCase() : '버전 ' + RTS_VERSION;
+  }
   document.getElementById('start-btn').addEventListener('click', () => {
     SND.init();
     document.getElementById('title').classList.add('hidden');

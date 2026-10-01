@@ -396,7 +396,7 @@ class Entity {
       // 목표가 움직이는 경우 마지막 점을 갱신
       const end = this.path[this.path.length - 1];
       if (this.pathExact && (tgtEnt || this.path.length === 1) || tgtEnt && tgtEnt.isBuilding && edgeDistPt(tgtEnt, end[0], end[1]) <= TILE) this.path[this.path.length - 1] = [x, y];
-      while (this.pi < this.path.length - 1 && dist(this.x, this.y, this.path[this.pi][0], this.path[this.pi][1]) < (this.pathDynamic ? Math.max(1, sp * 0.6) : Math.max(10, sp * 1.5))) this.pi++;
+      while (this.pi < this.path.length - 1 && dist(this.x, this.y, this.path[this.pi][0], this.path[this.pi][1]) < (this.pathDynamic ? 0.001 : Math.max(10, sp * 1.5))) this.pi++;
       [wx, wy] = this.path[this.pi];
       if (this.pi === this.path.length - 1 && dist(this.x, this.y, wx, wy) < Math.max(4, sp)) {
         // 목적지가 막혀 있어 더 못 가는 경우
@@ -410,7 +410,9 @@ class Entity {
       }
     }
     const wdx = wx - this.x, wdy = wy - this.y, wd = Math.hypot(wdx, wdy) || 1;
-    const s = Math.min(sp, Math.max(wd, 0.5));
+    // 마지막 짧은 구간도 경유점에 정확히 도착한다. 최소 이동량을 강제하면
+    // 0.5px보다 가까운 점을 매 틱 넘어서며 회전/좌우 왕복을 반복한다.
+    const s = Math.min(sp, wd);
     this.vx = wdx / wd * s; this.vy = wdy / wd * s;
     this.dir = Math.atan2(wdy, wdx);
     // 막힘 감지

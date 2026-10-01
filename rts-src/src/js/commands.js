@@ -279,7 +279,7 @@ function collisionFixed(e) {
 }
 function groundCollider(e) {
   return !e.dead && !e.hidden && !e.air && !e.lifted && !e.isBuilding &&
-    !e.noCollide && !e.burrowed && !e.def.mine;
+    !e.noCollide && !e.burrowed && !e.def.mine && e.type !== 'larva';
 }
 function collisionMover(e) {
   const order = e.orders[0];
@@ -300,16 +300,36 @@ function steerGround(e) {
     for (const o of blockers) {
       const ox = o.x - e.x, oy = o.y - e.y;
       const min = (e.r + o.r) * 0.85;
-      const t = Math.max(0, Math.min(1, (ox * dx + oy * dy) / (length * length)));
-      const closest = Math.hypot(ox - dx * t, oy - dy * t);
+      // 같은 방향으로 진행하는 유닛은 이번 프레임의 상대 이동으로 검사한다.
+      // 앞 유닛이 떠날 현재 위치를 정지 장애물로 취급하면 뒤 유닛이 매번 옆으로 튄다.
+      let rx = dx, ry = dy;
+      const otherSpeed = Math.hypot(o.vx, o.vy);
+      if (!e.pathDynamic && length <= speed + 0.001 && collisionMover(o) && Math.abs(otherSpeed - speed) < 0.001 && otherSpeed > 0 &&
+          (dx * o.vx + dy * o.vy) / (length * otherSpeed) > 0.97 &&
+          PF.lineClear(o.x, o.y, o.x + o.vx, o.y + o.vy, Math.max(3, o.r * 0.75), 0)) {
+        rx -= o.vx; ry -= o.vy;
+      }
+      const len2 = rx * rx + ry * ry;
+      const t = len2 ? Math.max(0, Math.min(1, (ox * rx + oy * ry) / len2)) : 0;
+      const closest = Math.hypot(ox - rx * t, oy - ry * t);
       if (closest >= min + 0.1) continue;
       // 스폰/언버로우 등으로 이미 겹친 경우 바깥으로 탈출하는 이동 허용.
-      if (Math.hypot(ox, oy) < min + 0.1 && ox * dx + oy * dy <= 0) continue;
+      if (Math.hypot(ox, oy) < min + 0.1 && ox * rx + oy * ry <= 0) continue;
       return false;
     }
     return true;
   }
-  for (const length of e.pathDynamic ? [speed] : [Math.max(speed, e.r + speed * 6), speed]) {
+  // 같은 속도로 앞에서 진행하는 병력만 먼저 따라간다. 고정 장애물 우회는 기존 경로를 유지한다.
+  const look = Math.max(speed, e.r + speed * 6), ux = Math.cos(angle), uy = Math.sin(angle);
+  const parallel = o => collisionMover(o) && Math.abs(Math.hypot(o.vx, o.vy) - speed) < 0.001 && (ux * o.vx + uy * o.vy) / speed > 0.97;
+  const follows = blockers.some(o => parallel(o) && (o.x - e.x) * ux + (o.y - e.y) * uy > 0);
+  const fixedAhead = blockers.some(o => {
+    if (parallel(o)) return false;
+    const ox = o.x - e.x, oy = o.y - e.y, t = Math.max(0, Math.min(look, ox * ux + oy * uy));
+    return Math.hypot(ox - ux * t, oy - uy * t) < (e.r + o.r) * 0.85 + 0.1;
+  });
+  if (!e.pathDynamic && follows && !fixedAhead && clear(angle, speed)) { e.blockedTicks = 0; return; }
+  for (const length of e.pathDynamic ? [speed] : [look, speed]) {
     for (const turn of [0, side, -side, 2 * side, -2 * side, 3 * side, -3 * side, 4 * side, -4 * side]) {
       const a = angle + turn * Math.PI / 8;
       if (!clear(a, length)) continue;
