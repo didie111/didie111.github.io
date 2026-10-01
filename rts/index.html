@@ -100,7 +100,7 @@ button.on { background: linear-gradient(#2c5a8c, #183050); border-color: #7ab0ff
   <div class="res"><img id="ico-min"><span id="r-min">0</span></div>
   <div class="res"><img id="ico-gas"><span id="r-gas">0</span></div>
   <div class="res"><img id="r-sup-ico"><span id="r-sup">0/0</span></div>
-  <div class="menu-btns"><span style="font-size:11px;color:#9ab">SC1.4</span><button onclick="UI.toggleTest()">테스트(F10)</button><button onclick="UI.el.help.classList.toggle('hidden')">도움말(F1)</button><button onclick="GAME.paused=!GAME.paused">일시정지(F9)</button></div>
+  <div class="menu-btns"><span style="font-size:11px;color:#9ab">SC1.5</span><button onclick="UI.toggleTest()">테스트(F10)</button><button onclick="UI.el.help.classList.toggle('hidden')">도움말(F1)</button><button onclick="GAME.paused=!GAME.paused">일시정지(F9)</button></div>
 </div>
 
 <div id="msgs"></div>
@@ -115,7 +115,7 @@ button.on { background: linear-gradient(#2c5a8c, #183050); border-color: #7ab0ff
 <div id="test" class="hidden"></div>
 
 <div id="help" class="hidden">
-  <h2>조작법 · SC1.4</h2>
+  <h2>조작법 · SC1.5</h2>
   <p>생산 건물에서 부속 건물을 연결하세요. 캐리어는 I로 인터셉터, 리버는 R로 스캐럽을 생산해야 공격합니다. 컴샛에서 S로 스캔할 수 있습니다.</p>
   <table>
     <tr><td>좌클릭 / 드래그</td><td>유닛 선택 · 박스 선택 (최대 12기)</td></tr>
@@ -528,7 +528,7 @@ function supplyText(v) { return (Math.round(v * 2) / 2).toString(); }
 'use strict';
 // 확장 데이터: Blizzard StarCraft Compendium 수치/역할을 참고한 웹게임 구현.
 // 원작 MPQ/엔진을 포함하지 않으며 투사체/애니메이션/길찾기는 자체 구현이다.
-const RTS_VERSION = '2026.09.30-sc1.4';
+const RTS_VERSION = '2026.10.01-sc1.5';
 Object.assign(UNITS, {
   valkyrie: { name: '발키리', race: 'T', hp: 200, armor: 2, size: 'large', air: true, speed: 6.6, sight: 8, r: 16,
     cost: [250, 125], supply: 3, time: 750, mech: true, from: 'starport', hotkey: 'V', req: ['armory'], addon: 'control_tower',
@@ -4189,7 +4189,7 @@ const ART = (() => {
 // ===================================================================
 //  렌더링 — 지형 청크, 크립, 유닛/건물 스프라이트, 이펙트, 안개
 // ===================================================================
-const VIEW = { x: 0, y: 0, w: 640, h: 400, scale: 2 };
+const VIEW = { x: 0, y: 0, w: 640, h: 400, scale: 1 };
 const RENDER = (() => {
   let cv, ctx, fogC, fogX, fogImg;
   function init(canvas) {
