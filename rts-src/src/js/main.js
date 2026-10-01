@@ -146,7 +146,7 @@ function loop(now) {
     if (n >= 8) LOOP.acc = 0;
   }
   RENDER.draw();
-  UI.frame(LOOP.frame++);
+  UI.frame(LOOP.frame++, dt);
   requestAnimationFrame(loop);
 }
 

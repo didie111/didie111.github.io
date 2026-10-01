@@ -102,7 +102,9 @@ const UI = {
     });
     window.addEventListener('keydown', (e) => this.keyDown(e));
     window.addEventListener('keyup', (e) => { this.keys[e.key] = false; if (e.key === 'Shift') this.keys.Shift = false; if (e.key === 'Alt') this.keys.Alt = false; });
-    window.addEventListener('blur', () => { this.keys = {}; });
+    const loseFocus = () => { this.keys = {}; this.mouse.inside = false; this.mouse.drag = null; this.mmDrag = false; };
+    window.addEventListener('blur', loseFocus);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) loseFocus(); });
     window.addEventListener('resize', () => RENDER.resize());
   },
   mmWorld(e) {
@@ -702,18 +704,34 @@ const UI = {
   },
 
   // ---------------- 프레임 ----------------
-  frame(fr) {
-    // 스크롤 (가장자리/방향키)
-    const sp = 22 / Math.sqrt(VIEW.scale);
+  scrollCamera(dt = 1000 / 60) {
+    if (!GAME.running || GAME.over || document.hidden || this.mmDrag) return;
+    if (document.activeElement?.matches('input,select,textarea,[contenteditable="true"]')) return;
+    const edge = 24, width = window.innerWidth, height = window.innerHeight;
     let dx = 0, dy = 0;
     const m = this.mouse;
-    if (m.inside && !this.el.test.contains(document.elementFromPoint(m.x, m.y))) {
-      if (m.x <= 3) dx = -sp; else if (m.x >= window.innerWidth - 4) dx = sp;
-      if (m.y <= 3) dy = -sp; else if (m.y >= window.innerHeight - 4) dy = sp;
+    if (m.inside && m.x >= 0 && m.y >= 0 && m.x < width && m.y < height) {
+      const hit = document.elementFromPoint(m.x, m.y);
+      // 메뉴/미니맵/명령 버튼을 조작하는 동안 가장자리 이동이 끼어들지 않는다.
+      const control = hit?.closest('#test,#help,#title,#end,#minimap,button,input,select,textarea,.btn,.wf,.qs');
+      if (!control) {
+        if (m.x < edge) dx = -1; else if (m.x >= width - edge) dx = 1;
+        const bottom = height - this.consoleH();
+        if (m.y < edge) dy = -1;
+        else if (m.y >= height - edge || m.y >= bottom - edge && m.y < bottom) dy = 1;
+      }
     }
-    if (this.keys.ArrowLeft) dx = -sp; if (this.keys.ArrowRight) dx = sp;
-    if (this.keys.ArrowUp) dy = -sp; if (this.keys.ArrowDown) dy = sp;
-    if (dx || dy) { VIEW.x += dx; VIEW.y += dy; RENDER.clampCam(); }
+    if (this.keys.ArrowLeft) dx = -1; if (this.keys.ArrowRight) dx = 1;
+    if (this.keys.ArrowUp) dy = -1; if (this.keys.ArrowDown) dy = 1;
+    if (dx || dy) {
+      // CSS 화면 기준 초당 720px. 줌 배율/모니터 주사율과 무관한 이동 속도.
+      const distance = 720 * Math.min(50, Math.max(0, dt)) / 1000 / VIEW.scale / Math.hypot(dx, dy);
+      VIEW.x += dx * distance; VIEW.y += dy * distance; RENDER.clampCam();
+    }
+  },
+  frame(fr, dt) {
+    this.scrollCamera(dt);
+    const m = this.mouse;
     const [wx, wy] = RENDER.toWorld(m.x, m.y);
     m.wx = wx; m.wy = wy;
     this.hover = m.overUI ? null : this.pick(wx, wy);
