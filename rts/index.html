@@ -530,7 +530,7 @@ function supplyText(v) { return (Math.round(v * 2) / 2).toString(); }
 'use strict';
 // 확장 데이터: Blizzard StarCraft Compendium 수치/역할을 참고한 웹게임 구현.
 // 원작 MPQ/엔진을 포함하지 않으며 투사체/애니메이션/길찾기는 자체 구현이다.
-const RTS_VERSION = '2026.10.01-sc1.8';
+const RTS_VERSION = '2026.10.01-sc1.9';
 Object.assign(UNITS, {
   valkyrie: { name: '발키리', race: 'T', hp: 200, armor: 2, size: 'large', air: true, speed: 6.6, sight: 8, r: 16,
     cost: [250, 125], supply: 3, time: 750, mech: true, from: 'starport', hotkey: 'V', req: ['armory'], addon: 'control_tower',
@@ -1350,7 +1350,7 @@ function canPlace(type, tx, ty, owner, builder, quiet) {
 function nearestTownHall(owner, x, y) {
   let best = null, bd = 1e9;
   for (const e of GAME.entities) {
-    if (e.dead || e.owner !== owner || !e.isBuilding || !e.def.townHall || !e.done || e.lifted) continue;
+    if (e.dead || e.owner !== owner || !e.isBuilding || !e.def.townHall || !e.done || e.lifted || e.liftT > 0) continue;
     const d = dist(x, y, e.x, e.y);
     if (d < bd) { bd = d; best = e; }
   }
@@ -1603,14 +1603,27 @@ class Entity {
       this.vx = 0; this.vy = 0; this.lastD = undefined; this.giveUp = 0; this.avoidSide = 0; this.blockedTicks = 0;
       this.unitPathUntil = 0; this.pathRetryAt = 0; this.pathDynamic = false;
     } else this.orders.push(o);
+    this.syncHarvestCollision();
+  }
+  syncHarvestCollision() {
+    const o = this.orders[0];
+    if (!(this.isWorker && o && (o.t === 'gather' || o.t === 'ret'))) this.noCollide = !!this.burrowed;
   }
   releaseMining() {
     const o = this.orders[0];
     if (o && o.t === 'gather' && o.tgt && o.tgt.miner === this) o.tgt.miner = null;
+    if (o && o.t === 'gather' && o.tgt && o.tgt.gasUser === this) {
+      o.tgt.gasUser = null;
+      if (this.hidden && !this.inside) {
+        this.hidden = false;
+        const sp = findSpawnSpot(o.tgt, this.r, this.x, this.y); this.x = sp[0]; this.y = sp[1];
+      }
+    }
   }
   nextOrder() {
     this.releaseMining();
     this.orders.shift(); this.path = null; this.tgt = null; this.stuck = 0;
+    this.syncHarvestCollision();
   }
   stopAll() { this.issue({ t: 'stop' }); this.orders = []; }
 
@@ -1935,16 +1948,30 @@ class Entity {
   }
 
   // ---------- 채취 ----------
+  returnDepot(o) {
+    // ReturnMinerals/ReturnGas처럼 명령과 적재물을 유지하며 반납 기지를 재탐색한다.
+    this.noCollide = true;
+    let th = o.depot;
+    if (th && (th.dead || th.owner !== this.owner || !th.done || th.lifted || th.liftT > 0)) {
+      th = o.depot = null; this.path = null; o.depotRetryAt = 0;
+    }
+    if (!th && GAME.tick >= (o.depotRetryAt || 0)) {
+      th = o.depot = nearestTownHall(this.owner, this.x, this.y);
+      if (!th) o.depotRetryAt = GAME.tick + 75;
+    }
+    if (!th) { this.path = null; this.vx = 0; this.vy = 0; }
+    return th;
+  }
   gatherLogic(o) {
     if (this.carry > 0 && o.phase !== 'ret' && o.phase !== 'in') o.phase = 'ret';
     if (o.phase === 'ret') {
-      const th = nearestTownHall(this.owner, this.x, this.y);
-      if (!th) { this.nextOrder(); return; }
-      this.noCollide = true;
+      const th = this.returnDepot(o);
+      if (!th) return;
       if (this.moveTo(th.x, th.y, 4, th)) {
         const p = P(this.owner);
         if (this.carryKind === 'gas') p.gas += this.carry; else p.min += this.carry;
         this.carry = 0; this.carryKind = null; o.phase = 'go'; this.path = null;
+        o.depot = null; o.depotRetryAt = 0;
       }
       return;
     }
@@ -2000,12 +2027,12 @@ class Entity {
   }
   returnLogic(o) {
     if (this.carry <= 0) { this.nextOrder(); return; }
-    const th = nearestTownHall(this.owner, this.x, this.y);
-    if (!th) { this.nextOrder(); return; }
+    const th = this.returnDepot(o);
+    if (!th) return;
     if (this.moveTo(th.x, th.y, 4, th)) {
       const p = P(this.owner);
       if (this.carryKind === 'gas') p.gas += this.carry; else p.min += this.carry;
-      this.carry = 0;
+      this.carry = 0; this.carryKind = null;
       const last = this.lastRes;
       this.nextOrder();
       if (!this.orders.length && last && !last.dead) this.issue({ t: 'gather', tgt: last, phase: 'go' });
@@ -3336,12 +3363,17 @@ function physics() {
       const min = (e.r + o.r) * 0.85;
       if (d >= min) continue;
       const ov = min - d;
-      if (d < 0.01) { dx = e.id % 2 ? 1 : -1; dy = 0; d = 1; }
+      if (d < 0.01) {
+        // 같은 좌표의 군집을 전부 수평으로 밀면 벽 옆에서 한 줄로 다시 낀다.
+        const a = ((e.id * 13 + o.id * 7) % 16) * Math.PI / 8;
+        dx = Math.cos(a); dy = Math.sin(a); d = 1;
+      }
       let me = e.collisionMoving ? 1 : 0, mo = o.collisionMoving ? 1 : 0;
-      // 이미 겹친 대기 유닛의 예외적 겹침 해소. Hold/고정 상태는 그대로.
+      // 이미 겹친 대기 유닛은 홀드 중이어도 몸체 겹침을 해소한다.
+      // 정상 접근은 이동하는 쪽만 회피하며 시즈/변태/상태이상은 계속 고정한다.
       if (!me && !mo) {
-        me = !collisionFixed(e) && e.orders[0]?.t !== 'hold' ? 1 : 0;
-        mo = !collisionFixed(o) && o.orders[0]?.t !== 'hold' ? 1 : 0;
+        me = !collisionFixed(e) ? 1 : 0;
+        mo = !collisionFixed(o) ? 1 : 0;
       }
       const total = me + mo;
       if (!total) continue;

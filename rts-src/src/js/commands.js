@@ -379,12 +379,17 @@ function physics() {
       const min = (e.r + o.r) * 0.85;
       if (d >= min) continue;
       const ov = min - d;
-      if (d < 0.01) { dx = e.id % 2 ? 1 : -1; dy = 0; d = 1; }
+      if (d < 0.01) {
+        // 같은 좌표의 군집을 전부 수평으로 밀면 벽 옆에서 한 줄로 다시 낀다.
+        const a = ((e.id * 13 + o.id * 7) % 16) * Math.PI / 8;
+        dx = Math.cos(a); dy = Math.sin(a); d = 1;
+      }
       let me = e.collisionMoving ? 1 : 0, mo = o.collisionMoving ? 1 : 0;
-      // 이미 겹친 대기 유닛의 예외적 겹침 해소. Hold/고정 상태는 그대로.
+      // 이미 겹친 대기 유닛은 홀드 중이어도 몸체 겹침을 해소한다.
+      // 정상 접근은 이동하는 쪽만 회피하며 시즈/변태/상태이상은 계속 고정한다.
       if (!me && !mo) {
-        me = !collisionFixed(e) && e.orders[0]?.t !== 'hold' ? 1 : 0;
-        mo = !collisionFixed(o) && o.orders[0]?.t !== 'hold' ? 1 : 0;
+        me = !collisionFixed(e) ? 1 : 0;
+        mo = !collisionFixed(o) ? 1 : 0;
       }
       const total = me + mo;
       if (!total) continue;

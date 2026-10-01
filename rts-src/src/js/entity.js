@@ -97,14 +97,27 @@ class Entity {
       this.vx = 0; this.vy = 0; this.lastD = undefined; this.giveUp = 0; this.avoidSide = 0; this.blockedTicks = 0;
       this.unitPathUntil = 0; this.pathRetryAt = 0; this.pathDynamic = false;
     } else this.orders.push(o);
+    this.syncHarvestCollision();
+  }
+  syncHarvestCollision() {
+    const o = this.orders[0];
+    if (!(this.isWorker && o && (o.t === 'gather' || o.t === 'ret'))) this.noCollide = !!this.burrowed;
   }
   releaseMining() {
     const o = this.orders[0];
     if (o && o.t === 'gather' && o.tgt && o.tgt.miner === this) o.tgt.miner = null;
+    if (o && o.t === 'gather' && o.tgt && o.tgt.gasUser === this) {
+      o.tgt.gasUser = null;
+      if (this.hidden && !this.inside) {
+        this.hidden = false;
+        const sp = findSpawnSpot(o.tgt, this.r, this.x, this.y); this.x = sp[0]; this.y = sp[1];
+      }
+    }
   }
   nextOrder() {
     this.releaseMining();
     this.orders.shift(); this.path = null; this.tgt = null; this.stuck = 0;
+    this.syncHarvestCollision();
   }
   stopAll() { this.issue({ t: 'stop' }); this.orders = []; }
 
@@ -429,16 +442,30 @@ class Entity {
   }
 
   // ---------- 채취 ----------
+  returnDepot(o) {
+    // ReturnMinerals/ReturnGas처럼 명령과 적재물을 유지하며 반납 기지를 재탐색한다.
+    this.noCollide = true;
+    let th = o.depot;
+    if (th && (th.dead || th.owner !== this.owner || !th.done || th.lifted || th.liftT > 0)) {
+      th = o.depot = null; this.path = null; o.depotRetryAt = 0;
+    }
+    if (!th && GAME.tick >= (o.depotRetryAt || 0)) {
+      th = o.depot = nearestTownHall(this.owner, this.x, this.y);
+      if (!th) o.depotRetryAt = GAME.tick + 75;
+    }
+    if (!th) { this.path = null; this.vx = 0; this.vy = 0; }
+    return th;
+  }
   gatherLogic(o) {
     if (this.carry > 0 && o.phase !== 'ret' && o.phase !== 'in') o.phase = 'ret';
     if (o.phase === 'ret') {
-      const th = nearestTownHall(this.owner, this.x, this.y);
-      if (!th) { this.nextOrder(); return; }
-      this.noCollide = true;
+      const th = this.returnDepot(o);
+      if (!th) return;
       if (this.moveTo(th.x, th.y, 4, th)) {
         const p = P(this.owner);
         if (this.carryKind === 'gas') p.gas += this.carry; else p.min += this.carry;
         this.carry = 0; this.carryKind = null; o.phase = 'go'; this.path = null;
+        o.depot = null; o.depotRetryAt = 0;
       }
       return;
     }
@@ -494,12 +521,12 @@ class Entity {
   }
   returnLogic(o) {
     if (this.carry <= 0) { this.nextOrder(); return; }
-    const th = nearestTownHall(this.owner, this.x, this.y);
-    if (!th) { this.nextOrder(); return; }
+    const th = this.returnDepot(o);
+    if (!th) return;
     if (this.moveTo(th.x, th.y, 4, th)) {
       const p = P(this.owner);
       if (this.carryKind === 'gas') p.gas += this.carry; else p.min += this.carry;
-      this.carry = 0;
+      this.carry = 0; this.carryKind = null;
       const last = this.lastRes;
       this.nextOrder();
       if (!this.orders.length && last && !last.dead) this.issue({ t: 'gather', tgt: last, phase: 'go' });

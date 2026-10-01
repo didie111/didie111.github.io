@@ -23,6 +23,56 @@ function world() {
   return code => vm.runInContext(code,ctx);
 }
 function check(name, code) { test(name, () => world()(code)); }
+for (const [workerType,hallType,gasType] of [['scv','cc','refinery'],['drone','hatchery','extractor'],['probe','nexus','assimilator']]) {
+ for (const kind of ['min','gas']) check(workerType+' keeps '+kind+' cargo and resumes harvesting when a depot returns', `
+  const hall=building('${hallType}',10,10), res=building('${kind==='min'?'mineral':gasType}',20,10,${kind==='min'?'NEUTRAL':'0'});
+  res.amount=5000; if('${kind}'==='gas') res.geyser={amount:5000};
+  const w=unit('${workerType}',hall.x,hall.y+hall.hh+30); refresh();
+  w.carry=8; w.carryKind='${kind}'; w.lastRes=res; w.issue({t:'gather',tgt:res,phase:'ret'});
+  ${hallType==='cc' ? "cmdInstant([hall],'lift');" : "killEntity(hall,null);"}
+  const before=P(0)['${kind}']; const pos=[w.x,w.y]; ticks(160);
+  assert.equal(w.orders[0]?.t,'gather'); assert.equal(w.orders[0]?.phase,'ret');
+  assert.equal(w.carry,8); assert.equal(P(0)['${kind}'],before); assert.equal(w.x,pos[0]); assert.equal(w.y,pos[1]);
+  ${hallType==='cc' ? "hall.issue({t:'land',tx:10,ty:10});" : `building('${hallType}',10,10);`} ticks(600);
+  assert.ok(P(0)['${kind}']>before,'must deposit and resume mining'); assert.equal(w.orders[0]?.t,'gather');
+  assert.equal(w.orders[0]?.tgt,res); assert.ok(('${kind}'==='min'?res.amount:res.geyser.amount)<5000);
+ `);
+ check(workerType+' explicit stop cancels depot waiting without losing cargo', `
+  const res=building('mineral',20,10,NEUTRAL); res.amount=5000;
+  const w=unit('${workerType}',600,500); w.carry=8; w.carryKind='min'; w.lastRes=res;
+  w.issue({t:'gather',tgt:res,phase:'ret'}); ticks(2); w.issue({t:'stop'});
+  building('${hallType}',10,10); const before=P(0).min; ticks(200);
+  assert.equal(w.carry,8); assert.equal(P(0).min,before); assert.equal(w.orders.length,0); assert.ok(!w.noCollide);
+ `);
+}
+check('return cargo command waits for another landed command center and resumes last resource', `
+ const first=building('cc',10,10); first.lifted=true; occupy(first,false);
+ const res=building('mineral',20,10,NEUTRAL); res.amount=5000;
+ const w=unit('scv',600,500); w.carry=8; w.carryKind='min'; w.lastRes=res; w.issue({t:'ret'}); ticks(150);
+ assert.equal(w.orders[0]?.t,'ret'); assert.equal(w.carry,8);
+ building('cc',10,15); const before=P(0).min; ticks(400);
+ assert.ok(P(0).min>before); assert.equal(w.orders[0]?.t,'gather'); assert.equal(w.orders[0]?.tgt,res);
+`);
+check('lifting the current depot reroutes cargo to another completed grounded depot', `
+ const first=building('cc',10,10),second=building('cc',10,17);
+ const res=building('mineral',20,10,NEUTRAL); res.amount=5000;
+ const w=unit('scv',first.x+first.hw+100,first.y); w.carry=8; w.carryKind='min'; w.lastRes=res;
+ w.issue({t:'ret'}); ticks(1); assert.equal(w.orders[0].depot,first);
+ cmdInstant([first],'lift'); const before=P(0).min; ticks(400);
+ assert.ok(first.lifted); assert.ok(P(0).min>before); assert.equal(w.orders[0]?.t,'gather');
+`);
+check('returning worker ignores enemy and incomplete depots and resumes after completion', `
+ building('cc',10,10,1); const unfinished=createBuilding('cc',0,10,17,false);
+ const w=unit('scv',600,500); w.carry=8; w.carryKind='gas'; w.issue({t:'ret'});
+ const before=P(0).gas; ticks(160); assert.equal(w.carry,8); assert.equal(P(0).gas,before);
+ completeBuilding(unfinished); ticks(300); assert.equal(P(0).gas,before+8); assert.equal(w.carry,0);
+`);
+for(const type of ['scv','drone','probe']) check(type+' exits interrupted gas harvesting visibly with body collision restored', `
+ const b=building('refinery',20,20),w=unit('${type}',b.x,b.y); b.geyser={amount:5000};
+ w.orders=[{t:'gather',tgt:b,phase:'in'}]; w.gasT=30; w.hidden=true; w.noCollide=true; b.gasUser=w;
+ w.issue({t:'hold'}); assert.equal(w.hidden,false); assert.equal(w.noCollide,false); assert.equal(b.gasUser,null);
+ assert.ok(PF.positionClear(w.x,w.y,w.r*0.75,0)); ticks(2); assert.equal(w.orders[0].t,'hold');
+`);
 for (const [workerType, gasType, hallType] of [['scv','refinery','cc'],['drone','extractor','hatchery'],['probe','assimilator','nexus']]) {
  for (const [side, dx, dy] of [['left',-180,0],['right',180,0],['top',0,-140],['bottom',0,140]])
  check(workerType+' builds gas from '+side, `

@@ -16,6 +16,7 @@ function world() {
     GAME.players = [newPlayer('T', 0), newPlayer('Z', 1), newPlayer('Z', 2)];
     GAME.sandbox = true;
     return { GAME, MAP, TILE, MAP_W, SH, PF, physics, gameTick, cmdInstant, commandUnits,
+      groundTypes: Object.keys(UNITS).filter(t => UNITS[t].speed > 0 && !UNITS[t].air && !UNITS[t].mine && t !== 'larva'),
       unit: (type, x, y) => createUnit(type, 0, x, y),
       building: (type, tx, ty) => createBuilding(type, 0, tx, ty, true),
       step() {
@@ -32,6 +33,50 @@ function world() {
 }
 function position(e) { return [e.x, e.y]; }
 function finite(e) { assert.ok(Number.isFinite(e.x) && Number.isFinite(e.y)); }
+
+test('all mobile ground types recover from exact overlap even when both units hold', () => {
+  const catalogue = world();
+  // 정의된 모든 이동 가능한 지상 유닛을 검사한다 (공중·라바·고정 형태 제외).
+  for (const type of catalogue.groundTypes) {
+    const w = world(), a = w.unit(type,240,240), b = w.unit(type,240,240);
+    a.issue({t:'hold'}); b.issue({t:'hold'});
+    for(let i=0;i<10;i++) w.physicalStep();
+    finite(a); finite(b);
+    assert.ok(Math.hypot(a.x-b.x,a.y-b.y)>=(a.r+b.r)*0.85-1e-6,type+' stays stacked');
+  }
+});
+
+for (const type of ['scv','drone','probe']) for (const order of ['stop','hold','move'])
+test(type+' restores collision immediately after gathering -> '+order, () => {
+  const w=world(), blocker=w.unit('tank_siege',240,240), worker=w.unit(type,240,240);
+  worker.orders=[{t:'gather',phase:'go'}]; worker.noCollide=true;
+  worker.issue({t:order,x:400,y:240});
+  assert.ok(!worker.noCollide,'ordinary order must restore body collision');
+  for(let i=0;i<10;i++) w.physicalStep();
+  assert.deepEqual(position(blocker),[240,240]); finite(worker);
+  assert.ok(Math.hypot(worker.x-blocker.x,worker.y-blocker.y)>=(worker.r+blocker.r)*0.85-1e-6);
+});
+
+test('mixed held ground army untangles a dense stack beside terrain', () => {
+  const w=world(), army=[];
+  for(let y=0;y<30;y++) w.MAP.walk[y*w.MAP_W+8]=0;
+  for(const type of ['marine','scv','hydra','drone','zealot','probe','tank','ultralisk','dragoon']) {
+    const u=w.unit(type,232,240); u.issue({t:'hold'}); army.push(u);
+  }
+  for(let i=0;i<120;i++) w.physicalStep();
+  for(const a of army) {
+    finite(a); assert.ok(w.PF.positionClear(a.x,a.y,a.r*0.75,0),'overlap recovery enters wall');
+    for(const b of army) if(a.id<b.id)
+      assert.ok(Math.hypot(a.x-b.x,a.y-b.y)>=(a.r+b.r)*0.85-0.1,a.type+' / '+b.type+' stay stacked');
+  }
+});
+
+for(const type of ['scv','drone','probe']) test(type+' queued stop keeps mining collision until it becomes active', () => {
+  const w=world(), worker=w.unit(type,240,240);
+  worker.orders=[{t:'gather',phase:'go'}]; worker.noCollide=true;
+  worker.issue({t:'stop'},true); assert.equal(worker.noCollide,true);
+  worker.nextOrder(); assert.equal(worker.noCollide,false); assert.equal(worker.orders[0].t,'stop');
+});
 
 test('ground units walk straight through friendly and enemy larvae in a corridor', () => {
   for (const type of ['marine', 'scv', 'hydra', 'tank']) for (const owner of [0, 1]) {

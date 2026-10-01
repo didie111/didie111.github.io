@@ -152,7 +152,7 @@ function canPlace(type, tx, ty, owner, builder, quiet) {
 function nearestTownHall(owner, x, y) {
   let best = null, bd = 1e9;
   for (const e of GAME.entities) {
-    if (e.dead || e.owner !== owner || !e.isBuilding || !e.def.townHall || !e.done || e.lifted) continue;
+    if (e.dead || e.owner !== owner || !e.isBuilding || !e.def.townHall || !e.done || e.lifted || e.liftT > 0) continue;
     const d = dist(x, y, e.x, e.y);
     if (d < bd) { bd = d; best = e; }
   }
