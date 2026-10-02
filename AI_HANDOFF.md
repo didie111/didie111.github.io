@@ -4,7 +4,8 @@
 >
 > **가장 중요한 사용자 요구: 전 세계에 공개된 스타크래프트 1 / 브루드워의 엔진 재현·관련 구현 소스를 가능한 넓게 계속 찾아 직접 분석하고, 원작 동작 및 우리 프로젝트 코드와 비교해서 거의 동일하게 구현해야 한다. 추측, 임의 좌표 밀기, 단순히 비슷한 연출로 끝내지 않는다.**
 
-인수인계 갱신: **2026-10-03 KST**. 게임 기준 버전: **`2026.10.03-sc1.22`**.
+인수인계 갱신: **2026-10-03 KST**. 게임 기준 버전: **`2026.10.03-sc1.23`**.
+SC1.23은 화면 지정/호출을 추가한 버전이다. 시작 커밋은 `615d3a7d1c66741a38636984dae62bb292ec8c4d`이며 상세 근거와 검증은 [화면 지정 기록](rts-src/docs/sc123-camera-locations.md)에 있다.
 SC1.22 게임 코드 커밋: [`7c3b06bcf7f9126d18d003bdf6ba6d61920286b0`](https://github.com/didie111/didie111.github.io/commit/7c3b06bcf7f9126d18d003bdf6ba6d61920286b0). SC1.21 위에 고정 상태 F10 드래그 커서 표시를 수정했다. SC1.21 게임 코드 커밋은 [`113afe4b160fa51699019ab8a41a0b6156bea640`](https://github.com/didie111/didie111.github.io/commit/113afe4b160fa51699019ab8a41a0b6156bea640), SC1.22 시작 커밋은 `ca796daa3470a432a74db4ef9b6d8e9c7bbbd316`이다. 비교 시작 커밋은 `c856034a095e90dcbbb8fd30da5ff3cbfca400d0`, SC1.20 게임 코드는 `ea63d555110f1968bf8927c5a8b169ffdd8938dc`다. 이후 작업자는 최신 `main`과 `RTS_VERSION`을 다시 확인하고 이 기준을 갱신한다.
 
 ## 1. 프로젝트와 첫 읽기 순서
@@ -56,6 +57,7 @@ SC1.22 게임 코드 커밋: [`7c3b06bcf7f9126d18d003bdf6ba6d61920286b0`](https:
 - 메뉴(F10)와 마우스 고정 버튼은 **6시 유닛 정보 패널의 중앙 위**에 둔다. 미니맵 옆으로 옮기지 않는다.
 - **마우스를 고정한 상태에서 F10을 열고 메뉴를 조작해도 실제 고정을 계속 유지해야 한다.** 설정만 보존한 채 잠깐 해제했다가 다시 고정하는 것으로 대체하지 않는다.
 - 고정 상태에서도 F10 제목줄에 올리면 이동 커서, 잡고 드래그하면 잡은 손 커서를 즉시 표시한다. 제목줄의 닫기 버튼을 이동 영역으로 취급하지 않으며, 창 이동/클릭을 지도 명령으로 흘리지 않는다.
+- Shift+F2/F3/F4로 지도 화면 위치를 각각 지정하고 F2/F3/F4로 호출한다. F1 도움말은 유지한다. 선택/명령/줌/고정 상태를 보존하며 같은 슬롯 재지정은 덮어쓴다.
 - 아래쪽 화면 이동은 정보 패널 **아래 12px 띠**에서 작동한다. 패널 위/내부를 아래 화면 이동 영역으로 만들지 않는다.
 - 한 번에 군대 24기, 생산 가능한 건물 24개를 선택한다. 부대 지정 키는 기존 0–9이다. “24 부대 선택”을 숫자 부대 슬롯 24개 추가로 해석하지 않는다.
 - 생산 불가능 건물·적군 건물의 그룹 선택은 제한한다. 군대와 건물을 혼합 선택하지 않는다. 정보 패널은 8열×3행과 생산 건물 종류 탭을 제공한다.
@@ -82,6 +84,15 @@ SC1.22 게임 코드 커밋: [`7c3b06bcf7f9126d18d003bdf6ba6d61920286b0`](https:
 | SC1.20 | F10/F1 중 실제 Pointer Lock 유지, 게임 안 목록·커서로 메뉴 조작, 입력 경합 처리 | 관련 169개 검사 통과, 빌드/공백 통과, GitHub Pages 성공·실제 SC1.20 화면 확인. 고정 상태의 실제 브라우저 조작은 아래 제한이 남았다. |
 | SC1.21 | 상시 FPS, F10 목록 위치 복원, 미니맵 정사각 표시, 지상 근접 공격의 빈 경계 접근·완전 경로·군집 탐색 비용 제한 | 전체 415개 검사 통과. OpenBW/Teippi 실제 공격 접근 함수 비교, 24기 네 방향·Hold/벽/이동 표적·지상/공중 추적 확인. 상세 근거·수치·한계는 아래 기록. |
 | SC1.22 | 고정 커서에 F10 제목줄의 이동/드래그 상태 표시, 시작·끝·닫기 즉시 갱신 | 관련 입력·스폰 47개 검사 통과. 실제 고정 브라우저 검증의 한계는 아래와 같으며 엔진 변경은 없다. |
+| SC1.23 | Shift+F2/F3/F4 위치 지정, F2/F3/F4 즉시 호출, 줌/창 크기에 따른 지도 중심 보존 | 관련 입력·스폰 53개 검사 통과. 원작 Blizzard 단축키 문서 및 OpenBW UI 화면 처리 직접 확인. |
+
+### SC1.23 화면 지정과 이동
+
+`UI.cameraLocationKey`가 세 개의 독립 지도 중심을 저장/호출한다. 현재 줌·유닛 선택·명령·공격/스폰 모드·F10 목록/입력 포커스와 포인터 고정을 보존한다. 호출 시 이전 지도 좌표의 드래그만 종료한다. 미지정은 이동하지 않고 안내하며, 일시정지에서는 작동한다. 게임 시작 전/종료 후/숨김/키 반복은 무시하며 새 게임은 초기화한다. 저장 슬롯은 현재 게임 메모리에만 있다.
+
+Blizzard의 F2–F4 공식 동작을 확인하고 OpenBW 고정 커밋의 `ui/ui.h` 화면 좌표·입력·경계 처리도 직접 비교했다. 읽은 OpenBW UI 분기에는 F2–F4 지정 코드가 없으므로 그 기능을 OpenBW에서 이식했다고 표현하지 않는다. [구체적인 출처/적용/검증](rts-src/docs/sc123-camera-locations.md).
+
+camera·spawn **53개 검사 통과**. 실제 UI 코드의 고정 조건 검사와 실제 OS 브라우저 검증을 구분한다. 이 변경은 UI 카메라 단축키이며 이동/공격 엔진은 변경하지 않았다.
 
 ### SC1.22 고정 상태 F10 드래그 커서
 
@@ -195,7 +206,7 @@ OpenBW는 공개 재현 엔진, BWAPI는 API, PyMS는 데이터 도구다. 이�
 
 ## 6. 다음 작업 우선순위
 
-이번 요청은 마우스 고정 상태에서 F10 제목줄에 올리거나 창을 드래그할 때 커서 모양을 바꾸는 것이다. SC1.22에 구현·자동 검증했다. 후속 작업은 사용자의 다음 지시와 아래 미완료 항목을 함께 확인한다.
+이번 요청은 원작처럼 화면 위치를 지정하고 단축키로 이동하는 것이다. SC1.23에 Shift+F2/F3/F4 지정과 F2/F3/F4 호출을 구현·자동 검증했다. 후속 작업은 사용자의 다음 지시와 아래 미완료 항목을 함께 확인한다.
 
 | 우선순위 | 다음 작업 | 완료 판단 |
 | --- | --- | --- |
@@ -216,7 +227,7 @@ OpenBW는 공개 재현 엔진, BWAPI는 API, PyMS는 데이터 도구다. 이�
 | `rts-src/src/js/commands.js` | `smartCommand`, `commandUnits`, `cmdTrainSelected`, `collisionFixed`, `groundCollider`, `groundMovement`, `steerGround`, `recoveryRand`, `recoverGround`, `physics`, `resolveTerrain`, `gameTick` |
 | `rts-src/src/js/path.js` | `PF`: A*/국소 경로·몸체/지형·탐색 예산·캐시; `SH`: 주변 지상/적 공간 인덱스 |
 | `rts-src/src/js/combat.js` | `fireWeapon`, `dealDamage`, `splashDamage`, `lurkerSpines`, `updateProjectiles`, `onProjectileHit`, `updateAreas`, `castSpell` |
-| `rts-src/src/js/ui.js` | 선택/부대·8×3 패널; `renderRes`, `minimapViewport`, `pointerLocked`, `requestMouseLock`, `releaseMouse`, `routeLockedDown`, `installMenuSelect`, `openMenuSelect`/`closeMenuSelect`, `toggleTest`, F10 드래그 |
+| `rts-src/src/js/ui.js` | 선택/부대·8×3 패널; `cameraLocationKey`, `renderRes`, `minimapViewport`, `pointerLocked`, `requestMouseLock`, `releaseMouse`, `routeLockedDown`, `installMenuSelect`, `openMenuSelect`/`closeMenuSelect`, `toggleTest`, F10 드래그 |
 | `rts-src/src/js/game.js`, `map.js` | 플레이어/개체/시야, 생성/점유와 무효화, 맵/지형/자원 |
 | `rts-src/src/js/render.js`, `art.js` | 카메라·화면/안개/스프라이트·프리뷰. 시뮬레이션 렉과 따로 측정 |
 | `rts-src/src/js/main.js`, `ai.js`, `sound.js` | 시작 시나리오·메인 루프·승패/고정 해제, 자체 AI, 효과음 |
@@ -255,7 +266,7 @@ git status --short
 | `sc118.test.cjs` | 독립 추출 수치·24기/건물·가스 완공·전체 무기/능력 경계 |
 | `sc1.test.cjs` | 채취/가스 건설/반납·기지 이착륙·기존 명령/종족 기능 |
 
-**마지막 기록된 검사 결과를 현재 재실행 결과처럼 쓰지 않는다.** SC1.22는 커서/입력 변경의 camera·spawn **47개 통과**다. SC1.21의 `node --test rts-src/tests/*.cjs` 전체 **415개 통과**(실행 버전 `2026.10.03-sc1.21`) 및 과거 SC1.18 전체 375개, SC1.20 관련 169개 기록과 구분한다. 다음 변경자는 범위에 맞춰 다시 실행하고 결과를 남긴다.
+**마지막 기록된 검사 결과를 현재 재실행 결과처럼 쓰지 않는다.** SC1.23은 화면 지정/입력 변경의 camera·spawn **53개 통과**다. SC1.22 관련 47개, SC1.21의 `node --test rts-src/tests/*.cjs` 전체 **415개 통과**(실행 버전 `2026.10.03-sc1.21`) 및 과거 SC1.18 전체 375개, SC1.20 관련 169개 기록과 구분한다. 다음 변경자는 범위에 맞춰 다시 실행하고 결과를 남긴다.
 
 기존 성능 원시값: [SC1.16](rts-src/docs/sc116-benchmark.json), [SC1.18](rts-src/docs/sc118-benchmarks.json). SC1.18의 800기 평균은 대기 약 7.45ms/틱, 이동 49.76ms/틱, 밀집 복구 41.82ms/틱이었다. **Node VM 시뮬레이션만 포함한 과거 측정**이므로 브라우저 60fps 보장으로 쓰지 않는다. 벤치마크 비교 중에는 다른 벤치마크/검사를 동시에 돌리지 않는다.
 

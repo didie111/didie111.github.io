@@ -6,6 +6,7 @@
 const UI = {
   selection: [], hover: null, keys: {}, mode: null, menu: null,
   groups: [], lastGroup: { k: -1, t: 0 }, clicks: [], pings: [], lastAlert: null, alertT: -9999,
+  cameraLocations: [],
   mouse: { x: 0, y: 0, wx: 0, wy: 0, inside: false, drag: null, overUI: false },
   cardSig: '', infoSig: '', card: [], lastClick: { t: 0, id: 0 },
   lockWanted: false, lockPending: false, lockActive: false, lockRequestId: 0,
@@ -290,6 +291,7 @@ const UI = {
     if (e.key === 'Escape' && (this.pointerLocked() || this.lockWanted)) {
       const locked = this.pointerLocked(); this.releaseMouse(); if (locked) return;
     }
+    if (this.cameraLocationKey(e)) return;
     if (this.menuSelect && this.menuSelectKey(e)) return;
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) {
       if (e.key === 'Escape' && this.mode && this.mode.kind === 'spawn') { this.cancelMode(); return; }
@@ -318,6 +320,24 @@ const UI = {
       if (i >= 0) { this.pressCard(i, e.shiftKey); e.preventDefault(); }
       else { const j = this.card.findIndex(b => b && b.key === up); if (j >= 0) this.pressCard(j, e.shiftKey); }
     }
+  },
+  cameraLocationKey(e) {
+    if (!/^F[234]$/.test(e.key) || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return false;
+    e.preventDefault();
+    if (!GAME.running || GAME.over || document.hidden || e.repeat) return true;
+    const slot = +e.key.slice(1) - 2;
+    if (e.shiftKey) {
+      // Store the playable map center, so zoom/resizing never changes the bookmarked place.
+      this.cameraLocations[slot] = {x:VIEW.x + VIEW.w / 2, y:VIEW.y + (VIEW.h - this.consoleH() / VIEW.scale) / 2};
+      this.message(e.key + ' 화면 지정');
+    } else {
+      const location = this.cameraLocations[slot];
+      if (!location) { this.message(e.key + '에 지정된 화면이 없습니다. Shift+' + e.key + '로 지정하세요.'); return true; }
+      this.mouse.drag = null; this.mmDrag = false;
+      RENDER.centerOn(location.x, location.y);
+      this.message(e.key + ' 화면 이동');
+    }
+    return true;
   },
   groupKey(n, set, add) {
     const own = this.normalizeSelection(this.selection.filter(e => e.owner === GAME.control));

@@ -68,6 +68,64 @@ function camera() {
   };
 }
 function near(a, b) { assert.ok(Math.abs(a - b) < 1e-6, `${a} != ${b}`); }
+function cameraKey(c,key,shiftKey=false,props={}) {
+ let prevented=0;
+ c.UI.keyDown({key,shiftKey,preventDefault(){prevented++;},...props});
+ return prevented;
+}
+
+test('Shift F2-F4 store three independent screen locations and one key recalls each immediately',()=>{
+ const c=camera();
+ const positions=[[400,500],[1700,2200],[2900,1200]];
+ for(let i=0;i<3;i++){[c.VIEW.x,c.VIEW.y]=positions[i];assert.equal(cameraKey(c,'F'+(i+2),true),1);}
+ for(let i=0;i<3;i++){c.VIEW.x=900;c.VIEW.y=900;assert.equal(cameraKey(c,'F'+(i+2)),1);near(c.VIEW.x,positions[i][0]);near(c.VIEW.y,positions[i][1]);}
+ c.VIEW.x=600;c.VIEW.y=800;cameraKey(c,'F3',true);c.VIEW.x=2200;cameraKey(c,'F3');near(c.VIEW.x,600);near(c.VIEW.y,800);
+ cameraKey(c,'F2');near(c.VIEW.x,400);near(c.VIEW.y,500);
+});
+test('screen recall preserves the bookmarked map center across zoom and resize, clamping map edges',()=>{
+ const c=camera();c.VIEW.x=1600;c.VIEW.y=1900;cameraKey(c,'F2',true);
+ const x=2000,y=1900+(640-172/1.25)/2;
+ for(const [scale,w,h] of [[2,500,400],[1,1400,900],[3,700,600]]){
+  c.VIEW.scale=scale;c.VIEW.w=w;c.VIEW.h=h;c.VIEW.x=0;c.VIEW.y=0;cameraKey(c,'F2');
+  near(c.VIEW.x+w/2,x);near(c.VIEW.y+(h-172/scale)/2,y);assert.equal(c.VIEW.scale,scale);
+ }
+ c.VIEW.scale=3;c.VIEW.w=300;c.VIEW.h=300;c.VIEW.x=3796;c.VIEW.y=3796+172/3;cameraKey(c,'F4',true);
+ c.VIEW.scale=1;c.VIEW.w=1400;c.VIEW.h=900;cameraKey(c,'F4');near(c.VIEW.x,2696);near(c.VIEW.y,3368);
+});
+test('camera hotkeys keep selection, queued orders and target mode while clearing an unfinished map drag',()=>{
+ const c=camera(),unit={owner:0,orders:[{kind:'move',x:123,y:456}]};c.UI.selection=[unit];c.UI.mode={kind:'target',cmd:'attack'};
+ const selection=c.UI.selection,mode=c.UI.mode,orders=unit.orders;cameraKey(c,'F2',true);
+ c.UI.mouse.drag={wx:12,wy:34};c.UI.mmDrag=true;c.VIEW.x=1200;cameraKey(c,'F2');
+ assert.equal(c.UI.selection,selection);assert.equal(c.UI.mode,mode);assert.equal(unit.orders,orders);
+ assert.equal(c.UI.mouse.drag,null);assert.equal(c.UI.mmDrag,false);
+});
+test('unassigned screen keys do not move, and suspended gameplay never changes bookmarks',()=>{
+ const c=camera(),messages=[];c.UI.message=m=>messages.push(m);
+ assert.equal(cameraKey(c,'F2'),1);near(c.VIEW.x,1800);near(c.VIEW.y,1800);assert.ok(messages[0].includes('Shift+F2'));
+ cameraKey(c,'F2',true);
+ for(const state of ['GAME.running=false','GAME.running=true;GAME.over=true','GAME.over=false;document.hidden=true']){
+  c.setGame(state);c.VIEW.x=800;cameraKey(c,'F2');near(c.VIEW.x,800);cameraKey(c,'F3',true);assert.equal(c.UI.cameraLocations[1],undefined);
+ }
+ c.setGame('document.hidden=false;GAME.paused=true');cameraKey(c,'F2');near(c.VIEW.x,1800);
+ assert.equal(camera().UI.cameraLocations.length,0,'a new page/game starts without old locations');
+});
+test('repeats, composition and browser modifier shortcuts cannot accidentally overwrite a screen location',()=>{
+ const c=camera();cameraKey(c,'F2',true);c.VIEW.x=900;
+ assert.equal(cameraKey(c,'F2',true,{repeat:true}),1);
+ for(const prop of ['ctrlKey','metaKey','altKey','isComposing'])assert.equal(c.UI.cameraLocationKey({key:'F2',shiftKey:true,[prop]:true,preventDefault(){assert.fail('browser shortcut captured');}}),false);
+ cameraKey(c,'F2');near(c.VIEW.x,1800);
+});
+test('screen location hotkeys work through locked menu focus and retain pointer lock without requests or exits',()=>{
+ const c=camera();c.UI.bindInput();let requests=0,exits=0;
+ c.canvas.requestPointerLock=()=>{requests++;c.document.pointerLockElement=c.canvas;c.documentEvents.pointerlockchange();};
+ c.document.exitPointerLock=()=>{exits++;};c.UI.toggleMouseLock();c.UI.toggleTest(true);
+ const input=c.node('input');input.type='number';input.value='5';cameraKey(c,'F2',true,{target:input});
+ c.VIEW.x=800;cameraKey(c,'F2',false,{target:input});near(c.VIEW.x,1800);assert.equal(input.value,'5');
+ const {trigger}=picker(c);trigger.click();const menu=c.UI.menuSelect;
+ cameraKey(c,'F3',true,{target:menu.options[0]});c.VIEW.y=700;cameraKey(c,'F3',false,{target:menu.options[0]});near(c.VIEW.y,1800);
+ assert.equal(c.UI.menuSelect,menu);assert.equal(c.UI.el.test.classList.contains('hidden'),false);
+ assert.equal(c.document.pointerLockElement,c.canvas);assert.equal(requests,1);assert.equal(exits,0);
+});
 function cursorCamera() {
   const c = camera(), create = c.document.createElement;
   let image = 0;
