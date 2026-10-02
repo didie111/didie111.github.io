@@ -1,7 +1,7 @@
 'use strict';
 // 확장 데이터: Blizzard StarCraft Compendium 수치/역할을 참고한 웹게임 구현.
 // 원작 MPQ/엔진을 포함하지 않으며 투사체/애니메이션/길찾기는 자체 구현이다.
-const RTS_VERSION = '2026.10.02-sc1.16';
+const RTS_VERSION = '2026.10.02-sc1.17';
 // BWAPI UnitType.cpp d727fed: acceleration (1 = iscript), turn N/256 circle,
 // halt distance N/256 px. Keep the project's top speeds; animation strides are separate.
 const GROUND_MOTION = {

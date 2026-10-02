@@ -171,10 +171,10 @@ const UI = {
     });
     window.addEventListener('keydown', (e) => this.keyDown(e));
     window.addEventListener('keyup', (e) => { this.keys[e.key] = false; if (e.key === 'Shift') this.keys.Shift = false; if (e.key === 'Alt') this.keys.Alt = false; });
-    const loseFocus = () => { this.releaseMouse(); this.keys = {}; this.mouse.inside = false; this.mouse.drag = null; this.mmDrag = false; this.lockedTarget = null; };
+    const loseFocus = () => { this.releaseMouse(); this.finishTestDrag(); this.keys = {}; this.mouse.inside = false; this.mouse.drag = null; this.mmDrag = false; this.lockedTarget = null; };
     window.addEventListener('blur', loseFocus);
     document.addEventListener('visibilitychange', () => { if (document.hidden) loseFocus(); });
-    window.addEventListener('resize', () => RENDER.resize());
+    window.addEventListener('resize', () => { RENDER.resize(); this.finishTestDrag(); this.positionTestPanel(); });
   },
   mmWorld(e) {
     const r = this.el.mm.getBoundingClientRect();
@@ -793,7 +793,7 @@ const UI = {
 
   // ---------------- 프레임 ----------------
   scrollCamera(dt = 1000 / 60) {
-    if (!GAME.running || GAME.over || document.hidden || this.mmDrag) return;
+    if (!GAME.running || GAME.over || document.hidden || this.mmDrag || this.testDrag) return;
     if (document.activeElement?.matches('input,select,textarea,[contenteditable="true"]')) return;
     const edge = 24, width = window.innerWidth, height = window.innerHeight;
     let dx = 0, dy = 0;
@@ -849,9 +849,11 @@ const UI = {
     const opts = (race) => Object.keys(UNITS).filter(k => UNITS[k].race === race && !['larva', 'egg', 'lurker_egg', 'spider_mine', 'broodling', 'tank_siege'].includes(k)).map(k => '<option value="' + k + '">' + UNITS[k].name + '</option>').join('');
     const bopts = Object.keys(BUILDINGS).filter(k => BUILDINGS[k].race !== 'N').map(k => '<option value="' + k + '">' + BUILDINGS[k].name + '</option>').join('');
     t.innerHTML = `
-      <div class="th">테스트 / 치트 패널 <span class="x" id="t-close">✕</span></div>
+      <div class="th" id="t-drag" title="제목줄을 드래그해 창을 이동하세요"><span>테스트 / 치트 패널 <small>드래그로 이동</small></span><button class="x" id="t-close" aria-label="스폰창 닫기">✕</button></div>
       <div class="row small">버전 ${RTS_VERSION} · 자체 픽셀 그래픽 / 웹 RTS</div>
       <div class="row small" id="t-performance"></div>
+      <div class="test-columns">
+      <section class="test-column" aria-label="스폰 설정"><h3>유닛 / 건물 스폰</h3>
       <div class="row"><label>스폰 대상</label>
         <select id="t-type"><optgroup label="테란">${opts('T')}</optgroup><optgroup label="저그">${opts('Z')}</optgroup><optgroup label="프로토스">${opts('P')}</optgroup><optgroup label="건물">${bopts}</optgroup></select></div>
       <div class="row"><label>소속</label><select id="t-owner"><option value="1">적군 (저그/빨강)</option><option value="0">아군 (테란/파랑)</option></select>
@@ -859,15 +861,19 @@ const UI = {
       <div class="row"><button id="t-spawn">스폰 프리뷰 켜기 (우클릭 종료)</button></div>
       <div class="row small">대상 선택 → 마우스 프리뷰 → 지도 클릭으로 스폰</div>
       <div class="row"><button id="t-wave">적 공격 웨이브 즉시 출격</button><button id="t-killsel">선택 유닛 제거</button></div>
+      <div class="row"><label>조작 진영</label><button id="t-ctrl0" class="on">테란 (나)</button><button id="t-ctrl1">저그 (적군 조작)</button></div>
+      </section>
+      <section class="test-column" aria-label="게임 설정"><h3>게임 / 테스트 설정</h3>
       <div class="row"><label><input type="checkbox" id="t-ai" checked> 적 AI 작동</label><label><input type="checkbox" id="t-reveal"> 전체 맵 공개</label></div>
       <div class="row"><label><input type="checkbox" id="t-sandbox"> 샌드박스 (승패 없음)</label><label><input type="checkbox" id="t-snd" checked> 효과음</label></div>
-      <div class="row"><label>조작 진영</label><button id="t-ctrl0" class="on">테란 (나)</button><button id="t-ctrl1">저그 (적군 조작)</button></div>
       <div class="row"><button id="t-res">자원 +5000</button><button id="t-fast">빌드 속도 x<span id="t-bs">1</span></button></div>
       <div class="row"><button id="t-tech">전 종족 연구 완료 (테스트)</button></div>
       <div class="row"><label>게임 속도</label><input id="t-speed" type="range" min="0.5" max="3" step="0.25" value="1"><span id="t-spv">1.0x</span></div>
+      </section></div>
       <div class="row small">F10 / \` : 패널 열기 · F1 : 도움말 · F9 : 일시정지</div>`;
     const $ = (id) => document.getElementById(id);
     this.el.perf = $('t-performance');
+    this.bindTestDrag($('t-drag'));
     $('t-close').onclick = () => this.toggleTest(false);
     const preview = () => this.setMode({ kind: 'spawn', type: $('t-type').value, owner: +$('t-owner').value, count: Math.max(1, Math.min(50, Math.floor(+$('t-count').value) || 1)) });
     $('t-spawn').onclick = () => { preview(); this.message('마우스 프리뷰 위치에 클릭해 스폰하세요 (우클릭/ESC 종료)'); };
@@ -892,10 +898,47 @@ const UI = {
     $('t-fast').onclick = () => { GAME.buildSpeed = GAME.buildSpeed >= 8 ? 1 : GAME.buildSpeed * 2; $('t-bs').textContent = GAME.buildSpeed; };
     $('t-speed').oninput = (e) => { GAME.speed = +e.target.value; $('t-spv').textContent = GAME.speed.toFixed(2).replace(/0$/, '') + 'x'; };
   },
+  positionTestPanel(x, y) {
+    const panel = this.el.test;
+    if (!panel || panel.classList.contains('hidden') || !panel.getBoundingClientRect) return;
+    const rect = panel.getBoundingClientRect(), margin = 12;
+    const height = Math.max(0, window.innerHeight - this.consoleH());
+    const pos = this.testPosition || {x: margin, y: (height - rect.height) / 2};
+    // 처음에는 왼쪽 중앙. 화면을 줄여도 제목과 설정이 화면 밖에 남지 않는다.
+    this.testPosition = {
+      x: Math.round(Math.max(margin, Math.min(x ?? pos.x, Math.max(margin, window.innerWidth - rect.width - margin)))),
+      y: Math.round(Math.max(margin, Math.min(y ?? pos.y, Math.max(margin, height - rect.height - margin)))),
+    };
+    panel.style.left = this.testPosition.x + 'px'; panel.style.top = this.testPosition.y + 'px';
+  },
+  bindTestDrag(header) {
+    header.onpointerdown = (e) => {
+      if (e.button !== 0 || e.target.closest('button')) return;
+      e.preventDefault(); this.positionTestPanel();
+      this.mouse.drag = null; this.mmDrag = false;
+      this.testDrag = {id: e.pointerId, header, x: e.clientX, y: e.clientY, left: this.testPosition.x, top: this.testPosition.y};
+      this.el.test.classList.add('dragging'); header.setPointerCapture(e.pointerId);
+    };
+    header.onpointermove = (e) => {
+      const d = this.testDrag;
+      if (!d || d.id !== e.pointerId) return;
+      this.positionTestPanel(d.left + e.clientX - d.x, d.top + e.clientY - d.y);
+    };
+    const finish = (e) => { if (this.testDrag?.id === e.pointerId) this.finishTestDrag(); };
+    header.onpointerup = header.onpointercancel = header.onlostpointercapture = finish;
+  },
+  finishTestDrag() {
+    const d = this.testDrag;
+    if (!d) return;
+    this.testDrag = null; this.el.test.classList.remove('dragging');
+    if (d.header.hasPointerCapture(d.id)) d.header.releasePointerCapture(d.id);
+  },
   toggleTest(v) {
     const show = v === undefined ? this.el.test.classList.contains('hidden') : v;
     if (show) this.releaseMouse();
+    else this.finishTestDrag();
     this.el.test.classList.toggle('hidden', !show);
+    if (show) this.positionTestPanel();
   },
   // 미리보기와 클릭 생성이 같은 좌표/배치 검사 결과를 사용한다. 엔티티를 만들지 않는다.
   spawnLayout(wx, wy) {
