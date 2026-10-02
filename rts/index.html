@@ -25,8 +25,13 @@ button.on { background: linear-gradient(#2c5a8c, #183050); border-color: #7ab0ff
 .msg.fade { opacity: 0; }
 
 /* ---------- 콘솔 패널 (스타1 하단 UI) ---------- */
-#console { position: absolute; left: 0; right: 0; bottom: 0; height: 176px; display: flex; align-items: stretch; gap: 8px; padding: 8px 10px;
+#console { position: absolute; left: 0; right: 0; bottom: 12px; height: 176px; display: flex; align-items: stretch; gap: 8px; padding: 8px 10px;
   background: linear-gradient(#3b3226 0, #231c14 12px, #16120c 100%); border-top: 3px solid #6e5c3e; box-shadow: inset 0 2px 0 #9c8458, 0 -4px 10px rgba(0,0,0,0.6); z-index: 4; }
+#hud-menu { position: absolute; left: 178px; top: -30px; display: flex; gap: 5px; align-items: center; padding: 2px 5px; background: #231c14; border: 1px solid #6e5c3e; border-bottom: 0; }
+#hud-menu button { font-size: 12px; padding: 2px 8px; }
+#bottom-edge { position: fixed; left: 0; right: 0; bottom: 0; height: 12px; background: linear-gradient(#30281b,#100d08); border-top: 1px solid #6e5c3e; z-index: 6; }
+#bottom-edge::after { content: '▼'; position: absolute; left: 50%; font-size: 9px; line-height: 10px; color: #a18b61; }
+#locked-cursor { position: fixed; width: 32px; height: 32px; pointer-events: none; z-index: 100; image-rendering: pixelated; }
 #mm-wrap { width: 160px; height: 160px; border: 2px solid #8a7550; background: #000; box-shadow: inset 0 0 0 1px #000; flex: none; }
 #minimap { width: 156px; height: 156px; image-rendering: pixelated; display: block; cursor: crosshair; }
 #info { flex: 1; min-width: 280px; border: 2px solid #5a4a30; background: radial-gradient(#0e1a10, #050805); padding: 8px; overflow: hidden; position: relative; }
@@ -106,10 +111,13 @@ button.on { background: linear-gradient(#2c5a8c, #183050); border-color: #7ab0ff
 <div id="msgs"></div>
 
 <div id="console">
+  <div id="hud-menu"><button id="hud-f10" onclick="UI.toggleTest()">메뉴(F10)</button><button id="mouse-lock" onclick="UI.toggleMouseLock()" aria-pressed="false" title="게임 안에 마우스 고정 · Esc로 해제">마우스 고정</button></div>
   <div id="mm-wrap"><canvas id="minimap" width="128" height="128"></canvas></div>
   <div id="info"></div>
   <div id="cmd"></div>
 </div>
+<div id="bottom-edge" aria-hidden="true"></div>
+<img id="locked-cursor" class="hidden" alt="">
 
 <div id="tip" class="hidden"></div>
 <div id="test" class="hidden"></div>
@@ -118,6 +126,8 @@ button.on { background: linear-gradient(#2c5a8c, #183050); border-color: #7ab0ff
   <h2>조작법 · <span data-rts-version="short"></span></h2>
   <p>생산 건물에서 부속 건물을 연결하세요. 캐리어는 I로 인터셉터, 리버는 R로 스캐럽을 생산해야 공격합니다. 컴샛에서 S로 스캔할 수 있습니다.</p>
   <table>
+    <tr><td>마우스 고정 / Esc</td><td>하단 메뉴 옆 버튼으로 게임 안에 마우스를 고정합니다. Esc로 해제합니다. F10을 열면 메뉴 조작을 위해 해제됩니다.</td></tr>
+    <tr><td>가장자리 화면 이동</td><td>화면의 위·좌·우 끝, 하단 패널 아래의 좁은 띠에서 이동합니다. 방향키·미니맵도 사용할 수 있습니다.</td></tr>
     <tr><td>좌클릭 / 드래그</td><td>유닛 선택 · 박스 선택 (최대 12기)</td></tr>
     <tr><td>Shift + 클릭</td><td>선택 추가 / 제거 · 명령 예약(웨이포인트)</td></tr>
     <tr><td>Ctrl + 클릭 · 더블클릭</td><td>화면 내 같은 종류 전체 선택</td></tr>
@@ -530,7 +540,7 @@ function supplyText(v) { return (Math.round(v * 2) / 2).toString(); }
 'use strict';
 // 확장 데이터: Blizzard StarCraft Compendium 수치/역할을 참고한 웹게임 구현.
 // 원작 MPQ/엔진을 포함하지 않으며 투사체/애니메이션/길찾기는 자체 구현이다.
-const RTS_VERSION = '2026.10.02-sc1.15';
+const RTS_VERSION = '2026.10.02-sc1.16';
 // BWAPI UnitType.cpp d727fed: acceleration (1 = iscript), turn N/256 circle,
 // halt distance N/256 px. Keep the project's top speeds; animation strides are separate.
 const GROUND_MOTION = {
@@ -1035,11 +1045,23 @@ const PF = (() => {
       if (passable(tx, ty, ignoreId)) continue;
       const qx = Math.max(tx * TILE, Math.min(x, (tx + 1) * TILE));
       const qy = Math.max(ty * TILE, Math.min(y, (ty + 1) * TILE));
-      if (Math.hypot(x - qx, y - qy) < r - 0.001) return false;
+      if ((x - qx) ** 2 + (y - qy) ** 2 < (r - 0.001) ** 2) return false;
     }
     return true;
   }
   function lineClear(x0, y0, x1, y1, r, ignoreId) {
+    // Most movement steps cross only open tiles. Test that small rectangle once
+    // before sampling the swept circle; keep the original corner checks near walls.
+    const left = Math.min(x0, x1) - r, right = Math.max(x0, x1) + r,
+      top = Math.min(y0, y1) - r, bottom = Math.max(y0, y1) + r;
+    if (left < 0 || top < 0 || right > MAP_W * TILE || bottom > MAP_H * TILE) return false;
+    const tx0 = tileOf(left), tx1 = tileOf(right), ty0 = tileOf(top), ty1 = tileOf(bottom);
+    if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) <= 64) {
+      let open = true;
+      for (let y = ty0; y <= ty1 && open; y++) for (let x = tx0; x <= tx1; x++)
+        if (!passable(x, y, ignoreId)) { open = false; break; }
+      if (open) return true;
+    }
     const steps = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 4);
     for (let i = 0; i <= steps; i++) {
       const t = steps ? i / steps : 0;
@@ -1099,6 +1121,21 @@ const PF = (() => {
     return null;
   }
 
+  function compactPath(points) {
+    if (points.length < 3) return points;
+    const out = [points[0]];
+    for (let i = 1; i < points.length - 1; i++) {
+      const a = out[out.length - 1], b = points[i], c = points[i + 1],
+        ax = b[0] - a[0], ay = b[1] - a[1], bx = c[0] - b[0], by = c[1] - b[1];
+      // Keep every corner and reversal. Collinear grid points describe a single
+      // verified segment, not a series of places where a worker should brake.
+      if (Math.abs(ax * by - ay * bx) > 1e-7 || ax * bx + ay * by < 0) out.push(b);
+    }
+    out.push(points[points.length - 1]);
+    if (points.goalBlocker) out.goalBlocker = points.goalBlocker;
+    return out;
+  }
+
   // 가까운 정지 유닛 사이에서 잠깐 목표의 반대 방향으로 나가야 하는 경우,
   // 격자 경로의 '목표에 더 가까운 부분 경로'만 반복하면 탈출하지 못한다.
   // 원 둘레의 안전한 점을 연결해 목표까지 도달하는 경로를 찾는다.
@@ -1112,7 +1149,7 @@ const PF = (() => {
     if (!positionClear(x1, y1, rr, 0) || !unitsClear(x1, y1, x1, y1, r, units)) return null;
     if (clear([x0, y0], goal)) return [goal];
     const points = [[x0, y0], goal];
-    const nearest = units.slice().sort((a, b) => Math.hypot(a.x - x0, a.y - y0) - Math.hypot(b.x - x0, b.y - y0)).slice(0, 16);
+    const nearest = units.slice().sort((a, b) => (a.x - x0) ** 2 + (a.y - y0) ** 2 - (b.x - x0) ** 2 - (b.y - y0) ** 2).slice(0, 16);
     for (const u of nearest) {
       const radius = ((r + u.r) * 0.85 + 0.2) / Math.cos(Math.PI / 16);
       const bearing = Math.atan2(y0 - u.y, x0 - u.x);
@@ -1139,6 +1176,9 @@ const PF = (() => {
         if (closed.has(i)) continue;
         const cost = costs[cur] + Math.hypot(points[cur][0] - points[i][0], points[cur][1] - points[i][1]);
         if (cost >= costs[i]) continue;
+        // Count tested graph edges as work too, not just visited vertices.
+        // Otherwise hundreds of bodies can each test a complete visibility graph.
+        if (--budget <= 0) return null;
         if (clear(points[cur], points[i])) { costs[i] = cost; previous[i] = cur; }
       }
     }
@@ -1150,7 +1190,7 @@ const PF = (() => {
   function localPath(x0, y0, x1, y1, r, obstacles, occupiedGoal) {
     const step = 8, limit = 16, width = limit * 2 + 1;
     const key = (x, y) => (y + limit) * width + x + limit;
-    const units = obstacles.units.filter(u => Math.hypot(u.x - x0, u.y - y0) < 250 + u.r + r);
+    const units = obstacles.units.filter(u => (u.x - x0) ** 2 + (u.y - y0) ** 2 < (250 + u.r + r) ** 2);
     const rr = Math.max(3, r * 0.75), start = key(0, 0);
     const scores = new Map([[start, 0]]), parents = new Map(), nodes = new Map();
     const queue = [], closed = new Set();
@@ -1162,7 +1202,7 @@ const PF = (() => {
     const heuristic = (x, y) => Math.hypot(x1 - x0 - x * step, y1 - y0 - y * step);
     add({ x: 0, y: 0, k: start, g: 0, f: heuristic(0, 0) });
     let best = start, bestH = heuristic(0, 0), reached = false, count = 0;
-    while (queue.length && count < 600) {
+    while (queue.length && count < 600 && count < budget) {
       const n = queue.shift(); if (closed.has(n.k)) continue;
       closed.add(n.k); count++;
       const px = x0 + n.x * step, py = y0 + n.y * step, h = heuristic(n.x, n.y);
@@ -1189,19 +1229,40 @@ const PF = (() => {
       if (!out.length) out.push([x0, y0]);
       out.goalBlocker = occupiedGoal;
     }
-    return out.length ? out : null;
+    return out.length ? compactPath(out) : null;
   }
 
   function unitsClear(x0, y0, x1, y1, r, units) {
     const dx = x1 - x0, dy = y1 - y0, len2 = dx * dx + dy * dy;
-    for (const u of units) {
-      if (u.dead || u.hidden || u.burrowed || u.noCollide || u.type === 'larva') continue;
+    const blocked = u => {
+      if (u.dead || u.hidden || u.burrowed || u.noCollide || u.type === 'larva') return false;
       const ox = u.x - x0, oy = u.y - y0, min = (r + u.r) * 0.85 + 0.1;
-      if (len2 > 0 && Math.hypot(ox, oy) < min && ox * dx + oy * dy <= 0) continue;
+      if (len2 > 0 && ox * ox + oy * oy < min * min && ox * dx + oy * dy <= 0) return false;
       const t = len2 ? Math.max(0, Math.min(1, (ox * dx + oy * dy) / len2)) : 0;
-      if (Math.hypot(ox - dx * t, oy - dy * t) < min) return false;
+      return (ox - dx * t) ** 2 + (oy - dy * t) ** 2 < min * min;
+    };
+    if (units.spatialIndex) {
+      const index = units.spatialIndex, pad = (r + index.maxR) * .85 + .1,
+        tx0 = Math.floor((Math.min(x0, x1) - pad) / 64), tx1 = Math.floor((Math.max(x0, x1) + pad) / 64),
+        ty0 = Math.floor((Math.min(y0, y1) - pad) / 64), ty1 = Math.floor((Math.max(y0, y1) + pad) / 64);
+      for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
+        const cell = index.cells.get(ty * 128 + tx);
+        if (cell) for (const u of cell) if (blocked(u)) return false;
+      }
+    } else {
+      for (const u of units) if (blocked(u)) return false;
     }
     return true;
+  }
+  function indexUnits(units) {
+    if (units.length <= 32) return units;
+    const cells = new Map(); let maxR = 0;
+    for (const u of units) {
+      const key = Math.floor(u.y / 64) * 128 + Math.floor(u.x / 64);
+      let cell = cells.get(key); if (!cell) cells.set(key, cell = []); cell.push(u);
+      maxR = Math.max(maxR, u.r);
+    }
+    units.spatialIndex = {cells, maxR}; return units;
   }
   function unitObstacles(mover, includeMoving) {
     const units = GAME.entities.filter(u => u !== mover && groundCollider(u) && (includeMoving || !collisionMover(u)));
@@ -1213,10 +1274,10 @@ const PF = (() => {
           if (Math.hypot(Math.max(0, Math.abs(tx * TILE + TILE / 2 - u.x) - TILE / 2), Math.max(0, Math.abs(ty * TILE + TILE / 2 - u.y) - TILE / 2)) < radius) cells.add(tIdx(tx, ty));
     }
     cells.delete(tIdx(tileOf(mover.x), tileOf(mover.y)));
-    return { cells, units };
+    return { cells, units: indexUnits(units) };
   }
   return {
-    find, worldPath, lineClear, positionClear, localPath, unitPath, nearestPassable, passable, unitsClear, unitObstacles, goalBlocker,
+    find, worldPath, lineClear, positionClear, localPath, unitPath, nearestPassable, passable, unitsClear, unitObstacles, goalBlocker, compactPath,
     resetBudget() { budget = 24000; }, get budget() { return budget; },
   };
 })();
@@ -1225,10 +1286,22 @@ const PF = (() => {
 const SH = (() => {
   const CS = 64, GW = Math.ceil(MAP_W * TILE / CS), GH = Math.ceil(MAP_H * TILE / CS);
   const cells = Array.from({ length: GW * GH }, () => []);
-  function clear() { for (const c of cells) c.length = 0; }
+  const ownerMask = new Uint8Array(GW * GH);
+  const ground = Array.from({ length: GW * GH }, () => []), active = [], activeGround = [];
+  function clear() {
+    for (const c of active) c.length = 0; active.length = 0;
+    for (const c of activeGround) c.length = 0; activeGround.length = 0;
+  }
   function insert(e) {
     const cx = Math.max(0, Math.min(GW - 1, (e.x / CS) | 0)), cy = Math.max(0, Math.min(GH - 1, (e.y / CS) | 0));
-    cells[cy * GW + cx].push(e);
+    const i = cy * GW + cx, c = cells[i];
+    if (!c.length) { active.push(c); ownerMask[i] = 0; } c.push(e);
+    ownerMask[i] |= 1 << e.owner; e.shCell = i;
+    // Include harvest/burrow bodies too: an order can restore their collision
+    // after insertion in this same tick. Callers check their current state.
+    if (!e.isBuilding && !e.air && !e.def.mine && e.type !== 'larva') {
+      const g = ground[i]; if (!g.length) activeGround.push(g); g.push(e);
+    }
   }
   function query(x, y, r, out) {
     out = out || [];
@@ -1240,7 +1313,40 @@ const SH = (() => {
     }
     return out;
   }
-  return { clear, insert, query };
+  function queryEnemy(x, y, r, owner, out) {
+    out = out || []; if (owner === NEUTRAL) return out;
+    const enemy = owner === PLAYER ? ENEMY : PLAYER,
+      x0 = Math.max(0, ((x - r - 64) / CS) | 0), x1 = Math.min(GW - 1, ((x + r + 64) / CS) | 0),
+      y0 = Math.max(0, ((y - r - 64) / CS) | 0), y1 = Math.min(GH - 1, ((y + r + 64) / CS) | 0);
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+      const i = cy * GW + cx; if (!(ownerMask[i] & (1 << enemy))) continue;
+      for (const e of cells[i]) if (e.owner === enemy) out.push(e);
+    }
+    return out;
+  }
+  function ownerChanged(e) {
+    const cell = cells[e.shCell]; if (!cell || !cell.includes(e)) return;
+    let mask = 0; for (const u of cell) mask |= 1 << u.owner; ownerMask[e.shCell] = mask;
+  }
+  function queryGround(x, y, r, out) {
+    out = out || [];
+    const x0 = Math.max(0, Math.floor((x - r) / CS)), x1 = Math.min(GW - 1, Math.floor((x + r) / CS)),
+      y0 = Math.max(0, Math.floor((y - r) / CS)), y1 = Math.min(GH - 1, Math.floor((y + r) / CS));
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+      const c = ground[cy * GW + cx];
+      for (const e of c) if ((e.x - x) ** 2 + (e.y - y) ** 2 <= r * r) out.push(e);
+    }
+    return out;
+  }
+  function prepareGround(entities) {
+    for (const c of activeGround) c.length = 0; activeGround.length = 0;
+    for (const e of entities) {
+      if (!groundCollider(e)) continue;
+      const cx = Math.max(0, Math.min(GW - 1, Math.floor(e.x / CS))), cy = Math.max(0, Math.min(GH - 1, Math.floor(e.y / CS))), c = ground[cy * GW + cx];
+      if (!c.length) activeGround.push(c); c.push(e);
+    }
+  }
+  return { clear, insert, query, queryEnemy, ownerChanged, queryGround, prepareGround };
 })();
 
 </script>
@@ -1501,6 +1607,7 @@ function updateVision() {
       else if (e && e.type !== g.type && (v[i] & 1)) g.type = e.type;
     }
   }
+  GAME.visionVersion = (GAME.visionVersion || 0) + 1;
 }
 
 // e 가 플레이어 p 에게 보이는가?
@@ -1517,7 +1624,13 @@ function isVisibleTo(e, p) {
 function isCloakedFor(e, p) {
   if (e.owner === p) return false;
   if (e.ensnareT > 0 || e.irrT > 0 || e.matrixHp > 0 || e.parasiteOwner === p) return false;
-  const aura = !e.isBuilding && e.type !== 'arbiter' && GAME.entities.some(a => !a.dead && !a.hidden && a.owner === e.owner && a.def.cloakAura && !(a.stasisT > 0) && dist(a.x, a.y, e.x, e.y) <= a.def.cloakAura);
+  // The aura roster changes only when entities are added/removed/transformed;
+  // activity, owner and position are still checked at the call's current state.
+  if (GAME.cloakerTick !== GAME.tick || GAME.cloakerEntities !== GAME.entities || GAME.cloakerLength !== GAME.entities.length) {
+    GAME.cloakerTick = GAME.tick; GAME.cloakerEntities = GAME.entities; GAME.cloakerLength = GAME.entities.length;
+    GAME.cloakers = GAME.entities.filter(a => a.def.cloakAura);
+  }
+  const aura = !e.isBuilding && e.type !== 'arbiter' && GAME.cloakers.some(a => !a.dead && !a.hidden && a.owner === e.owner && !(a.stasisT > 0) && dist(a.x, a.y, e.x, e.y) <= a.def.cloakAura);
   if (!(e.cloaked || e.def.permCloak || e.burrowed || aura)) return false;
   return !isDetectedBy(e, p);
 }
@@ -1559,6 +1672,7 @@ function fx(kind, x, y, opt) {
 //  엔티티(유닛/건물) — 명령 처리, 이동, 전투, 채취, 건설, 생산
 // ===================================================================
 let GROUP_ID = 1;
+const SPEED_UPGRADES = { zergling: 'metabolic', hydra: 'muscular', zealot: 'legs', vulture: 'ion', overlord: 'pneumatized', ultralisk: 'anabolic' };
 
 class Entity {
   constructor(type, owner, x, y) {
@@ -1592,8 +1706,7 @@ class Entity {
   get speed() {
     const d = this.def; let s = d.speed || 0;
     if (this.lifted) return 1.1;
-    const upgrades = { zergling: 'metabolic', hydra: 'muscular', zealot: 'legs', vulture: 'ion', overlord: 'pneumatized', ultralisk: 'anabolic' };
-    const modifier = (hasTech(this.owner, upgrades[this.type]) ? 1 : 0) + (this.stimT > 0 ? 1 : 0) - (this.ensnareT > 0 ? 1 : 0);
+    const modifier = (hasTech(this.owner, SPEED_UPGRADES[this.type]) ? 1 : 0) + (this.stimT > 0 ? 1 : 0) - (this.ensnareT > 0 ? 1 : 0);
     if (modifier > 0) s = Math.max(s * 1.5, 10 / 3);
     if (modifier < 0) s /= 2;
     return s;
@@ -1864,7 +1977,7 @@ class Entity {
   findTarget(r) {
     if (r <= 0) return null;
     let best = null, bs = -1e9;
-    const list = SH.query(this.x, this.y, r + 40);
+    const list = SH.queryEnemy(this.x, this.y, r + 40, this.owner);
     for (const e of list) {
       if (e.dead || e.hidden || !isEnemy(this.owner, e.owner)) continue;
       if (e.type === 'larva' || e.type === 'egg' && !this.isBuilding && false) continue;
@@ -3055,10 +3168,10 @@ function castSpell(c, s, tgt, x, y) {
     }
     case 'infest':
       for (const q of tgt.queue) if (q.kind === 'tech') delete P(tgt.owner).researching[q.type];
-      tgt.queue = []; tgt.owner = c.owner; tgt.type = 'infested_cc'; tgt.def = BUILDINGS.infested_cc; tgt.race = 'Z'; tgt.hp = tgt.maxHp; tgt.orders = []; break;
+      tgt.queue = []; tgt.owner = c.owner; SH.ownerChanged(tgt); tgt.type = 'infested_cc'; tgt.def = BUILDINGS.infested_cc; tgt.race = 'Z'; tgt.hp = tgt.maxHp; tgt.orders = []; break;
     case 'feedback': { const dmg = tgt.energy; tgt.energy = 0; dealDamage(c, tgt, { dmg, type: 'spell' }, 1); break; }
     case 'mind_control':
-      tgt.owner = c.owner; tgt.issue({ t: 'stop' }); tgt.detCache = null; tgt.parasiteOwner = undefined; c.sh = 0; recomputeSupply(); break;
+      tgt.owner = c.owner; SH.ownerChanged(tgt); tgt.issue({ t: 'stop' }); tgt.detCache = null; tgt.parasiteOwner = undefined; c.sh = 0; recomputeSupply(); break;
     case 'disruption_web': GAME.areas.push({ kind: 'web', x, y, r: 64, t: 0, life: 360, owner: c.owner }); break;
     case 'recall':
       for (const e of [...GAME.entities]) {
@@ -3400,37 +3513,44 @@ function groundMovement(e, x, y, limit = e.speed) {
 function steerGround(e) {
   const speed = Math.hypot(e.vx, e.vy);
   if (!speed) return;
-  const nearby = SH.query(e.x, e.y, e.r + speed * 6 + 24);
-  const blockers = nearby.filter(o => o !== e && groundCollider(o));
+  const blockers = e.collisionNeighbors || SH.queryGround(e.x, e.y, e.r + speed * 6 + 24).filter(o => o !== e && groundCollider(o));
   const angle = Math.atan2(e.vy, e.vx), side = e.avoidSide || 1;
+  const vectorSpeed = o => {
+    if (o.speedVX !== o.vx || o.speedVY !== o.vy) {
+      o.speedVX = o.vx; o.speedVY = o.vy; o.vectorSpeed = Math.hypot(o.vx, o.vy);
+    }
+    return o.vectorSpeed;
+  };
   function clear(a, length) {
     const dx = Math.cos(a) * length, dy = Math.sin(a) * length;
     if (!PF.lineClear(e.x, e.y, e.x + dx, e.y + dy, Math.max(3, e.r * 0.75), 0)) return false;
     for (const o of blockers) {
       const ox = o.x - e.x, oy = o.y - e.y;
       const min = (e.r + o.r) * 0.85;
+      const projection = (ox * dx + oy * dy) / (length * length || 1), originalT = projection < 0 ? 0 : projection > 1 ? 1 : projection;
+      // A body outside our swept step needs no terrain prediction at all.
+      if ((ox - dx * originalT) ** 2 + (oy - dy * originalT) ** 2 >= (min + 0.1) ** 2) continue;
       // 같은 방향으로 진행하는 유닛은 이번 프레임의 상대 이동으로 검사한다.
       // 앞 유닛이 떠날 현재 위치를 정지 장애물로 취급하면 뒤 유닛이 매번 옆으로 튄다.
       let rx = dx, ry = dy;
-      const otherSpeed = Math.hypot(o.vx, o.vy);
+      const otherSpeed = vectorSpeed(o);
       if (!e.pathDynamic && length <= speed + 0.001 && collisionMover(o) && Math.abs(otherSpeed - speed) < 0.001 && otherSpeed > 0 &&
           (dx * o.vx + dy * o.vy) / (length * otherSpeed) > 0.97 &&
           PF.lineClear(o.x, o.y, o.x + o.vx, o.y + o.vy, Math.max(3, o.r * 0.75), 0)) {
         rx -= o.vx; ry -= o.vy;
       }
       const len2 = rx * rx + ry * ry;
-      const t = len2 ? Math.max(0, Math.min(1, (ox * rx + oy * ry) / len2)) : 0;
-      const closest = Math.hypot(ox - rx * t, oy - ry * t);
-      if (closest >= min + 0.1) continue;
+      const dot = len2 ? (ox * rx + oy * ry) / len2 : 0, t = dot < 0 ? 0 : dot > 1 ? 1 : dot;
+      if ((ox - rx * t) ** 2 + (oy - ry * t) ** 2 >= (min + 0.1) ** 2) continue;
       // 스폰/언버로우 등으로 이미 겹친 경우 바깥으로 탈출하는 이동 허용.
-      if (Math.hypot(ox, oy) < min + 0.1 && ox * rx + oy * ry <= 0) continue;
+      if (ox * ox + oy * oy < (min + 0.1) ** 2 && ox * rx + oy * ry <= 0) continue;
       return false;
     }
     return true;
   }
   // 같은 속도로 앞에서 진행하는 병력만 먼저 따라간다. 고정 장애물 우회는 기존 경로를 유지한다.
   const look = Math.max(speed, e.r + speed * 6), ux = Math.cos(angle), uy = Math.sin(angle);
-  const parallel = o => collisionMover(o) && Math.abs(Math.hypot(o.vx, o.vy) - speed) < 0.001 && (ux * o.vx + uy * o.vy) / speed > 0.97;
+  const parallel = o => collisionMover(o) && Math.abs(vectorSpeed(o) - speed) < 0.001 && (ux * o.vx + uy * o.vy) / speed > 0.97;
   const follows = blockers.some(o => parallel(o) && (o.x - e.x) * ux + (o.y - e.y) * uy > 0);
   const fixedAhead = blockers.some(o => {
     if (parallel(o)) return false;
@@ -3492,7 +3612,7 @@ function recoveryRand(from, to) {
 function recoverGround(e, blockers) {
   const speed = e.speed;
   if (collisionFixed(e) || speed <= 0) { e.groundRecovery = null; return false; }
-  const overlaps = blockers.filter(o => Math.hypot(e.x - o.x, e.y - o.y) < (e.r + o.r) * 0.85 - 1e-6);
+  const overlaps = blockers.filter(o => (e.x - o.x) ** 2 + (e.y - o.y) ** 2 < ((e.r + o.r) * 0.85 - 1e-6) ** 2);
   let state = e.groundRecovery;
   if (!state && !overlaps.length) return false;
   if (!state) state = e.groundRecovery = { phase: 'check' };
@@ -3502,8 +3622,8 @@ function recoverGround(e, blockers) {
   // MoveToLegal follows its chosen short path without ordinary unit collision.
   // Only already-illegal bodies enter this state; ordinary approaches still
   // collide with Hold/Stop. Terrain and physically fixed bodies remain barriers.
-  const newlyBlocked = (x, y) => !PF.unitsClear(e.x, e.y, x, y, e.r,
-    blockers.filter(o => !overlaps.includes(o) && collisionFixed(o)));
+  const fixedNew = blockers.filter(o => collisionFixed(o) && !overlaps.includes(o));
+  const newlyBlocked = (x, y) => !PF.unitsClear(e.x, e.y, x, y, e.r, fixedNew);
   if (state.phase === 'move') {
     const dx = state.x - e.x, dy = state.y - e.y, distance = Math.hypot(dx, dy);
     if (distance > 1e-6) {
@@ -3567,11 +3687,18 @@ function recoverGround(e, blockers) {
 
 function physics() {
   const ents = GAME.entities;
+  // Orders can reveal/unload units, hatch eggs, or restore harvest collision in
+  // this tick. Build the collision roster once from that current state.
+  SH.prepareGround(ents);
   // 모든 겹침 상태를 먼저 표시해야 처리 순서와 무관하게 상대의 CheckIllegal을 볼 수 있다.
   for (const e of ents) {
-    if (!groundCollider(e) || collisionFixed(e)) { e.groundRecovery = null; continue; }
-    if (!e.groundRecovery && SH.query(e.x, e.y, e.r + 48).some(o => o !== e && groundCollider(o) &&
-        Math.hypot(e.x - o.x, e.y - o.y) < (e.r + o.r) * .85 - 1e-6)) e.groundRecovery = { phase: 'check' };
+    e.collisionNeighbors = null;
+    if (!groundCollider(e)) { e.groundRecovery = null; continue; }
+    const radius = e.r + Math.max(48, Math.hypot(e.vx, e.vy) * 6 + 24);
+    e.collisionNeighbors = SH.queryGround(e.x, e.y, radius).filter(o => o !== e);
+    if (collisionFixed(e)) { e.groundRecovery = null; continue; }
+    if (!e.groundRecovery && e.collisionNeighbors.some(o =>
+        (e.x - o.x) ** 2 + (e.y - o.y) ** 2 < ((e.r + o.r) * .85 - 1e-6) ** 2)) e.groundRecovery = { phase: 'check' };
   }
   for (const e of ents) {
     e.collisionMoving = collisionMover(e);
@@ -3584,8 +3711,12 @@ function physics() {
     if (e.dead || e.hidden) { e.currentSpeed = 0; continue; }
     if (collisionFixed(e)) { e.vx = 0; e.vy = 0; e.currentSpeed = 0; continue; }
     if (groundCollider(e)) {
-      const blockers = SH.query(e.x, e.y, e.r + 48).filter(o => o !== e && groundCollider(o));
-      e.recovering = recoverGround(e, blockers);
+      const blockers = e.collisionNeighbors;
+      // A legal idle/ordinary body cannot acquire an overlap from ordinary
+      // movement. Only a neighbor already executing illegal recovery can enter it.
+      const needsRecovery = e.groundRecovery || blockers.some(o => o.recovering && o.moving &&
+        (e.x - o.x) ** 2 + (e.y - o.y) ** 2 < ((e.r + o.r) * .85 - 1e-6) ** 2);
+      e.recovering = needsRecovery ? recoverGround(e, blockers) : false;
       if (!e.recovering) {
         if (!e.collisionMoving || !e.moving) { e.currentSpeed = 0; continue; }
         const length = Math.hypot(e.vx, e.vy), waypoint = e.moveWaypoint || [e.x + e.vx, e.y + e.vy];
@@ -3598,7 +3729,7 @@ function physics() {
           const rx = vx, ry = vy;
           const rr = rx * rx + ry * ry;
           const t = rr ? Math.max(0, Math.min(1, (ox * rx + oy * ry) / rr)) : 0;
-          return Math.hypot(ox - rx * t, oy - ry * t) < (e.r + o.r) * 0.85 - 1e-6;
+          return (ox - rx * t) ** 2 + (oy - ry * t) ** 2 < ((e.r + o.r) * 0.85 - 1e-6) ** 2;
         });
         if (!movementClear(e.vx, e.vy)) {
           // UM_SlideFree checks 1px steps along the selected free direction
@@ -4573,6 +4704,7 @@ const ART = (() => {
 const VIEW = { x: 0, y: 0, w: 640, h: 400, scale: 1.25 };
 const RENDER = (() => {
   let cv, ctx, fogC, fogX, fogImg;
+  let fogVersion = -1, fogPlayer = -1, fogReveal;
   function init(canvas) {
     cv = canvas; ctx = cv.getContext('2d');
     fogC = document.createElement('canvas'); fogC.width = MAP_W; fogC.height = MAP_H;
@@ -4601,6 +4733,8 @@ const RENDER = (() => {
   function updateFog() {
     const p = GAME.control, v = GAME.vis[p], ex = GAME.explored[p], d = fogImg.data;
     const all = GAME.revealAll;
+    if (fogVersion === GAME.visionVersion && fogPlayer === p && fogReveal === all) return;
+    fogVersion = GAME.visionVersion; fogPlayer = p; fogReveal = all;
     for (let i = 0, o = 3; i < v.length; i++, o += 4) d[o] = all ? 0 : (v[i] & 1) ? 0 : ex[i] ? 140 : 255;
     fogX.putImageData(fogImg, 0, 0);
   }
@@ -5266,7 +5400,8 @@ const UI = {
   init() {
     const $ = (id) => document.getElementById(id);
     this.el = { cv: $('game'), mm: $('minimap'), info: $('info'), cmd: $('cmd'), msgs: $('msgs'), tip: $('tip'),
-      min: $('r-min'), gas: $('r-gas'), sup: $('r-sup'), supIco: $('r-sup-ico'), console: $('console'), test: $('test'), help: $('help') };
+      min: $('r-min'), gas: $('r-gas'), sup: $('r-sup'), supIco: $('r-sup-ico'), console: $('console'), test: $('test'), help: $('help'),
+      bottomEdge: $('bottom-edge'), mouseLock: $('mouse-lock'), pointerCursor: $('locked-cursor') };
     this.mmCtx = this.el.mm.getContext('2d');
     this.mmTerrain = ART.minimapTerrain();
     this.mmFog = document.createElement('canvas'); this.mmFog.width = MAP_W; this.mmFog.height = MAP_H;
@@ -5284,11 +5419,54 @@ const UI = {
     }
     document.getElementById('ico-min').src = ART.cmdIcon('gather');
   },
-  consoleH() { return this.el.console ? this.el.console.offsetHeight : 0; },
+  bottomEdgeH() { return this.el.bottomEdge?.offsetHeight ?? 12; },
+  consoleH() { return this.el.console ? this.el.console.offsetHeight + this.bottomEdgeH() : 0; },
+
+  pointerLocked() { return !!this.el.cv && document.pointerLockElement === this.el.cv; },
+  pointerAt(e) { return this.pointerLocked() ? {clientX: this.mouse.x, clientY: this.mouse.y} : e; },
+  releaseMouse() { if (this.pointerLocked()) document.exitPointerLock?.(); },
+  toggleMouseLock() {
+    if (this.pointerLocked()) { this.releaseMouse(); return; }
+    if (!GAME.running || GAME.over || this.lockPending) return;
+    if (!this.el.cv.requestPointerLock) { this.message('이 브라우저는 마우스 고정을 지원하지 않습니다.'); return; }
+    this.lockPending = true; this.lockError = false;
+    const fail = () => {
+      this.lockPending = false;
+      if (!this.lockError) { this.lockError = true; this.message('마우스 고정을 시작하지 못했습니다. 버튼을 다시 눌러주세요.'); }
+    };
+    try { const request = this.el.cv.requestPointerLock(); request?.catch(fail); } catch { fail(); }
+  },
+  pointerLockChanged() {
+    const locked = this.pointerLocked();
+    this.lockPending = false; this.keys = {}; this.mouse.drag = null; this.mmDrag = false; this.lockedTarget = null;
+    this.mouse.inside = locked;
+    if (locked) {
+      this.mouse.x = Math.max(0, Math.min(window.innerWidth - 1, this.mouse.x));
+      this.mouse.y = Math.max(0, Math.min(window.innerHeight - 1, this.mouse.y));
+    }
+    this.el.pointerCursor?.classList.toggle('hidden', !locked);
+    if (this.el.mouseLock) {
+      this.el.mouseLock.textContent = locked ? '마우스 해제 (Esc)' : '마우스 고정';
+      this.el.mouseLock.classList.toggle('on', locked); this.el.mouseLock.setAttribute('aria-pressed', String(locked));
+    }
+    this.updateCursor();
+  },
+  routeLockedDown(e) {
+    if (!this.pointerLocked()) return false;
+    const hit = document.elementFromPoint(this.mouse.x, this.mouse.y);
+    if (!hit || hit === this.el.cv) return false;
+    const target = hit.closest('button,input,select,label,.btn,.wf,.qs,#minimap') || hit;
+    this.lockedTarget = target; e.preventDefault();
+    target.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true,
+      clientX:this.mouse.x, clientY:this.mouse.y, button:e.button, buttons:e.buttons,
+      shiftKey:e.shiftKey, ctrlKey:e.ctrlKey, altKey:e.altKey, metaKey:e.metaKey}));
+    return true;
+  },
 
   // ---------------- 커서 ----------------
   makeCursors() {
-    const mkc = (draw, hx, hy) => { const c = document.createElement('canvas'); c.width = 32; c.height = 32; const g = c.getContext('2d'); draw(g); return 'url(' + c.toDataURL() + ') ' + hx + ' ' + hy + ', auto'; };
+    this.cursorImages = new Map();
+    const mkc = (draw, hx, hy) => { const c = document.createElement('canvas'); c.width = 32; c.height = 32; const g = c.getContext('2d'); draw(g); const src = c.toDataURL(), css = 'url(' + src + ') ' + hx + ' ' + hy + ', auto'; this.cursorImages.set(css, {src, hx, hy}); return css; };
     const arrow = (col) => (g) => { g.fillStyle = col; g.strokeStyle = '#000'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(2, 2); g.lineTo(2, 20); g.lineTo(7, 15); g.lineTo(11, 23); g.lineTo(14, 21); g.lineTo(10, 14); g.lineTo(17, 14); g.closePath(); g.fill(); g.stroke(); };
     const cross = (col) => (g) => { g.strokeStyle = '#000'; g.lineWidth = 4; g.beginPath(); g.arc(16, 16, 9, 0, 6.283); g.moveTo(16, 2); g.lineTo(16, 10); g.moveTo(16, 22); g.lineTo(16, 30); g.moveTo(2, 16); g.lineTo(10, 16); g.moveTo(22, 16); g.lineTo(30, 16); g.stroke(); g.strokeStyle = col; g.lineWidth = 2; g.stroke(); };
     const mag = (col) => (g) => { g.strokeStyle = '#000'; g.lineWidth = 4; g.beginPath(); g.arc(13, 13, 8, 0, 6.283); g.moveTo(19, 19); g.lineTo(28, 28); g.stroke(); g.strokeStyle = col; g.lineWidth = 2; g.stroke(); };
@@ -5297,12 +5475,18 @@ const UI = {
     document.body.style.cursor = this.cur.normal;
   },
   updateCursor() {
+    if (!this.cur) return;
     let c = this.cur.normal;
     const h = this.hover;
     const col = (e) => !e ? 'g' : e.owner === GAME.control ? 'g' : e.owner === NEUTRAL ? 'y' : 'r';
     if (this.mode && this.mode.kind === 'target') c = this.cur['t' + col(h)];
     else if (!this.mouse.overUI && h) c = this.cur['m' + col(h)];
     if (this._cur !== c) { this._cur = c; this.el.cv.style.cursor = c; }
+    if (this.pointerLocked() && this.el.pointerCursor) {
+      const icon = this.cursorImages.get(c), image = this.el.pointerCursor;
+      if (image.src !== icon.src) image.src = icon.src;
+      image.style.left = (this.mouse.x - icon.hx) + 'px'; image.style.top = (this.mouse.y - icon.hy) + 'px';
+    }
   },
 
   // ---------------- 입력 ----------------
@@ -5311,38 +5495,57 @@ const UI = {
     cv.addEventListener('contextmenu', (e) => e.preventDefault());
     this.el.console.addEventListener('contextmenu', (e) => e.preventDefault());
     window.addEventListener('mousemove', (e) => {
-      this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.mouse.inside = true;
-      this.mouse.overUI = e.target !== cv;
-      if (this.mmDrag) this.minimapAt(e, true);
+      const locked = this.pointerLocked();
+      this.mouse.x = locked ? Math.max(0, Math.min(window.innerWidth - 1, this.mouse.x + (e.movementX || 0))) : e.clientX;
+      this.mouse.y = locked ? Math.max(0, Math.min(window.innerHeight - 1, this.mouse.y + (e.movementY || 0))) : e.clientY;
+      this.mouse.inside = true;
+      this.mouse.overUI = (locked ? document.elementFromPoint(this.mouse.x, this.mouse.y) : e.target) !== cv;
+      if (this.mmDrag) this.minimapAt(this.pointerAt(e), true);
     });
-    document.addEventListener('mouseleave', () => { this.mouse.inside = false; });
+    document.addEventListener('mouseleave', () => { if (!this.pointerLocked()) this.mouse.inside = false; });
+    document.addEventListener('pointerlockchange', () => this.pointerLockChanged());
+    document.addEventListener('pointerlockerror', () => {
+      this.lockPending = false;
+      if (!this.lockError) { this.lockError = true; this.message('마우스 고정을 시작하지 못했습니다. 버튼을 다시 눌러주세요.'); }
+    });
     cv.addEventListener('mousedown', (e) => {
       SND.init();
-      const [wx, wy] = RENDER.toWorld(e.clientX, e.clientY);
+      if (this.routeLockedDown(e)) return;
+      const p = this.pointerAt(e), [wx, wy] = RENDER.toWorld(p.clientX, p.clientY);
       if (e.button === 0) {
         if (this.mode) { this.execMode(wx, wy, e.shiftKey); return; }
-        this.mouse.drag = { sx: e.clientX, sy: e.clientY, wx, wy, shift: e.shiftKey, ctrl: e.ctrlKey };
+        this.mouse.drag = { sx: p.clientX, sy: p.clientY, wx, wy, shift: e.shiftKey, ctrl: e.ctrlKey };
       } else if (e.button === 2) {
         if (this.mode) { this.cancelMode(); return; }
         this.rightClick(wx, wy, this.pick(wx, wy), e.shiftKey);
       }
     });
     window.addEventListener('mouseup', (e) => {
+      if (this.pointerLocked() && e.isTrusted === false) return;
+      if (this.pointerLocked() && this.lockedTarget) {
+        const target = this.lockedTarget; this.lockedTarget = null;
+        const hit = document.elementFromPoint(this.mouse.x, this.mouse.y);
+        target.dispatchEvent(new MouseEvent('mouseup', {bubbles:true, cancelable:true,
+          clientX:this.mouse.x, clientY:this.mouse.y, button:e.button}));
+        if (e.button === 0 && (target === hit || target.contains(hit))) target.click?.();
+        this.mmDrag = false; return;
+      }
       this.mmDrag = false;
       if (e.button !== 0 || !this.mouse.drag) return;
       const d = this.mouse.drag; this.mouse.drag = null;
-      const [wx, wy] = RENDER.toWorld(e.clientX, e.clientY);
-      if (Math.abs(e.clientX - d.sx) < 5 && Math.abs(e.clientY - d.sy) < 5) this.clickSelect(wx, wy, d.shift, d.ctrl);
+      const p = this.pointerAt(e), [wx, wy] = RENDER.toWorld(p.clientX, p.clientY);
+      if (Math.abs(p.clientX - d.sx) < 5 && Math.abs(p.clientY - d.sy) < 5) this.clickSelect(wx, wy, d.shift, d.ctrl);
       else this.boxSelect(d.wx, d.wy, wx, wy, d.shift);
     });
     cv.addEventListener('wheel', (e) => {
       e.preventDefault();
+      if (this.mouse.overUI && this.pointerLocked()) return;
       const steps = [1, 1.25, 1.5, 2, 2.5, 3];
       let i = steps.indexOf(VIEW.scale); if (i < 0) i = 3;
       i = Math.max(0, Math.min(steps.length - 1, i + (e.deltaY > 0 ? -1 : 1)));
-      const [cx, cy] = RENDER.toWorld(e.clientX, e.clientY);
+      const p = this.pointerAt(e), [cx, cy] = RENDER.toWorld(p.clientX, p.clientY);
       VIEW.scale = steps[i]; RENDER.resize();
-      VIEW.x = cx - e.clientX / VIEW.scale; VIEW.y = cy - e.clientY / VIEW.scale; RENDER.clampCam();
+      VIEW.x = cx - p.clientX / VIEW.scale; VIEW.y = cy - p.clientY / VIEW.scale; RENDER.clampCam();
     }, { passive: false });
     // 미니맵
     const mm = this.el.mm;
@@ -5355,7 +5558,7 @@ const UI = {
     });
     window.addEventListener('keydown', (e) => this.keyDown(e));
     window.addEventListener('keyup', (e) => { this.keys[e.key] = false; if (e.key === 'Shift') this.keys.Shift = false; if (e.key === 'Alt') this.keys.Alt = false; });
-    const loseFocus = () => { this.keys = {}; this.mouse.inside = false; this.mouse.drag = null; this.mmDrag = false; };
+    const loseFocus = () => { this.releaseMouse(); this.keys = {}; this.mouse.inside = false; this.mouse.drag = null; this.mmDrag = false; this.lockedTarget = null; };
     window.addEventListener('blur', loseFocus);
     document.addEventListener('visibilitychange', () => { if (document.hidden) loseFocus(); });
     window.addEventListener('resize', () => RENDER.resize());
@@ -5367,6 +5570,7 @@ const UI = {
   minimapAt(e) { const [wx, wy] = this.mmWorld(e); RENDER.centerOn(wx, wy); },
 
   keyDown(e) {
+    if (e.key === 'Escape' && this.pointerLocked()) { this.releaseMouse(); return; }
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) {
       if (e.key === 'Escape' && this.mode && this.mode.kind === 'spawn') { this.cancelMode(); return; }
       if (e.key === 'F10') { e.preventDefault(); this.toggleTest(); }
@@ -5987,9 +6191,8 @@ const UI = {
       const control = hit?.closest('#test,#help,#title,#end,#minimap,button,input,select,textarea,.btn,.wf,.qs');
       if (!control) {
         if (m.x < edge) dx = -1; else if (m.x >= width - edge) dx = 1;
-        const bottom = height - this.consoleH();
         if (m.y < edge) dy = -1;
-        else if (m.y >= height - edge || m.y >= bottom - edge && m.y < bottom) dy = 1;
+        else if (m.y >= height - this.bottomEdgeH()) dy = 1;
       }
     }
     if (this.keys.ArrowLeft) dx = -1; if (this.keys.ArrowRight) dx = 1;
@@ -6021,6 +6224,10 @@ const UI = {
     this.el.sup.classList.toggle('cap', pl.used >= pl.max);
     const ico = { T: 'depot', Z: 'overlord', P: 'pylon' }[pl.race];
     if (this._supIco !== ico) { this._supIco = ico; this.el.supIco.src = ART.icon(ico, GAME.control); document.getElementById('ico-gas').src = ART.icon({ T: 'refinery', Z: 'extractor', P: 'assimilator' }[pl.race], GAME.control); }
+    if (this.el.perf) {
+      const stats = GAME.performance;
+      this.el.perf.textContent = '유닛·건물 ' + GAME.entities.length + '개' + (stats ? ' · ' + stats.fps + 'fps · 시뮬레이션 ' + stats.tickMs.toFixed(1) + 'ms/틱' : '');
+    }
   },
 
   // ---------------- 테스트 패널 ----------------
@@ -6031,6 +6238,7 @@ const UI = {
     t.innerHTML = `
       <div class="th">테스트 / 치트 패널 <span class="x" id="t-close">✕</span></div>
       <div class="row small">버전 ${RTS_VERSION} · 자체 픽셀 그래픽 / 웹 RTS</div>
+      <div class="row small" id="t-performance"></div>
       <div class="row"><label>스폰 대상</label>
         <select id="t-type"><optgroup label="테란">${opts('T')}</optgroup><optgroup label="저그">${opts('Z')}</optgroup><optgroup label="프로토스">${opts('P')}</optgroup><optgroup label="건물">${bopts}</optgroup></select></div>
       <div class="row"><label>소속</label><select id="t-owner"><option value="1">적군 (저그/빨강)</option><option value="0">아군 (테란/파랑)</option></select>
@@ -6046,6 +6254,7 @@ const UI = {
       <div class="row"><label>게임 속도</label><input id="t-speed" type="range" min="0.5" max="3" step="0.25" value="1"><span id="t-spv">1.0x</span></div>
       <div class="row small">F10 / \` : 패널 열기 · F1 : 도움말 · F9 : 일시정지</div>`;
     const $ = (id) => document.getElementById(id);
+    this.el.perf = $('t-performance');
     $('t-close').onclick = () => this.toggleTest(false);
     const preview = () => this.setMode({ kind: 'spawn', type: $('t-type').value, owner: +$('t-owner').value, count: Math.max(1, Math.min(50, Math.floor(+$('t-count').value) || 1)) });
     $('t-spawn').onclick = () => { preview(); this.message('마우스 프리뷰 위치에 클릭해 스폰하세요 (우클릭/ESC 종료)'); };
@@ -6070,7 +6279,11 @@ const UI = {
     $('t-fast').onclick = () => { GAME.buildSpeed = GAME.buildSpeed >= 8 ? 1 : GAME.buildSpeed * 2; $('t-bs').textContent = GAME.buildSpeed; };
     $('t-speed').oninput = (e) => { GAME.speed = +e.target.value; $('t-spv').textContent = GAME.speed.toFixed(2).replace(/0$/, '') + 'x'; };
   },
-  toggleTest(v) { this.el.test.classList.toggle('hidden', v === undefined ? !this.el.test.classList.contains('hidden') : !v); },
+  toggleTest(v) {
+    const show = v === undefined ? this.el.test.classList.contains('hidden') : v;
+    if (show) this.releaseMouse();
+    this.el.test.classList.toggle('hidden', !show);
+  },
   // 미리보기와 클릭 생성이 같은 좌표/배치 검사 결과를 사용한다. 엔티티를 만들지 않는다.
   spawnLayout(wx, wy) {
     const m = this.mode;
@@ -6248,6 +6461,7 @@ function setupScenario(seed) {
 function endGame(win) {
   if (GAME.over) return;
   GAME.over = true;
+  UI.releaseMouse();
   const el = document.getElementById('end');
   const pl = P(PLAYER);
   el.querySelector('h1').textContent = win ? '승리!' : '패배';
@@ -6259,7 +6473,7 @@ function endGame(win) {
 }
 
 // ---------------- 메인 루프 ----------------
-const LOOP = { acc: 0, last: 0, frame: 0 };
+const LOOP = { acc: 0, last: 0, frame: 0, measuredAt: 0, frames: 0, ticks: 0, tickTime: 0 };
 function loop(now) {
   const dt = Math.min(250, now - (LOOP.last || now));
   LOOP.last = now;
@@ -6267,11 +6481,20 @@ function loop(now) {
     LOOP.acc += dt * GAME.speed;
     const step = 1000 / FPS;
     let n = 0;
-    while (LOOP.acc >= step && n < 8) { gameTick(); LOOP.acc -= step; n++; }
+    while (LOOP.acc >= step && n < 8) {
+      const started = performance.now(); gameTick(); LOOP.tickTime += performance.now() - started; LOOP.ticks++;
+      LOOP.acc -= step; n++;
+    }
     if (n >= 8) LOOP.acc = 0;
   }
   RENDER.draw();
   UI.frame(LOOP.frame++, dt);
+  LOOP.frames++;
+  if (!LOOP.measuredAt) LOOP.measuredAt = now;
+  if (now - LOOP.measuredAt >= 1000) {
+    GAME.performance = {fps:Math.round(LOOP.frames * 1000 / (now - LOOP.measuredAt)), tickMs:LOOP.ticks ? LOOP.tickTime / LOOP.ticks : 0};
+    LOOP.measuredAt = now; LOOP.frames = 0; LOOP.ticks = 0; LOOP.tickTime = 0;
+  }
   requestAnimationFrame(loop);
 }
 

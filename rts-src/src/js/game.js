@@ -254,6 +254,7 @@ function updateVision() {
       else if (e && e.type !== g.type && (v[i] & 1)) g.type = e.type;
     }
   }
+  GAME.visionVersion = (GAME.visionVersion || 0) + 1;
 }
 
 // e 가 플레이어 p 에게 보이는가?
@@ -270,7 +271,13 @@ function isVisibleTo(e, p) {
 function isCloakedFor(e, p) {
   if (e.owner === p) return false;
   if (e.ensnareT > 0 || e.irrT > 0 || e.matrixHp > 0 || e.parasiteOwner === p) return false;
-  const aura = !e.isBuilding && e.type !== 'arbiter' && GAME.entities.some(a => !a.dead && !a.hidden && a.owner === e.owner && a.def.cloakAura && !(a.stasisT > 0) && dist(a.x, a.y, e.x, e.y) <= a.def.cloakAura);
+  // The aura roster changes only when entities are added/removed/transformed;
+  // activity, owner and position are still checked at the call's current state.
+  if (GAME.cloakerTick !== GAME.tick || GAME.cloakerEntities !== GAME.entities || GAME.cloakerLength !== GAME.entities.length) {
+    GAME.cloakerTick = GAME.tick; GAME.cloakerEntities = GAME.entities; GAME.cloakerLength = GAME.entities.length;
+    GAME.cloakers = GAME.entities.filter(a => a.def.cloakAura);
+  }
+  const aura = !e.isBuilding && e.type !== 'arbiter' && GAME.cloakers.some(a => !a.dead && !a.hidden && a.owner === e.owner && !(a.stasisT > 0) && dist(a.x, a.y, e.x, e.y) <= a.def.cloakAura);
   if (!(e.cloaked || e.def.permCloak || e.burrowed || aura)) return false;
   return !isDetectedBy(e, p);
 }

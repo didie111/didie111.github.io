@@ -3,6 +3,7 @@
 //  엔티티(유닛/건물) — 명령 처리, 이동, 전투, 채취, 건설, 생산
 // ===================================================================
 let GROUP_ID = 1;
+const SPEED_UPGRADES = { zergling: 'metabolic', hydra: 'muscular', zealot: 'legs', vulture: 'ion', overlord: 'pneumatized', ultralisk: 'anabolic' };
 
 class Entity {
   constructor(type, owner, x, y) {
@@ -36,8 +37,7 @@ class Entity {
   get speed() {
     const d = this.def; let s = d.speed || 0;
     if (this.lifted) return 1.1;
-    const upgrades = { zergling: 'metabolic', hydra: 'muscular', zealot: 'legs', vulture: 'ion', overlord: 'pneumatized', ultralisk: 'anabolic' };
-    const modifier = (hasTech(this.owner, upgrades[this.type]) ? 1 : 0) + (this.stimT > 0 ? 1 : 0) - (this.ensnareT > 0 ? 1 : 0);
+    const modifier = (hasTech(this.owner, SPEED_UPGRADES[this.type]) ? 1 : 0) + (this.stimT > 0 ? 1 : 0) - (this.ensnareT > 0 ? 1 : 0);
     if (modifier > 0) s = Math.max(s * 1.5, 10 / 3);
     if (modifier < 0) s /= 2;
     return s;
@@ -308,7 +308,7 @@ class Entity {
   findTarget(r) {
     if (r <= 0) return null;
     let best = null, bs = -1e9;
-    const list = SH.query(this.x, this.y, r + 40);
+    const list = SH.queryEnemy(this.x, this.y, r + 40, this.owner);
     for (const e of list) {
       if (e.dead || e.hidden || !isEnemy(this.owner, e.owner)) continue;
       if (e.type === 'larva' || e.type === 'egg' && !this.isBuilding && false) continue;

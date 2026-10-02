@@ -13,7 +13,8 @@ const UI = {
   init() {
     const $ = (id) => document.getElementById(id);
     this.el = { cv: $('game'), mm: $('minimap'), info: $('info'), cmd: $('cmd'), msgs: $('msgs'), tip: $('tip'),
-      min: $('r-min'), gas: $('r-gas'), sup: $('r-sup'), supIco: $('r-sup-ico'), console: $('console'), test: $('test'), help: $('help') };
+      min: $('r-min'), gas: $('r-gas'), sup: $('r-sup'), supIco: $('r-sup-ico'), console: $('console'), test: $('test'), help: $('help'),
+      bottomEdge: $('bottom-edge'), mouseLock: $('mouse-lock'), pointerCursor: $('locked-cursor') };
     this.mmCtx = this.el.mm.getContext('2d');
     this.mmTerrain = ART.minimapTerrain();
     this.mmFog = document.createElement('canvas'); this.mmFog.width = MAP_W; this.mmFog.height = MAP_H;
@@ -31,11 +32,54 @@ const UI = {
     }
     document.getElementById('ico-min').src = ART.cmdIcon('gather');
   },
-  consoleH() { return this.el.console ? this.el.console.offsetHeight : 0; },
+  bottomEdgeH() { return this.el.bottomEdge?.offsetHeight ?? 12; },
+  consoleH() { return this.el.console ? this.el.console.offsetHeight + this.bottomEdgeH() : 0; },
+
+  pointerLocked() { return !!this.el.cv && document.pointerLockElement === this.el.cv; },
+  pointerAt(e) { return this.pointerLocked() ? {clientX: this.mouse.x, clientY: this.mouse.y} : e; },
+  releaseMouse() { if (this.pointerLocked()) document.exitPointerLock?.(); },
+  toggleMouseLock() {
+    if (this.pointerLocked()) { this.releaseMouse(); return; }
+    if (!GAME.running || GAME.over || this.lockPending) return;
+    if (!this.el.cv.requestPointerLock) { this.message('이 브라우저는 마우스 고정을 지원하지 않습니다.'); return; }
+    this.lockPending = true; this.lockError = false;
+    const fail = () => {
+      this.lockPending = false;
+      if (!this.lockError) { this.lockError = true; this.message('마우스 고정을 시작하지 못했습니다. 버튼을 다시 눌러주세요.'); }
+    };
+    try { const request = this.el.cv.requestPointerLock(); request?.catch(fail); } catch { fail(); }
+  },
+  pointerLockChanged() {
+    const locked = this.pointerLocked();
+    this.lockPending = false; this.keys = {}; this.mouse.drag = null; this.mmDrag = false; this.lockedTarget = null;
+    this.mouse.inside = locked;
+    if (locked) {
+      this.mouse.x = Math.max(0, Math.min(window.innerWidth - 1, this.mouse.x));
+      this.mouse.y = Math.max(0, Math.min(window.innerHeight - 1, this.mouse.y));
+    }
+    this.el.pointerCursor?.classList.toggle('hidden', !locked);
+    if (this.el.mouseLock) {
+      this.el.mouseLock.textContent = locked ? '마우스 해제 (Esc)' : '마우스 고정';
+      this.el.mouseLock.classList.toggle('on', locked); this.el.mouseLock.setAttribute('aria-pressed', String(locked));
+    }
+    this.updateCursor();
+  },
+  routeLockedDown(e) {
+    if (!this.pointerLocked()) return false;
+    const hit = document.elementFromPoint(this.mouse.x, this.mouse.y);
+    if (!hit || hit === this.el.cv) return false;
+    const target = hit.closest('button,input,select,label,.btn,.wf,.qs,#minimap') || hit;
+    this.lockedTarget = target; e.preventDefault();
+    target.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true,
+      clientX:this.mouse.x, clientY:this.mouse.y, button:e.button, buttons:e.buttons,
+      shiftKey:e.shiftKey, ctrlKey:e.ctrlKey, altKey:e.altKey, metaKey:e.metaKey}));
+    return true;
+  },
 
   // ---------------- 커서 ----------------
   makeCursors() {
-    const mkc = (draw, hx, hy) => { const c = document.createElement('canvas'); c.width = 32; c.height = 32; const g = c.getContext('2d'); draw(g); return 'url(' + c.toDataURL() + ') ' + hx + ' ' + hy + ', auto'; };
+    this.cursorImages = new Map();
+    const mkc = (draw, hx, hy) => { const c = document.createElement('canvas'); c.width = 32; c.height = 32; const g = c.getContext('2d'); draw(g); const src = c.toDataURL(), css = 'url(' + src + ') ' + hx + ' ' + hy + ', auto'; this.cursorImages.set(css, {src, hx, hy}); return css; };
     const arrow = (col) => (g) => { g.fillStyle = col; g.strokeStyle = '#000'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(2, 2); g.lineTo(2, 20); g.lineTo(7, 15); g.lineTo(11, 23); g.lineTo(14, 21); g.lineTo(10, 14); g.lineTo(17, 14); g.closePath(); g.fill(); g.stroke(); };
     const cross = (col) => (g) => { g.strokeStyle = '#000'; g.lineWidth = 4; g.beginPath(); g.arc(16, 16, 9, 0, 6.283); g.moveTo(16, 2); g.lineTo(16, 10); g.moveTo(16, 22); g.lineTo(16, 30); g.moveTo(2, 16); g.lineTo(10, 16); g.moveTo(22, 16); g.lineTo(30, 16); g.stroke(); g.strokeStyle = col; g.lineWidth = 2; g.stroke(); };
     const mag = (col) => (g) => { g.strokeStyle = '#000'; g.lineWidth = 4; g.beginPath(); g.arc(13, 13, 8, 0, 6.283); g.moveTo(19, 19); g.lineTo(28, 28); g.stroke(); g.strokeStyle = col; g.lineWidth = 2; g.stroke(); };
@@ -44,12 +88,18 @@ const UI = {
     document.body.style.cursor = this.cur.normal;
   },
   updateCursor() {
+    if (!this.cur) return;
     let c = this.cur.normal;
     const h = this.hover;
     const col = (e) => !e ? 'g' : e.owner === GAME.control ? 'g' : e.owner === NEUTRAL ? 'y' : 'r';
     if (this.mode && this.mode.kind === 'target') c = this.cur['t' + col(h)];
     else if (!this.mouse.overUI && h) c = this.cur['m' + col(h)];
     if (this._cur !== c) { this._cur = c; this.el.cv.style.cursor = c; }
+    if (this.pointerLocked() && this.el.pointerCursor) {
+      const icon = this.cursorImages.get(c), image = this.el.pointerCursor;
+      if (image.src !== icon.src) image.src = icon.src;
+      image.style.left = (this.mouse.x - icon.hx) + 'px'; image.style.top = (this.mouse.y - icon.hy) + 'px';
+    }
   },
 
   // ---------------- 입력 ----------------
@@ -58,38 +108,57 @@ const UI = {
     cv.addEventListener('contextmenu', (e) => e.preventDefault());
     this.el.console.addEventListener('contextmenu', (e) => e.preventDefault());
     window.addEventListener('mousemove', (e) => {
-      this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.mouse.inside = true;
-      this.mouse.overUI = e.target !== cv;
-      if (this.mmDrag) this.minimapAt(e, true);
+      const locked = this.pointerLocked();
+      this.mouse.x = locked ? Math.max(0, Math.min(window.innerWidth - 1, this.mouse.x + (e.movementX || 0))) : e.clientX;
+      this.mouse.y = locked ? Math.max(0, Math.min(window.innerHeight - 1, this.mouse.y + (e.movementY || 0))) : e.clientY;
+      this.mouse.inside = true;
+      this.mouse.overUI = (locked ? document.elementFromPoint(this.mouse.x, this.mouse.y) : e.target) !== cv;
+      if (this.mmDrag) this.minimapAt(this.pointerAt(e), true);
     });
-    document.addEventListener('mouseleave', () => { this.mouse.inside = false; });
+    document.addEventListener('mouseleave', () => { if (!this.pointerLocked()) this.mouse.inside = false; });
+    document.addEventListener('pointerlockchange', () => this.pointerLockChanged());
+    document.addEventListener('pointerlockerror', () => {
+      this.lockPending = false;
+      if (!this.lockError) { this.lockError = true; this.message('마우스 고정을 시작하지 못했습니다. 버튼을 다시 눌러주세요.'); }
+    });
     cv.addEventListener('mousedown', (e) => {
       SND.init();
-      const [wx, wy] = RENDER.toWorld(e.clientX, e.clientY);
+      if (this.routeLockedDown(e)) return;
+      const p = this.pointerAt(e), [wx, wy] = RENDER.toWorld(p.clientX, p.clientY);
       if (e.button === 0) {
         if (this.mode) { this.execMode(wx, wy, e.shiftKey); return; }
-        this.mouse.drag = { sx: e.clientX, sy: e.clientY, wx, wy, shift: e.shiftKey, ctrl: e.ctrlKey };
+        this.mouse.drag = { sx: p.clientX, sy: p.clientY, wx, wy, shift: e.shiftKey, ctrl: e.ctrlKey };
       } else if (e.button === 2) {
         if (this.mode) { this.cancelMode(); return; }
         this.rightClick(wx, wy, this.pick(wx, wy), e.shiftKey);
       }
     });
     window.addEventListener('mouseup', (e) => {
+      if (this.pointerLocked() && e.isTrusted === false) return;
+      if (this.pointerLocked() && this.lockedTarget) {
+        const target = this.lockedTarget; this.lockedTarget = null;
+        const hit = document.elementFromPoint(this.mouse.x, this.mouse.y);
+        target.dispatchEvent(new MouseEvent('mouseup', {bubbles:true, cancelable:true,
+          clientX:this.mouse.x, clientY:this.mouse.y, button:e.button}));
+        if (e.button === 0 && (target === hit || target.contains(hit))) target.click?.();
+        this.mmDrag = false; return;
+      }
       this.mmDrag = false;
       if (e.button !== 0 || !this.mouse.drag) return;
       const d = this.mouse.drag; this.mouse.drag = null;
-      const [wx, wy] = RENDER.toWorld(e.clientX, e.clientY);
-      if (Math.abs(e.clientX - d.sx) < 5 && Math.abs(e.clientY - d.sy) < 5) this.clickSelect(wx, wy, d.shift, d.ctrl);
+      const p = this.pointerAt(e), [wx, wy] = RENDER.toWorld(p.clientX, p.clientY);
+      if (Math.abs(p.clientX - d.sx) < 5 && Math.abs(p.clientY - d.sy) < 5) this.clickSelect(wx, wy, d.shift, d.ctrl);
       else this.boxSelect(d.wx, d.wy, wx, wy, d.shift);
     });
     cv.addEventListener('wheel', (e) => {
       e.preventDefault();
+      if (this.mouse.overUI && this.pointerLocked()) return;
       const steps = [1, 1.25, 1.5, 2, 2.5, 3];
       let i = steps.indexOf(VIEW.scale); if (i < 0) i = 3;
       i = Math.max(0, Math.min(steps.length - 1, i + (e.deltaY > 0 ? -1 : 1)));
-      const [cx, cy] = RENDER.toWorld(e.clientX, e.clientY);
+      const p = this.pointerAt(e), [cx, cy] = RENDER.toWorld(p.clientX, p.clientY);
       VIEW.scale = steps[i]; RENDER.resize();
-      VIEW.x = cx - e.clientX / VIEW.scale; VIEW.y = cy - e.clientY / VIEW.scale; RENDER.clampCam();
+      VIEW.x = cx - p.clientX / VIEW.scale; VIEW.y = cy - p.clientY / VIEW.scale; RENDER.clampCam();
     }, { passive: false });
     // 미니맵
     const mm = this.el.mm;
@@ -102,7 +171,7 @@ const UI = {
     });
     window.addEventListener('keydown', (e) => this.keyDown(e));
     window.addEventListener('keyup', (e) => { this.keys[e.key] = false; if (e.key === 'Shift') this.keys.Shift = false; if (e.key === 'Alt') this.keys.Alt = false; });
-    const loseFocus = () => { this.keys = {}; this.mouse.inside = false; this.mouse.drag = null; this.mmDrag = false; };
+    const loseFocus = () => { this.releaseMouse(); this.keys = {}; this.mouse.inside = false; this.mouse.drag = null; this.mmDrag = false; this.lockedTarget = null; };
     window.addEventListener('blur', loseFocus);
     document.addEventListener('visibilitychange', () => { if (document.hidden) loseFocus(); });
     window.addEventListener('resize', () => RENDER.resize());
@@ -114,6 +183,7 @@ const UI = {
   minimapAt(e) { const [wx, wy] = this.mmWorld(e); RENDER.centerOn(wx, wy); },
 
   keyDown(e) {
+    if (e.key === 'Escape' && this.pointerLocked()) { this.releaseMouse(); return; }
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) {
       if (e.key === 'Escape' && this.mode && this.mode.kind === 'spawn') { this.cancelMode(); return; }
       if (e.key === 'F10') { e.preventDefault(); this.toggleTest(); }
@@ -734,9 +804,8 @@ const UI = {
       const control = hit?.closest('#test,#help,#title,#end,#minimap,button,input,select,textarea,.btn,.wf,.qs');
       if (!control) {
         if (m.x < edge) dx = -1; else if (m.x >= width - edge) dx = 1;
-        const bottom = height - this.consoleH();
         if (m.y < edge) dy = -1;
-        else if (m.y >= height - edge || m.y >= bottom - edge && m.y < bottom) dy = 1;
+        else if (m.y >= height - this.bottomEdgeH()) dy = 1;
       }
     }
     if (this.keys.ArrowLeft) dx = -1; if (this.keys.ArrowRight) dx = 1;
@@ -768,6 +837,10 @@ const UI = {
     this.el.sup.classList.toggle('cap', pl.used >= pl.max);
     const ico = { T: 'depot', Z: 'overlord', P: 'pylon' }[pl.race];
     if (this._supIco !== ico) { this._supIco = ico; this.el.supIco.src = ART.icon(ico, GAME.control); document.getElementById('ico-gas').src = ART.icon({ T: 'refinery', Z: 'extractor', P: 'assimilator' }[pl.race], GAME.control); }
+    if (this.el.perf) {
+      const stats = GAME.performance;
+      this.el.perf.textContent = '유닛·건물 ' + GAME.entities.length + '개' + (stats ? ' · ' + stats.fps + 'fps · 시뮬레이션 ' + stats.tickMs.toFixed(1) + 'ms/틱' : '');
+    }
   },
 
   // ---------------- 테스트 패널 ----------------
@@ -778,6 +851,7 @@ const UI = {
     t.innerHTML = `
       <div class="th">테스트 / 치트 패널 <span class="x" id="t-close">✕</span></div>
       <div class="row small">버전 ${RTS_VERSION} · 자체 픽셀 그래픽 / 웹 RTS</div>
+      <div class="row small" id="t-performance"></div>
       <div class="row"><label>스폰 대상</label>
         <select id="t-type"><optgroup label="테란">${opts('T')}</optgroup><optgroup label="저그">${opts('Z')}</optgroup><optgroup label="프로토스">${opts('P')}</optgroup><optgroup label="건물">${bopts}</optgroup></select></div>
       <div class="row"><label>소속</label><select id="t-owner"><option value="1">적군 (저그/빨강)</option><option value="0">아군 (테란/파랑)</option></select>
@@ -793,6 +867,7 @@ const UI = {
       <div class="row"><label>게임 속도</label><input id="t-speed" type="range" min="0.5" max="3" step="0.25" value="1"><span id="t-spv">1.0x</span></div>
       <div class="row small">F10 / \` : 패널 열기 · F1 : 도움말 · F9 : 일시정지</div>`;
     const $ = (id) => document.getElementById(id);
+    this.el.perf = $('t-performance');
     $('t-close').onclick = () => this.toggleTest(false);
     const preview = () => this.setMode({ kind: 'spawn', type: $('t-type').value, owner: +$('t-owner').value, count: Math.max(1, Math.min(50, Math.floor(+$('t-count').value) || 1)) });
     $('t-spawn').onclick = () => { preview(); this.message('마우스 프리뷰 위치에 클릭해 스폰하세요 (우클릭/ESC 종료)'); };
@@ -817,7 +892,11 @@ const UI = {
     $('t-fast').onclick = () => { GAME.buildSpeed = GAME.buildSpeed >= 8 ? 1 : GAME.buildSpeed * 2; $('t-bs').textContent = GAME.buildSpeed; };
     $('t-speed').oninput = (e) => { GAME.speed = +e.target.value; $('t-spv').textContent = GAME.speed.toFixed(2).replace(/0$/, '') + 'x'; };
   },
-  toggleTest(v) { this.el.test.classList.toggle('hidden', v === undefined ? !this.el.test.classList.contains('hidden') : !v); },
+  toggleTest(v) {
+    const show = v === undefined ? this.el.test.classList.contains('hidden') : v;
+    if (show) this.releaseMouse();
+    this.el.test.classList.toggle('hidden', !show);
+  },
   // 미리보기와 클릭 생성이 같은 좌표/배치 검사 결과를 사용한다. 엔티티를 만들지 않는다.
   spawnLayout(wx, wy) {
     const m = this.mode;

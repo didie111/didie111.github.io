@@ -5,6 +5,7 @@
 const VIEW = { x: 0, y: 0, w: 640, h: 400, scale: 1.25 };
 const RENDER = (() => {
   let cv, ctx, fogC, fogX, fogImg;
+  let fogVersion = -1, fogPlayer = -1, fogReveal;
   function init(canvas) {
     cv = canvas; ctx = cv.getContext('2d');
     fogC = document.createElement('canvas'); fogC.width = MAP_W; fogC.height = MAP_H;
@@ -33,6 +34,8 @@ const RENDER = (() => {
   function updateFog() {
     const p = GAME.control, v = GAME.vis[p], ex = GAME.explored[p], d = fogImg.data;
     const all = GAME.revealAll;
+    if (fogVersion === GAME.visionVersion && fogPlayer === p && fogReveal === all) return;
+    fogVersion = GAME.visionVersion; fogPlayer = p; fogReveal = all;
     for (let i = 0, o = 3; i < v.length; i++, o += 4) d[o] = all ? 0 : (v[i] & 1) ? 0 : ex[i] ? 140 : 255;
     fogX.putImageData(fogImg, 0, 0);
   }

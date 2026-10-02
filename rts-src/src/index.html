@@ -19,10 +19,13 @@
 <div id="msgs"></div>
 
 <div id="console">
+  <div id="hud-menu"><button id="hud-f10" onclick="UI.toggleTest()">메뉴(F10)</button><button id="mouse-lock" onclick="UI.toggleMouseLock()" aria-pressed="false" title="게임 안에 마우스 고정 · Esc로 해제">마우스 고정</button></div>
   <div id="mm-wrap"><canvas id="minimap" width="128" height="128"></canvas></div>
   <div id="info"></div>
   <div id="cmd"></div>
 </div>
+<div id="bottom-edge" aria-hidden="true"></div>
+<img id="locked-cursor" class="hidden" alt="">
 
 <div id="tip" class="hidden"></div>
 <div id="test" class="hidden"></div>
@@ -31,6 +34,8 @@
   <h2>조작법 · <span data-rts-version="short"></span></h2>
   <p>생산 건물에서 부속 건물을 연결하세요. 캐리어는 I로 인터셉터, 리버는 R로 스캐럽을 생산해야 공격합니다. 컴샛에서 S로 스캔할 수 있습니다.</p>
   <table>
+    <tr><td>마우스 고정 / Esc</td><td>하단 메뉴 옆 버튼으로 게임 안에 마우스를 고정합니다. Esc로 해제합니다. F10을 열면 메뉴 조작을 위해 해제됩니다.</td></tr>
+    <tr><td>가장자리 화면 이동</td><td>화면의 위·좌·우 끝, 하단 패널 아래의 좁은 띠에서 이동합니다. 방향키·미니맵도 사용할 수 있습니다.</td></tr>
     <tr><td>좌클릭 / 드래그</td><td>유닛 선택 · 박스 선택 (최대 12기)</td></tr>
     <tr><td>Shift + 클릭</td><td>선택 추가 / 제거 · 명령 예약(웨이포인트)</td></tr>
     <tr><td>Ctrl + 클릭 · 더블클릭</td><td>화면 내 같은 종류 전체 선택</td></tr>

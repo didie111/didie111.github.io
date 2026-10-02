@@ -379,10 +379,10 @@ function castSpell(c, s, tgt, x, y) {
     }
     case 'infest':
       for (const q of tgt.queue) if (q.kind === 'tech') delete P(tgt.owner).researching[q.type];
-      tgt.queue = []; tgt.owner = c.owner; tgt.type = 'infested_cc'; tgt.def = BUILDINGS.infested_cc; tgt.race = 'Z'; tgt.hp = tgt.maxHp; tgt.orders = []; break;
+      tgt.queue = []; tgt.owner = c.owner; SH.ownerChanged(tgt); tgt.type = 'infested_cc'; tgt.def = BUILDINGS.infested_cc; tgt.race = 'Z'; tgt.hp = tgt.maxHp; tgt.orders = []; break;
     case 'feedback': { const dmg = tgt.energy; tgt.energy = 0; dealDamage(c, tgt, { dmg, type: 'spell' }, 1); break; }
     case 'mind_control':
-      tgt.owner = c.owner; tgt.issue({ t: 'stop' }); tgt.detCache = null; tgt.parasiteOwner = undefined; c.sh = 0; recomputeSupply(); break;
+      tgt.owner = c.owner; SH.ownerChanged(tgt); tgt.issue({ t: 'stop' }); tgt.detCache = null; tgt.parasiteOwner = undefined; c.sh = 0; recomputeSupply(); break;
     case 'disruption_web': GAME.areas.push({ kind: 'web', x, y, r: 64, t: 0, life: 360, owner: c.owner }); break;
     case 'recall':
       for (const e of [...GAME.entities]) {

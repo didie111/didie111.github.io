@@ -124,6 +124,7 @@ function setupScenario(seed) {
 function endGame(win) {
   if (GAME.over) return;
   GAME.over = true;
+  UI.releaseMouse();
   const el = document.getElementById('end');
   const pl = P(PLAYER);
   el.querySelector('h1').textContent = win ? '승리!' : '패배';
@@ -135,7 +136,7 @@ function endGame(win) {
 }
 
 // ---------------- 메인 루프 ----------------
-const LOOP = { acc: 0, last: 0, frame: 0 };
+const LOOP = { acc: 0, last: 0, frame: 0, measuredAt: 0, frames: 0, ticks: 0, tickTime: 0 };
 function loop(now) {
   const dt = Math.min(250, now - (LOOP.last || now));
   LOOP.last = now;
@@ -143,11 +144,20 @@ function loop(now) {
     LOOP.acc += dt * GAME.speed;
     const step = 1000 / FPS;
     let n = 0;
-    while (LOOP.acc >= step && n < 8) { gameTick(); LOOP.acc -= step; n++; }
+    while (LOOP.acc >= step && n < 8) {
+      const started = performance.now(); gameTick(); LOOP.tickTime += performance.now() - started; LOOP.ticks++;
+      LOOP.acc -= step; n++;
+    }
     if (n >= 8) LOOP.acc = 0;
   }
   RENDER.draw();
   UI.frame(LOOP.frame++, dt);
+  LOOP.frames++;
+  if (!LOOP.measuredAt) LOOP.measuredAt = now;
+  if (now - LOOP.measuredAt >= 1000) {
+    GAME.performance = {fps:Math.round(LOOP.frames * 1000 / (now - LOOP.measuredAt)), tickMs:LOOP.ticks ? LOOP.tickTime / LOOP.ticks : 0};
+    LOOP.measuredAt = now; LOOP.frames = 0; LOOP.ticks = 0; LOOP.tickTime = 0;
+  }
   requestAnimationFrame(loop);
 }
 

@@ -1,0 +1,319 @@
+{
+  "baselineCommit": "581eb2e5d11858fd251223faf989c07515131464",
+  "baselineVersion": "2026.10.02-sc1.15",
+  "candidateVersion": "2026.10.02-sc1.16",
+  "node": "v24.19.0",
+  "seed": 42,
+  "population": "80% marine, 20% SCV",
+  "measurement": "simulation only; separate runs; first 8 ticks excluded from mean and p95; max includes warm-up",
+  "before": [
+    {
+      "version": "2026.10.02-sc1.15",
+      "mode": "idle",
+      "count": 100,
+      "ticks": 96,
+      "meanMs": 5.56,
+      "p95Ms": 6.61,
+      "maxMs": 14.83,
+      "perTick": {
+        "queries": 213,
+        "candidates": 16821,
+        "obstacleBuilds": 0,
+        "lineChecks": 0
+      },
+      "moving": 0,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.02-sc1.15",
+      "mode": "idle",
+      "count": 400,
+      "ticks": 96,
+      "meanMs": 30,
+      "p95Ms": 33.33,
+      "maxMs": 36.76,
+      "perTick": {
+        "queries": 853,
+        "candidates": 106948,
+        "obstacleBuilds": 0,
+        "lineChecks": 0
+      },
+      "moving": 0,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.02-sc1.15",
+      "mode": "idle",
+      "count": 800,
+      "ticks": 96,
+      "meanMs": 67.03,
+      "p95Ms": 76.84,
+      "maxMs": 80.09,
+      "perTick": {
+        "queries": 1707,
+        "candidates": 244198,
+        "obstacleBuilds": 0,
+        "lineChecks": 0
+      },
+      "moving": 0,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.02-sc1.15",
+      "mode": "move",
+      "count": 100,
+      "ticks": 96,
+      "meanMs": 47.47,
+      "p95Ms": 60.69,
+      "maxMs": 195.85,
+      "perTick": {
+        "queries": 400,
+        "candidates": 18110,
+        "obstacleBuilds": 0,
+        "lineChecks": 4530
+      },
+      "moving": 83,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.02-sc1.15",
+      "mode": "move",
+      "count": 400,
+      "ticks": 96,
+      "meanMs": 316.8,
+      "p95Ms": 413.38,
+      "maxMs": 563.98,
+      "perTick": {
+        "queries": 1600,
+        "candidates": 135858,
+        "obstacleBuilds": 1,
+        "lineChecks": 32706
+      },
+      "moving": 389,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.02-sc1.15",
+      "mode": "move",
+      "count": 800,
+      "ticks": 96,
+      "meanMs": 793.04,
+      "p95Ms": 943.29,
+      "maxMs": 1825.42,
+      "perTick": {
+        "queries": 3200,
+        "candidates": 322128,
+        "obstacleBuilds": 1,
+        "lineChecks": 73235
+      },
+      "moving": 776,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.02-sc1.15",
+      "mode": "overlap",
+      "count": 100,
+      "ticks": 32,
+      "meanMs": 6.28,
+      "p95Ms": 7.55,
+      "maxMs": 12.58,
+      "perTick": {
+        "queries": 115,
+        "candidates": 11472,
+        "obstacleBuilds": 0,
+        "lineChecks": 80
+      },
+      "moving": 62,
+      "recovering": 90
+    },
+    {
+      "version": "2026.10.02-sc1.15",
+      "mode": "overlap",
+      "count": 400,
+      "ticks": 32,
+      "meanMs": 68.3,
+      "p95Ms": 73.07,
+      "maxMs": 90.95,
+      "perTick": {
+        "queries": 456,
+        "candidates": 180234,
+        "obstacleBuilds": 0,
+        "lineChecks": 317
+      },
+      "moving": 213,
+      "recovering": 393
+    },
+    {
+      "version": "2026.10.02-sc1.15",
+      "mode": "overlap",
+      "count": 800,
+      "ticks": 32,
+      "meanMs": 254.36,
+      "p95Ms": 267.22,
+      "maxMs": 487.47,
+      "perTick": {
+        "queries": 909,
+        "candidates": 699438,
+        "obstacleBuilds": 0,
+        "lineChecks": 638
+      },
+      "moving": 470,
+      "recovering": 791
+    }
+  ],
+  "after": [
+    {
+      "version": "2026.10.02-sc1.16",
+      "mode": "idle",
+      "count": 100,
+      "ticks": 96,
+      "meanMs": 1.14,
+      "p95Ms": 2.2,
+      "maxMs": 12.95,
+      "perTick": {
+        "queries": 113,
+        "candidates": 1680,
+        "obstacleBuilds": 0,
+        "lineChecks": 0
+      },
+      "moving": 0,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.02-sc1.16",
+      "mode": "idle",
+      "count": 400,
+      "ticks": 96,
+      "meanMs": 5.14,
+      "p95Ms": 9.77,
+      "maxMs": 17.69,
+      "perTick": {
+        "queries": 453,
+        "candidates": 7540,
+        "obstacleBuilds": 0,
+        "lineChecks": 0
+      },
+      "moving": 0,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.02-sc1.16",
+      "mode": "idle",
+      "count": 800,
+      "ticks": 96,
+      "meanMs": 8.5,
+      "p95Ms": 12.92,
+      "maxMs": 32.67,
+      "perTick": {
+        "queries": 907,
+        "candidates": 15574,
+        "obstacleBuilds": 0,
+        "lineChecks": 0
+      },
+      "moving": 0,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.02-sc1.16",
+      "mode": "move",
+      "count": 100,
+      "ticks": 96,
+      "meanMs": 6.14,
+      "p95Ms": 11.82,
+      "maxMs": 68.01,
+      "perTick": {
+        "queries": 200,
+        "candidates": 1442,
+        "obstacleBuilds": 0,
+        "lineChecks": 316
+      },
+      "moving": 96,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.02-sc1.16",
+      "mode": "move",
+      "count": 400,
+      "ticks": 96,
+      "meanMs": 25.71,
+      "p95Ms": 38.38,
+      "maxMs": 320.13,
+      "perTick": {
+        "queries": 800,
+        "candidates": 11497,
+        "obstacleBuilds": 1,
+        "lineChecks": 1484
+      },
+      "moving": 398,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.02-sc1.16",
+      "mode": "move",
+      "count": 800,
+      "ticks": 96,
+      "meanMs": 54.02,
+      "p95Ms": 72.15,
+      "maxMs": 257.4,
+      "perTick": {
+        "queries": 1600,
+        "candidates": 40789,
+        "obstacleBuilds": 1,
+        "lineChecks": 3282
+      },
+      "moving": 784,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.02-sc1.16",
+      "mode": "overlap",
+      "count": 100,
+      "ticks": 32,
+      "meanMs": 3.82,
+      "p95Ms": 8.31,
+      "maxMs": 9.89,
+      "perTick": {
+        "queries": 113,
+        "candidates": 6297,
+        "obstacleBuilds": 0,
+        "lineChecks": 80
+      },
+      "moving": 62,
+      "recovering": 90
+    },
+    {
+      "version": "2026.10.02-sc1.16",
+      "mode": "overlap",
+      "count": 400,
+      "ticks": 32,
+      "meanMs": 16.78,
+      "p95Ms": 20.15,
+      "maxMs": 35.03,
+      "perTick": {
+        "queries": 453,
+        "candidates": 66821,
+        "obstacleBuilds": 0,
+        "lineChecks": 317
+      },
+      "moving": 213,
+      "recovering": 393
+    },
+    {
+      "version": "2026.10.02-sc1.16",
+      "mode": "overlap",
+      "count": 800,
+      "ticks": 32,
+      "meanMs": 43.03,
+      "p95Ms": 53.15,
+      "maxMs": 68.11,
+      "perTick": {
+        "queries": 907,
+        "candidates": 176475,
+        "obstacleBuilds": 0,
+        "lineChecks": 638
+      },
+      "moving": 470,
+      "recovering": 791
+    }
+  ]
+}

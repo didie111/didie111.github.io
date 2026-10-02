@@ -325,37 +325,44 @@ function groundMovement(e, x, y, limit = e.speed) {
 function steerGround(e) {
   const speed = Math.hypot(e.vx, e.vy);
   if (!speed) return;
-  const nearby = SH.query(e.x, e.y, e.r + speed * 6 + 24);
-  const blockers = nearby.filter(o => o !== e && groundCollider(o));
+  const blockers = e.collisionNeighbors || SH.queryGround(e.x, e.y, e.r + speed * 6 + 24).filter(o => o !== e && groundCollider(o));
   const angle = Math.atan2(e.vy, e.vx), side = e.avoidSide || 1;
+  const vectorSpeed = o => {
+    if (o.speedVX !== o.vx || o.speedVY !== o.vy) {
+      o.speedVX = o.vx; o.speedVY = o.vy; o.vectorSpeed = Math.hypot(o.vx, o.vy);
+    }
+    return o.vectorSpeed;
+  };
   function clear(a, length) {
     const dx = Math.cos(a) * length, dy = Math.sin(a) * length;
     if (!PF.lineClear(e.x, e.y, e.x + dx, e.y + dy, Math.max(3, e.r * 0.75), 0)) return false;
     for (const o of blockers) {
       const ox = o.x - e.x, oy = o.y - e.y;
       const min = (e.r + o.r) * 0.85;
+      const projection = (ox * dx + oy * dy) / (length * length || 1), originalT = projection < 0 ? 0 : projection > 1 ? 1 : projection;
+      // A body outside our swept step needs no terrain prediction at all.
+      if ((ox - dx * originalT) ** 2 + (oy - dy * originalT) ** 2 >= (min + 0.1) ** 2) continue;
       // 같은 방향으로 진행하는 유닛은 이번 프레임의 상대 이동으로 검사한다.
       // 앞 유닛이 떠날 현재 위치를 정지 장애물로 취급하면 뒤 유닛이 매번 옆으로 튄다.
       let rx = dx, ry = dy;
-      const otherSpeed = Math.hypot(o.vx, o.vy);
+      const otherSpeed = vectorSpeed(o);
       if (!e.pathDynamic && length <= speed + 0.001 && collisionMover(o) && Math.abs(otherSpeed - speed) < 0.001 && otherSpeed > 0 &&
           (dx * o.vx + dy * o.vy) / (length * otherSpeed) > 0.97 &&
           PF.lineClear(o.x, o.y, o.x + o.vx, o.y + o.vy, Math.max(3, o.r * 0.75), 0)) {
         rx -= o.vx; ry -= o.vy;
       }
       const len2 = rx * rx + ry * ry;
-      const t = len2 ? Math.max(0, Math.min(1, (ox * rx + oy * ry) / len2)) : 0;
-      const closest = Math.hypot(ox - rx * t, oy - ry * t);
-      if (closest >= min + 0.1) continue;
+      const dot = len2 ? (ox * rx + oy * ry) / len2 : 0, t = dot < 0 ? 0 : dot > 1 ? 1 : dot;
+      if ((ox - rx * t) ** 2 + (oy - ry * t) ** 2 >= (min + 0.1) ** 2) continue;
       // 스폰/언버로우 등으로 이미 겹친 경우 바깥으로 탈출하는 이동 허용.
-      if (Math.hypot(ox, oy) < min + 0.1 && ox * rx + oy * ry <= 0) continue;
+      if (ox * ox + oy * oy < (min + 0.1) ** 2 && ox * rx + oy * ry <= 0) continue;
       return false;
     }
     return true;
   }
   // 같은 속도로 앞에서 진행하는 병력만 먼저 따라간다. 고정 장애물 우회는 기존 경로를 유지한다.
   const look = Math.max(speed, e.r + speed * 6), ux = Math.cos(angle), uy = Math.sin(angle);
-  const parallel = o => collisionMover(o) && Math.abs(Math.hypot(o.vx, o.vy) - speed) < 0.001 && (ux * o.vx + uy * o.vy) / speed > 0.97;
+  const parallel = o => collisionMover(o) && Math.abs(vectorSpeed(o) - speed) < 0.001 && (ux * o.vx + uy * o.vy) / speed > 0.97;
   const follows = blockers.some(o => parallel(o) && (o.x - e.x) * ux + (o.y - e.y) * uy > 0);
   const fixedAhead = blockers.some(o => {
     if (parallel(o)) return false;
@@ -417,7 +424,7 @@ function recoveryRand(from, to) {
 function recoverGround(e, blockers) {
   const speed = e.speed;
   if (collisionFixed(e) || speed <= 0) { e.groundRecovery = null; return false; }
-  const overlaps = blockers.filter(o => Math.hypot(e.x - o.x, e.y - o.y) < (e.r + o.r) * 0.85 - 1e-6);
+  const overlaps = blockers.filter(o => (e.x - o.x) ** 2 + (e.y - o.y) ** 2 < ((e.r + o.r) * 0.85 - 1e-6) ** 2);
   let state = e.groundRecovery;
   if (!state && !overlaps.length) return false;
   if (!state) state = e.groundRecovery = { phase: 'check' };
@@ -427,8 +434,8 @@ function recoverGround(e, blockers) {
   // MoveToLegal follows its chosen short path without ordinary unit collision.
   // Only already-illegal bodies enter this state; ordinary approaches still
   // collide with Hold/Stop. Terrain and physically fixed bodies remain barriers.
-  const newlyBlocked = (x, y) => !PF.unitsClear(e.x, e.y, x, y, e.r,
-    blockers.filter(o => !overlaps.includes(o) && collisionFixed(o)));
+  const fixedNew = blockers.filter(o => collisionFixed(o) && !overlaps.includes(o));
+  const newlyBlocked = (x, y) => !PF.unitsClear(e.x, e.y, x, y, e.r, fixedNew);
   if (state.phase === 'move') {
     const dx = state.x - e.x, dy = state.y - e.y, distance = Math.hypot(dx, dy);
     if (distance > 1e-6) {
@@ -492,11 +499,18 @@ function recoverGround(e, blockers) {
 
 function physics() {
   const ents = GAME.entities;
+  // Orders can reveal/unload units, hatch eggs, or restore harvest collision in
+  // this tick. Build the collision roster once from that current state.
+  SH.prepareGround(ents);
   // 모든 겹침 상태를 먼저 표시해야 처리 순서와 무관하게 상대의 CheckIllegal을 볼 수 있다.
   for (const e of ents) {
-    if (!groundCollider(e) || collisionFixed(e)) { e.groundRecovery = null; continue; }
-    if (!e.groundRecovery && SH.query(e.x, e.y, e.r + 48).some(o => o !== e && groundCollider(o) &&
-        Math.hypot(e.x - o.x, e.y - o.y) < (e.r + o.r) * .85 - 1e-6)) e.groundRecovery = { phase: 'check' };
+    e.collisionNeighbors = null;
+    if (!groundCollider(e)) { e.groundRecovery = null; continue; }
+    const radius = e.r + Math.max(48, Math.hypot(e.vx, e.vy) * 6 + 24);
+    e.collisionNeighbors = SH.queryGround(e.x, e.y, radius).filter(o => o !== e);
+    if (collisionFixed(e)) { e.groundRecovery = null; continue; }
+    if (!e.groundRecovery && e.collisionNeighbors.some(o =>
+        (e.x - o.x) ** 2 + (e.y - o.y) ** 2 < ((e.r + o.r) * .85 - 1e-6) ** 2)) e.groundRecovery = { phase: 'check' };
   }
   for (const e of ents) {
     e.collisionMoving = collisionMover(e);
@@ -509,8 +523,12 @@ function physics() {
     if (e.dead || e.hidden) { e.currentSpeed = 0; continue; }
     if (collisionFixed(e)) { e.vx = 0; e.vy = 0; e.currentSpeed = 0; continue; }
     if (groundCollider(e)) {
-      const blockers = SH.query(e.x, e.y, e.r + 48).filter(o => o !== e && groundCollider(o));
-      e.recovering = recoverGround(e, blockers);
+      const blockers = e.collisionNeighbors;
+      // A legal idle/ordinary body cannot acquire an overlap from ordinary
+      // movement. Only a neighbor already executing illegal recovery can enter it.
+      const needsRecovery = e.groundRecovery || blockers.some(o => o.recovering && o.moving &&
+        (e.x - o.x) ** 2 + (e.y - o.y) ** 2 < ((e.r + o.r) * .85 - 1e-6) ** 2);
+      e.recovering = needsRecovery ? recoverGround(e, blockers) : false;
       if (!e.recovering) {
         if (!e.collisionMoving || !e.moving) { e.currentSpeed = 0; continue; }
         const length = Math.hypot(e.vx, e.vy), waypoint = e.moveWaypoint || [e.x + e.vx, e.y + e.vy];
@@ -523,7 +541,7 @@ function physics() {
           const rx = vx, ry = vy;
           const rr = rx * rx + ry * ry;
           const t = rr ? Math.max(0, Math.min(1, (ox * rx + oy * ry) / rr)) : 0;
-          return Math.hypot(ox - rx * t, oy - ry * t) < (e.r + o.r) * 0.85 - 1e-6;
+          return (ox - rx * t) ** 2 + (oy - ry * t) ** 2 < ((e.r + o.r) * 0.85 - 1e-6) ** 2;
         });
         if (!movementClear(e.vx, e.vy)) {
           // UM_SlideFree checks 1px steps along the selected free direction

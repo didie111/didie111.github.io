@@ -99,11 +99,23 @@ const PF = (() => {
       if (passable(tx, ty, ignoreId)) continue;
       const qx = Math.max(tx * TILE, Math.min(x, (tx + 1) * TILE));
       const qy = Math.max(ty * TILE, Math.min(y, (ty + 1) * TILE));
-      if (Math.hypot(x - qx, y - qy) < r - 0.001) return false;
+      if ((x - qx) ** 2 + (y - qy) ** 2 < (r - 0.001) ** 2) return false;
     }
     return true;
   }
   function lineClear(x0, y0, x1, y1, r, ignoreId) {
+    // Most movement steps cross only open tiles. Test that small rectangle once
+    // before sampling the swept circle; keep the original corner checks near walls.
+    const left = Math.min(x0, x1) - r, right = Math.max(x0, x1) + r,
+      top = Math.min(y0, y1) - r, bottom = Math.max(y0, y1) + r;
+    if (left < 0 || top < 0 || right > MAP_W * TILE || bottom > MAP_H * TILE) return false;
+    const tx0 = tileOf(left), tx1 = tileOf(right), ty0 = tileOf(top), ty1 = tileOf(bottom);
+    if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) <= 64) {
+      let open = true;
+      for (let y = ty0; y <= ty1 && open; y++) for (let x = tx0; x <= tx1; x++)
+        if (!passable(x, y, ignoreId)) { open = false; break; }
+      if (open) return true;
+    }
     const steps = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 4);
     for (let i = 0; i <= steps; i++) {
       const t = steps ? i / steps : 0;
@@ -163,6 +175,21 @@ const PF = (() => {
     return null;
   }
 
+  function compactPath(points) {
+    if (points.length < 3) return points;
+    const out = [points[0]];
+    for (let i = 1; i < points.length - 1; i++) {
+      const a = out[out.length - 1], b = points[i], c = points[i + 1],
+        ax = b[0] - a[0], ay = b[1] - a[1], bx = c[0] - b[0], by = c[1] - b[1];
+      // Keep every corner and reversal. Collinear grid points describe a single
+      // verified segment, not a series of places where a worker should brake.
+      if (Math.abs(ax * by - ay * bx) > 1e-7 || ax * bx + ay * by < 0) out.push(b);
+    }
+    out.push(points[points.length - 1]);
+    if (points.goalBlocker) out.goalBlocker = points.goalBlocker;
+    return out;
+  }
+
   // 가까운 정지 유닛 사이에서 잠깐 목표의 반대 방향으로 나가야 하는 경우,
   // 격자 경로의 '목표에 더 가까운 부분 경로'만 반복하면 탈출하지 못한다.
   // 원 둘레의 안전한 점을 연결해 목표까지 도달하는 경로를 찾는다.
@@ -176,7 +203,7 @@ const PF = (() => {
     if (!positionClear(x1, y1, rr, 0) || !unitsClear(x1, y1, x1, y1, r, units)) return null;
     if (clear([x0, y0], goal)) return [goal];
     const points = [[x0, y0], goal];
-    const nearest = units.slice().sort((a, b) => Math.hypot(a.x - x0, a.y - y0) - Math.hypot(b.x - x0, b.y - y0)).slice(0, 16);
+    const nearest = units.slice().sort((a, b) => (a.x - x0) ** 2 + (a.y - y0) ** 2 - (b.x - x0) ** 2 - (b.y - y0) ** 2).slice(0, 16);
     for (const u of nearest) {
       const radius = ((r + u.r) * 0.85 + 0.2) / Math.cos(Math.PI / 16);
       const bearing = Math.atan2(y0 - u.y, x0 - u.x);
@@ -203,6 +230,9 @@ const PF = (() => {
         if (closed.has(i)) continue;
         const cost = costs[cur] + Math.hypot(points[cur][0] - points[i][0], points[cur][1] - points[i][1]);
         if (cost >= costs[i]) continue;
+        // Count tested graph edges as work too, not just visited vertices.
+        // Otherwise hundreds of bodies can each test a complete visibility graph.
+        if (--budget <= 0) return null;
         if (clear(points[cur], points[i])) { costs[i] = cost; previous[i] = cur; }
       }
     }
@@ -214,7 +244,7 @@ const PF = (() => {
   function localPath(x0, y0, x1, y1, r, obstacles, occupiedGoal) {
     const step = 8, limit = 16, width = limit * 2 + 1;
     const key = (x, y) => (y + limit) * width + x + limit;
-    const units = obstacles.units.filter(u => Math.hypot(u.x - x0, u.y - y0) < 250 + u.r + r);
+    const units = obstacles.units.filter(u => (u.x - x0) ** 2 + (u.y - y0) ** 2 < (250 + u.r + r) ** 2);
     const rr = Math.max(3, r * 0.75), start = key(0, 0);
     const scores = new Map([[start, 0]]), parents = new Map(), nodes = new Map();
     const queue = [], closed = new Set();
@@ -226,7 +256,7 @@ const PF = (() => {
     const heuristic = (x, y) => Math.hypot(x1 - x0 - x * step, y1 - y0 - y * step);
     add({ x: 0, y: 0, k: start, g: 0, f: heuristic(0, 0) });
     let best = start, bestH = heuristic(0, 0), reached = false, count = 0;
-    while (queue.length && count < 600) {
+    while (queue.length && count < 600 && count < budget) {
       const n = queue.shift(); if (closed.has(n.k)) continue;
       closed.add(n.k); count++;
       const px = x0 + n.x * step, py = y0 + n.y * step, h = heuristic(n.x, n.y);
@@ -253,19 +283,40 @@ const PF = (() => {
       if (!out.length) out.push([x0, y0]);
       out.goalBlocker = occupiedGoal;
     }
-    return out.length ? out : null;
+    return out.length ? compactPath(out) : null;
   }
 
   function unitsClear(x0, y0, x1, y1, r, units) {
     const dx = x1 - x0, dy = y1 - y0, len2 = dx * dx + dy * dy;
-    for (const u of units) {
-      if (u.dead || u.hidden || u.burrowed || u.noCollide || u.type === 'larva') continue;
+    const blocked = u => {
+      if (u.dead || u.hidden || u.burrowed || u.noCollide || u.type === 'larva') return false;
       const ox = u.x - x0, oy = u.y - y0, min = (r + u.r) * 0.85 + 0.1;
-      if (len2 > 0 && Math.hypot(ox, oy) < min && ox * dx + oy * dy <= 0) continue;
+      if (len2 > 0 && ox * ox + oy * oy < min * min && ox * dx + oy * dy <= 0) return false;
       const t = len2 ? Math.max(0, Math.min(1, (ox * dx + oy * dy) / len2)) : 0;
-      if (Math.hypot(ox - dx * t, oy - dy * t) < min) return false;
+      return (ox - dx * t) ** 2 + (oy - dy * t) ** 2 < min * min;
+    };
+    if (units.spatialIndex) {
+      const index = units.spatialIndex, pad = (r + index.maxR) * .85 + .1,
+        tx0 = Math.floor((Math.min(x0, x1) - pad) / 64), tx1 = Math.floor((Math.max(x0, x1) + pad) / 64),
+        ty0 = Math.floor((Math.min(y0, y1) - pad) / 64), ty1 = Math.floor((Math.max(y0, y1) + pad) / 64);
+      for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
+        const cell = index.cells.get(ty * 128 + tx);
+        if (cell) for (const u of cell) if (blocked(u)) return false;
+      }
+    } else {
+      for (const u of units) if (blocked(u)) return false;
     }
     return true;
+  }
+  function indexUnits(units) {
+    if (units.length <= 32) return units;
+    const cells = new Map(); let maxR = 0;
+    for (const u of units) {
+      const key = Math.floor(u.y / 64) * 128 + Math.floor(u.x / 64);
+      let cell = cells.get(key); if (!cell) cells.set(key, cell = []); cell.push(u);
+      maxR = Math.max(maxR, u.r);
+    }
+    units.spatialIndex = {cells, maxR}; return units;
   }
   function unitObstacles(mover, includeMoving) {
     const units = GAME.entities.filter(u => u !== mover && groundCollider(u) && (includeMoving || !collisionMover(u)));
@@ -277,10 +328,10 @@ const PF = (() => {
           if (Math.hypot(Math.max(0, Math.abs(tx * TILE + TILE / 2 - u.x) - TILE / 2), Math.max(0, Math.abs(ty * TILE + TILE / 2 - u.y) - TILE / 2)) < radius) cells.add(tIdx(tx, ty));
     }
     cells.delete(tIdx(tileOf(mover.x), tileOf(mover.y)));
-    return { cells, units };
+    return { cells, units: indexUnits(units) };
   }
   return {
-    find, worldPath, lineClear, positionClear, localPath, unitPath, nearestPassable, passable, unitsClear, unitObstacles, goalBlocker,
+    find, worldPath, lineClear, positionClear, localPath, unitPath, nearestPassable, passable, unitsClear, unitObstacles, goalBlocker, compactPath,
     resetBudget() { budget = 24000; }, get budget() { return budget; },
   };
 })();
@@ -289,10 +340,22 @@ const PF = (() => {
 const SH = (() => {
   const CS = 64, GW = Math.ceil(MAP_W * TILE / CS), GH = Math.ceil(MAP_H * TILE / CS);
   const cells = Array.from({ length: GW * GH }, () => []);
-  function clear() { for (const c of cells) c.length = 0; }
+  const ownerMask = new Uint8Array(GW * GH);
+  const ground = Array.from({ length: GW * GH }, () => []), active = [], activeGround = [];
+  function clear() {
+    for (const c of active) c.length = 0; active.length = 0;
+    for (const c of activeGround) c.length = 0; activeGround.length = 0;
+  }
   function insert(e) {
     const cx = Math.max(0, Math.min(GW - 1, (e.x / CS) | 0)), cy = Math.max(0, Math.min(GH - 1, (e.y / CS) | 0));
-    cells[cy * GW + cx].push(e);
+    const i = cy * GW + cx, c = cells[i];
+    if (!c.length) { active.push(c); ownerMask[i] = 0; } c.push(e);
+    ownerMask[i] |= 1 << e.owner; e.shCell = i;
+    // Include harvest/burrow bodies too: an order can restore their collision
+    // after insertion in this same tick. Callers check their current state.
+    if (!e.isBuilding && !e.air && !e.def.mine && e.type !== 'larva') {
+      const g = ground[i]; if (!g.length) activeGround.push(g); g.push(e);
+    }
   }
   function query(x, y, r, out) {
     out = out || [];
@@ -304,5 +367,38 @@ const SH = (() => {
     }
     return out;
   }
-  return { clear, insert, query };
+  function queryEnemy(x, y, r, owner, out) {
+    out = out || []; if (owner === NEUTRAL) return out;
+    const enemy = owner === PLAYER ? ENEMY : PLAYER,
+      x0 = Math.max(0, ((x - r - 64) / CS) | 0), x1 = Math.min(GW - 1, ((x + r + 64) / CS) | 0),
+      y0 = Math.max(0, ((y - r - 64) / CS) | 0), y1 = Math.min(GH - 1, ((y + r + 64) / CS) | 0);
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+      const i = cy * GW + cx; if (!(ownerMask[i] & (1 << enemy))) continue;
+      for (const e of cells[i]) if (e.owner === enemy) out.push(e);
+    }
+    return out;
+  }
+  function ownerChanged(e) {
+    const cell = cells[e.shCell]; if (!cell || !cell.includes(e)) return;
+    let mask = 0; for (const u of cell) mask |= 1 << u.owner; ownerMask[e.shCell] = mask;
+  }
+  function queryGround(x, y, r, out) {
+    out = out || [];
+    const x0 = Math.max(0, Math.floor((x - r) / CS)), x1 = Math.min(GW - 1, Math.floor((x + r) / CS)),
+      y0 = Math.max(0, Math.floor((y - r) / CS)), y1 = Math.min(GH - 1, Math.floor((y + r) / CS));
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+      const c = ground[cy * GW + cx];
+      for (const e of c) if ((e.x - x) ** 2 + (e.y - y) ** 2 <= r * r) out.push(e);
+    }
+    return out;
+  }
+  function prepareGround(entities) {
+    for (const c of activeGround) c.length = 0; activeGround.length = 0;
+    for (const e of entities) {
+      if (!groundCollider(e)) continue;
+      const cx = Math.max(0, Math.min(GW - 1, Math.floor(e.x / CS))), cy = Math.max(0, Math.min(GH - 1, Math.floor(e.y / CS))), c = ground[cy * GW + cx];
+      if (!c.length) activeGround.push(c); c.push(e);
+    }
+  }
+  return { clear, insert, query, queryEnemy, ownerChanged, queryGround, prepareGround };
 })();

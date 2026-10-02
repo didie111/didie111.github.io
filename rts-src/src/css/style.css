@@ -18,8 +18,13 @@ button.on { background: linear-gradient(#2c5a8c, #183050); border-color: #7ab0ff
 .msg.fade { opacity: 0; }
 
 /* ---------- 콘솔 패널 (스타1 하단 UI) ---------- */
-#console { position: absolute; left: 0; right: 0; bottom: 0; height: 176px; display: flex; align-items: stretch; gap: 8px; padding: 8px 10px;
+#console { position: absolute; left: 0; right: 0; bottom: 12px; height: 176px; display: flex; align-items: stretch; gap: 8px; padding: 8px 10px;
   background: linear-gradient(#3b3226 0, #231c14 12px, #16120c 100%); border-top: 3px solid #6e5c3e; box-shadow: inset 0 2px 0 #9c8458, 0 -4px 10px rgba(0,0,0,0.6); z-index: 4; }
+#hud-menu { position: absolute; left: 178px; top: -30px; display: flex; gap: 5px; align-items: center; padding: 2px 5px; background: #231c14; border: 1px solid #6e5c3e; border-bottom: 0; }
+#hud-menu button { font-size: 12px; padding: 2px 8px; }
+#bottom-edge { position: fixed; left: 0; right: 0; bottom: 0; height: 12px; background: linear-gradient(#30281b,#100d08); border-top: 1px solid #6e5c3e; z-index: 6; }
+#bottom-edge::after { content: '▼'; position: absolute; left: 50%; font-size: 9px; line-height: 10px; color: #a18b61; }
+#locked-cursor { position: fixed; width: 32px; height: 32px; pointer-events: none; z-index: 100; image-rendering: pixelated; }
 #mm-wrap { width: 160px; height: 160px; border: 2px solid #8a7550; background: #000; box-shadow: inset 0 0 0 1px #000; flex: none; }
 #minimap { width: 156px; height: 156px; image-rendering: pixelated; display: block; cursor: crosshair; }
 #info { flex: 1; min-width: 280px; border: 2px solid #5a4a30; background: radial-gradient(#0e1a10, #050805); padding: 8px; overflow: hidden; position: relative; }
