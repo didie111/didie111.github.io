@@ -26,6 +26,8 @@ class Entity {
     this.kills = 0; this.anim = Math.random() * 100; this.attackAnim = 0;
     this.done = true;
     this.tgt = null;
+    this.attackApproach = null; this.attackBorderTarget = null; this.meleeAttackTarget = null;
+    this.attackRetryAt = 0; this.attackCandidateOffset = 0;
     this.queue = [];
     this.cargo = [];
     this.carry = 0; this.carryKind = null;
@@ -94,6 +96,7 @@ class Entity {
         const b = this.orders[0].tgt; if (b && b.builder === this) b.builder = null;
       }
       this.releaseMining();
+      this.clearAttackApproach();
       this.groundRecovery = null;
       this.orders = [o]; this.path = null; this.tgt = null; this.stuck = 0;
       this.vx = 0; this.vy = 0; this.lastD = undefined; this.giveUp = 0; this.avoidSide = 0; this.blockedTicks = 0;
@@ -119,6 +122,7 @@ class Entity {
   }
   nextOrder() {
     this.releaseMining();
+    this.clearAttackApproach();
     this.orders.shift(); this.path = null; this.tgt = null; this.stuck = 0;
     this.collisionWait = 0; this.repathMoversUntil = 0;
     this.syncHarvestCollision();
@@ -346,14 +350,124 @@ class Entity {
     const rng = this.range(w);
     if (d > rng) {
       if (!canMove || this.speed <= 0) return false;
-      this.moveTo(t.x, t.y, 0, t);
+      this.moveInAttackRange(t, w);
       return true;
     }
     if (w.minRange && d < w.minRange) return false;
+    this.clearAttackApproach();
     this.path = null;
     this.dir = Math.atan2(t.y - this.y, t.x - this.x);
     if (this.cooldown <= 0) this.fire(t, w);
     return true;
+  }
+
+  clearAttackApproach() {
+    if (this.attackApproach) this.attackApproach.target.attackClaims?.delete(this.id);
+    this.meleeAttackTarget?.meleeAttackers?.delete(this);
+    this.meleeAttackTarget = null;
+    this.attackApproach = null; this.attackBorderTarget = null;
+    this.attackRetryAt = 0; this.attackCandidateOffset = 0;
+  }
+  trackMeleeAttack(t) {
+    const attackers = t.meleeAttackers || (t.meleeAttackers = new Set());
+    if (t.meleeAttackSweep !== Math.floor(GAME.tick / 24)) {
+      t.meleeAttackSweep = Math.floor(GAME.tick / 24);
+      for (const a of attackers) if (a.dead || a.hidden || a.meleeAttackTarget !== t) attackers.delete(a);
+    }
+    this.meleeAttackTarget = t; attackers.add(this);
+  }
+  moveInAttackRange(t, w) {
+    const range = this.range(w);
+    const melee = !this.air && !t.airTarget && range <= 32;
+    // OpenBW preserves the target's reachable border and stops inside weapon range.
+    // The perimeter claims below are an adaptation for this engine's circular bodies.
+    if (melee && !t.moving && edgeDist(this, t) < 6 * TILE) {
+      if (this.meleeAttackTarget !== t) this.clearAttackApproach();
+      this.trackMeleeAttack(t);
+      this.moveToMeleeBorder(t, range); return;
+    }
+    this.clearAttackApproach();
+    if (melee) this.trackMeleeAttack(t);
+    if (melee && !t.moving) {
+      // A distant stationary target also has a reachable border. Sending every
+      // attacker to its occupied center repeats A* even across open ground.
+      const x = Math.max(t.x - hx(t) - this.r, Math.min(this.x, t.x + hx(t) + this.r)),
+        y = Math.max(t.y - hy(t) - this.r, Math.min(this.y, t.y + hy(t) + this.r)),
+        dx = this.x - x, dy = this.y - y, d = Math.hypot(dx, dy) || 1, gap = Math.max(1, range - 1);
+      this.moveTo(x + dx / d * gap, y + dy / d * gap, .001); return;
+    }
+    // Pursuit must not brake at a point just inside weapon range: a moving
+    // target would keep escaping while an accelerated attacker slows down.
+    // OpenBW follows the target and stops only once the weapon range test succeeds.
+    this.moveTo(t.x, t.y, 0, t);
+  }
+  moveToMeleeBorder(t, range) {
+    let approach = this.attackApproach;
+    if (approach && (approach.target !== t || approach.tx !== t.x || approach.ty !== t.y || approach.range !== range ||
+        this.blockedTicks >= 8 || this.stuck >= 20)) {
+      this.clearAttackApproach(); this.path = null; this.pathRetryAt = 0;
+      this.trackMeleeAttack(t);
+      this.stuck = 0; this.blockedTicks = 0;
+      approach = null;
+    }
+    if (approach) {
+      approach.expires = GAME.tick + 24;
+      this.moveTo(approach.x, approach.y, .001); return;
+    }
+    if (this.attackBorderTarget !== t) {
+      this.attackBorderTarget = t; this.attackRetryAt = 0; this.attackCandidateOffset = 0;
+    }
+    if (GAME.tick < (this.attackRetryAt || 0)) return;
+    const claims = t.attackClaims || (t.attackClaims = new Map());
+    for (const [id, claim] of claims) if (claim.expires < GAME.tick || claim.unit.dead || claim.unit.hidden ||
+        claim.unit.attackApproach !== claim) claims.delete(id);
+    const r = this.r, gap = Math.max(1, range - 1), bx = hx(t) + r, by = hy(t) + r,
+      sx = bx + gap, sy = by + gap, step = r * 1.8 + 1;
+    const points = [], push = (x, y) => points.push({x:t.x + x, y:t.y + y});
+    for (let i = 0, n = Math.max(1, Math.ceil(by * 2 / step)); i <= n; i++) {
+      const y = -by + by * 2 * i / n; push(-sx, y); push(sx, y);
+    }
+    for (let i = 0, n = Math.max(1, Math.ceil(bx * 2 / step)); i <= n; i++) {
+      const x = -bx + bx * 2 * i / n; push(x, -sy); push(x, sy);
+    }
+    const bodies = SH.query(t.x, t.y, Math.max(sx, sy) + 80).filter(u => u !== this && groundCollider(u));
+    const activeClaims = [...claims.values()];
+    const candidates = points.filter(p => PF.positionClear(p.x, p.y, Math.max(3, r * .75), 0) &&
+      PF.unitsClear(p.x, p.y, p.x, p.y, r, bodies) && !activeClaims.some(c =>
+        (p.x - c.x) ** 2 + (p.y - c.y) ** 2 < ((r + c.unit.r) * .85 + .2) ** 2));
+    candidates.sort((a, b) => (a.x - this.x) ** 2 + (a.y - this.y) ** 2 - (b.x - this.x) ** 2 - (b.y - this.y) ** 2);
+    // Hundreds attacking one target share its route-search work each tick.
+    // Clear direct approaches remain immediate; failed searches are staggered.
+    if (t.attackSearchTick !== GAME.tick) { t.attackSearchTick = GAME.tick; t.attackSearchWork = 0; }
+    const crowded = t.meleeAttackers.size > 32;
+    let obstacles = null, tested = 0;
+    const offset = (this.attackCandidateOffset || 0) % Math.max(1, candidates.length);
+    for (let i = 0; i < Math.min(6, candidates.length); i++) {
+      if (PF.budget <= 0) break;
+      const goal = candidates[(offset + i) % candidates.length];
+      let route;
+      if (PF.lineClear(this.x, this.y, goal.x, goal.y, Math.max(3, r * .75), 0) &&
+          PF.unitsClear(this.x, this.y, goal.x, goal.y, r, bodies)) route = [[goal.x, goal.y]];
+      else {
+        if (crowded && t.attackSearchWork >= 2000) break;
+        obstacles ||= PF.unitObstacles(this, false);
+        const before = PF.budget;
+        route = PF.unitPath(this.x, this.y, goal.x, goal.y, r, obstacles, 0, this.owner, true,
+          crowded ? Math.max(1, 2000 - t.attackSearchWork) : Infinity);
+        t.attackSearchWork += Math.max(1, before - PF.budget);
+      }
+      tested++;
+      if (!route?.length || Math.hypot(route.at(-1)[0] - goal.x, route.at(-1)[1] - goal.y) > .01) continue;
+      approach = {target:t, unit:this, tx:t.x, ty:t.y, range, x:goal.x, y:goal.y, expires:GAME.tick + 24};
+      this.attackApproach = approach; claims.set(this.id, approach);
+      this.path = route; this.pi = 0; this.pgx = goal.x; this.pgy = goal.y; this.pathExact = true; this.pathDynamic = true;
+      this.repathAt = GAME.tick + 120; this.pathRetryAt = 0; this.lastD = undefined;
+      this.moveTo(goal.x, goal.y, .001); return;
+    }
+    // A surrounded target does not justify moving its idle defenders or dropping attack.
+    // Continue with other edges next time instead of repeating unreachable near-side pockets.
+    this.path = null; this.attackCandidateOffset = offset + tested;
+    this.attackRetryAt = GAME.tick + (tested ? 6 + this.id % 6 : 1 + this.id % 3);
   }
 
   fire(t, w) {

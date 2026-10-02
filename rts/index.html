@@ -16,6 +16,7 @@ button.on { background: linear-gradient(#2c5a8c, #183050); border-color: #7ab0ff
 #topbar { position: absolute; top: 0; right: 0; display: flex; gap: 14px; align-items: center; padding: 4px 10px; background: rgba(0,0,0,0.55); border-bottom-left-radius: 6px; z-index: 5; }
 #topbar .res { display: flex; align-items: center; gap: 4px; min-width: 70px; font-weight: bold; color: #e8e8e8; text-shadow: 1px 1px 0 #000; }
 #topbar .res img { width: 18px; height: 18px; image-rendering: pixelated; }
+#game-fps { min-width: 58px; color: #b9e8ad; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 #r-sup.cap { color: #ff4040; }
 #topbar .menu-btns { display: flex; gap: 4px; margin-left: 8px; }
 #topbar .menu-btns button { padding: 1px 6px; font-size: 11px; }
@@ -132,6 +133,7 @@ button.on { background: linear-gradient(#2c5a8c, #183050); border-color: #7ab0ff
 <canvas id="game"></canvas>
 
 <div id="topbar">
+  <span id="game-fps" aria-label="화면 FPS" title="실제 화면 렌더링 FPS">FPS —</span>
   <div class="res"><img id="ico-min"><span id="r-min">0</span></div>
   <div class="res"><img id="ico-gas"><span id="r-gas">0</span></div>
   <div class="res"><img id="r-sup-ico"><span id="r-sup">0/0</span></div>
@@ -574,7 +576,7 @@ function supplyText(v) { return (Math.round(v * 2) / 2).toString(); }
 'use strict';
 // 확장 데이터: Blizzard StarCraft Compendium 수치/역할을 참고한 웹게임 구현.
 // 원작 MPQ/엔진을 포함하지 않으며 투사체/애니메이션/길찾기는 자체 구현이다.
-const RTS_VERSION = '2026.10.02-sc1.20';
+const RTS_VERSION = '2026.10.03-sc1.21';
 // flingy.dat: [acceleration, turn N/256 circle, halt N/256 px, movement control].
 // Control 0: acceleration + braking; 1: acceleration without braking; 2: iscript.
 // The acceleration field alone does not identify walking units (notably templars).
@@ -1080,7 +1082,7 @@ const PF = (() => {
     return MAP.walk[i] === 1 && (MAP.occ[i] === 0 || MAP.occ[i] === ignoreId) && !(avoid && avoid.has(i));
   }
 
-  function find(sx, sy, gx, gy, ignoreId, avoid) {
+  function find(sx, sy, gx, gy, ignoreId, avoid, maxNodes = 9000) {
     const st = nearestPassable(sx, sy, 4, ignoreId, avoid);
     const gl = nearestPassable(gx, gy, 12, ignoreId, avoid);
     if (!st || !gl) return null;
@@ -1095,7 +1097,7 @@ const PF = (() => {
       if (closedGen[cur] === gen) continue;
       closedGen[cur] = gen;
       if (cur === goal) { best = cur; break; }
-      if (++nodes > 9000) break;
+      if (++nodes > Math.min(9000, maxNodes)) break;
       const cx = cur % MAP_W, cy = (cur / MAP_W) | 0;
       const h = oct(cx, cy, gx, gy);
       if (h < bestH) { bestH = h; best = cur; }
@@ -1158,8 +1160,8 @@ const PF = (() => {
   }
 
   // 월드 좌표 경로 (스무딩 포함)
-  function worldPath(x0, y0, x1, y1, r, ignoreId, obstacles) {
-    const tiles = find(Math.floor(x0 / TILE), Math.floor(y0 / TILE), Math.floor(x1 / TILE), Math.floor(y1 / TILE), ignoreId, obstacles && obstacles.cells);
+  function worldPath(x0, y0, x1, y1, r, ignoreId, obstacles, maxNodes = 9000) {
+    const tiles = find(Math.floor(x0 / TILE), Math.floor(y0 / TILE), Math.floor(x1 / TILE), Math.floor(y1 / TILE), ignoreId, obstacles && obstacles.cells, maxNodes);
     if (!tiles) return null;
     const pts = tiles.map(([x, y]) => [x * TILE + 16, y * TILE + 16]);
     const last = tiles[tiles.length - 1];
@@ -1190,22 +1192,40 @@ const PF = (() => {
     }) || null;
   }
 
-  function unitPath(x0, y0, x1, y1, r, obstacles, group, owner) {
-    const escape = circlePath(x0, y0, x1, y1, r, obstacles);
-    if (escape) return escape;
-    const fine = localPath(x0, y0, x1, y1, r, obstacles, goalBlocker(x1, y1, r, obstacles.units, group, owner));
-    if (fine) return fine;
-    const coarse = worldPath(x0, y0, x1, y1, r, 0, obstacles);
-    if (coarse && coarse.length) {
-      const end = coarse[coarse.length - 1];
-      let ax = x0, ay = y0;
-      const valid = coarse.every(([bx, by]) => {
-        const clear = lineClear(ax, ay, bx, by, Math.max(3, r * 0.75), 0) && unitsClear(ax, ay, bx, by, r, obstacles.units);
-        ax = bx; ay = by; return clear;
-      });
-      if (Math.hypot(end[0] - x1, end[1] - y1) < 1 && valid) return coarse;
+  function unitPath(x0, y0, x1, y1, r, obstacles, group, owner, requireGoal = false, maxWork = Infinity) {
+    const available = budget, allowance = Math.min(budget, maxWork);
+    budget = allowance;
+    try {
+      const completeCoarse = () => {
+        const p = worldPath(x0, y0, x1, y1, r, 0, obstacles, requireGoal ? Math.max(0, budget) : 9000);
+        if (!p?.length || Math.hypot(p.at(-1)[0] - x1, p.at(-1)[1] - y1) >= 1) return null;
+        let ax = x0, ay = y0;
+        const valid = p.every(([bx, by]) => {
+          const clear = lineClear(ax, ay, bx, by, Math.max(3, r * .75), 0) && unitsClear(ax, ay, bx, by, r, obstacles.units);
+          ax = bx; ay = by; return clear;
+        });
+        return valid ? p : null;
+      };
+      // In a large attacking crowd, try the cheap tile route before building
+      // a visibility graph around many bodies. Every segment is still checked.
+      if (requireGoal && Number.isFinite(maxWork)) {
+        const coarse = completeCoarse();
+        if (coarse) return coarse;
+        if (budget <= 0) return null;
+      }
+      const escape = circlePath(x0, y0, x1, y1, r, obstacles);
+      if (escape) return escape;
+      const fine = localPath(x0, y0, x1, y1, r, obstacles, goalBlocker(x1, y1, r, obstacles.units, group, owner));
+      // A melee border choice needs a complete route. A partial local path can
+      // end before a wall's corner even when the coarse route reaches that side.
+      // Ordinary movement/recovery keeps its existing short partial paths.
+      if (fine && (!requireGoal || Math.hypot(fine.at(-1)[0] - x1, fine.at(-1)[1] - y1) < .01)) return fine;
+      if (requireGoal && budget <= 0) return null;
+      return completeCoarse();
+    } finally {
+      // Keep the global tick budget accurate after a bounded attack search.
+      budget = available - allowance + budget;
     }
-    return null;
   }
 
   function compactPath(points) {
@@ -1786,6 +1806,8 @@ class Entity {
     this.kills = 0; this.anim = Math.random() * 100; this.attackAnim = 0;
     this.done = true;
     this.tgt = null;
+    this.attackApproach = null; this.attackBorderTarget = null; this.meleeAttackTarget = null;
+    this.attackRetryAt = 0; this.attackCandidateOffset = 0;
     this.queue = [];
     this.cargo = [];
     this.carry = 0; this.carryKind = null;
@@ -1854,6 +1876,7 @@ class Entity {
         const b = this.orders[0].tgt; if (b && b.builder === this) b.builder = null;
       }
       this.releaseMining();
+      this.clearAttackApproach();
       this.groundRecovery = null;
       this.orders = [o]; this.path = null; this.tgt = null; this.stuck = 0;
       this.vx = 0; this.vy = 0; this.lastD = undefined; this.giveUp = 0; this.avoidSide = 0; this.blockedTicks = 0;
@@ -1879,6 +1902,7 @@ class Entity {
   }
   nextOrder() {
     this.releaseMining();
+    this.clearAttackApproach();
     this.orders.shift(); this.path = null; this.tgt = null; this.stuck = 0;
     this.collisionWait = 0; this.repathMoversUntil = 0;
     this.syncHarvestCollision();
@@ -2106,14 +2130,124 @@ class Entity {
     const rng = this.range(w);
     if (d > rng) {
       if (!canMove || this.speed <= 0) return false;
-      this.moveTo(t.x, t.y, 0, t);
+      this.moveInAttackRange(t, w);
       return true;
     }
     if (w.minRange && d < w.minRange) return false;
+    this.clearAttackApproach();
     this.path = null;
     this.dir = Math.atan2(t.y - this.y, t.x - this.x);
     if (this.cooldown <= 0) this.fire(t, w);
     return true;
+  }
+
+  clearAttackApproach() {
+    if (this.attackApproach) this.attackApproach.target.attackClaims?.delete(this.id);
+    this.meleeAttackTarget?.meleeAttackers?.delete(this);
+    this.meleeAttackTarget = null;
+    this.attackApproach = null; this.attackBorderTarget = null;
+    this.attackRetryAt = 0; this.attackCandidateOffset = 0;
+  }
+  trackMeleeAttack(t) {
+    const attackers = t.meleeAttackers || (t.meleeAttackers = new Set());
+    if (t.meleeAttackSweep !== Math.floor(GAME.tick / 24)) {
+      t.meleeAttackSweep = Math.floor(GAME.tick / 24);
+      for (const a of attackers) if (a.dead || a.hidden || a.meleeAttackTarget !== t) attackers.delete(a);
+    }
+    this.meleeAttackTarget = t; attackers.add(this);
+  }
+  moveInAttackRange(t, w) {
+    const range = this.range(w);
+    const melee = !this.air && !t.airTarget && range <= 32;
+    // OpenBW preserves the target's reachable border and stops inside weapon range.
+    // The perimeter claims below are an adaptation for this engine's circular bodies.
+    if (melee && !t.moving && edgeDist(this, t) < 6 * TILE) {
+      if (this.meleeAttackTarget !== t) this.clearAttackApproach();
+      this.trackMeleeAttack(t);
+      this.moveToMeleeBorder(t, range); return;
+    }
+    this.clearAttackApproach();
+    if (melee) this.trackMeleeAttack(t);
+    if (melee && !t.moving) {
+      // A distant stationary target also has a reachable border. Sending every
+      // attacker to its occupied center repeats A* even across open ground.
+      const x = Math.max(t.x - hx(t) - this.r, Math.min(this.x, t.x + hx(t) + this.r)),
+        y = Math.max(t.y - hy(t) - this.r, Math.min(this.y, t.y + hy(t) + this.r)),
+        dx = this.x - x, dy = this.y - y, d = Math.hypot(dx, dy) || 1, gap = Math.max(1, range - 1);
+      this.moveTo(x + dx / d * gap, y + dy / d * gap, .001); return;
+    }
+    // Pursuit must not brake at a point just inside weapon range: a moving
+    // target would keep escaping while an accelerated attacker slows down.
+    // OpenBW follows the target and stops only once the weapon range test succeeds.
+    this.moveTo(t.x, t.y, 0, t);
+  }
+  moveToMeleeBorder(t, range) {
+    let approach = this.attackApproach;
+    if (approach && (approach.target !== t || approach.tx !== t.x || approach.ty !== t.y || approach.range !== range ||
+        this.blockedTicks >= 8 || this.stuck >= 20)) {
+      this.clearAttackApproach(); this.path = null; this.pathRetryAt = 0;
+      this.trackMeleeAttack(t);
+      this.stuck = 0; this.blockedTicks = 0;
+      approach = null;
+    }
+    if (approach) {
+      approach.expires = GAME.tick + 24;
+      this.moveTo(approach.x, approach.y, .001); return;
+    }
+    if (this.attackBorderTarget !== t) {
+      this.attackBorderTarget = t; this.attackRetryAt = 0; this.attackCandidateOffset = 0;
+    }
+    if (GAME.tick < (this.attackRetryAt || 0)) return;
+    const claims = t.attackClaims || (t.attackClaims = new Map());
+    for (const [id, claim] of claims) if (claim.expires < GAME.tick || claim.unit.dead || claim.unit.hidden ||
+        claim.unit.attackApproach !== claim) claims.delete(id);
+    const r = this.r, gap = Math.max(1, range - 1), bx = hx(t) + r, by = hy(t) + r,
+      sx = bx + gap, sy = by + gap, step = r * 1.8 + 1;
+    const points = [], push = (x, y) => points.push({x:t.x + x, y:t.y + y});
+    for (let i = 0, n = Math.max(1, Math.ceil(by * 2 / step)); i <= n; i++) {
+      const y = -by + by * 2 * i / n; push(-sx, y); push(sx, y);
+    }
+    for (let i = 0, n = Math.max(1, Math.ceil(bx * 2 / step)); i <= n; i++) {
+      const x = -bx + bx * 2 * i / n; push(x, -sy); push(x, sy);
+    }
+    const bodies = SH.query(t.x, t.y, Math.max(sx, sy) + 80).filter(u => u !== this && groundCollider(u));
+    const activeClaims = [...claims.values()];
+    const candidates = points.filter(p => PF.positionClear(p.x, p.y, Math.max(3, r * .75), 0) &&
+      PF.unitsClear(p.x, p.y, p.x, p.y, r, bodies) && !activeClaims.some(c =>
+        (p.x - c.x) ** 2 + (p.y - c.y) ** 2 < ((r + c.unit.r) * .85 + .2) ** 2));
+    candidates.sort((a, b) => (a.x - this.x) ** 2 + (a.y - this.y) ** 2 - (b.x - this.x) ** 2 - (b.y - this.y) ** 2);
+    // Hundreds attacking one target share its route-search work each tick.
+    // Clear direct approaches remain immediate; failed searches are staggered.
+    if (t.attackSearchTick !== GAME.tick) { t.attackSearchTick = GAME.tick; t.attackSearchWork = 0; }
+    const crowded = t.meleeAttackers.size > 32;
+    let obstacles = null, tested = 0;
+    const offset = (this.attackCandidateOffset || 0) % Math.max(1, candidates.length);
+    for (let i = 0; i < Math.min(6, candidates.length); i++) {
+      if (PF.budget <= 0) break;
+      const goal = candidates[(offset + i) % candidates.length];
+      let route;
+      if (PF.lineClear(this.x, this.y, goal.x, goal.y, Math.max(3, r * .75), 0) &&
+          PF.unitsClear(this.x, this.y, goal.x, goal.y, r, bodies)) route = [[goal.x, goal.y]];
+      else {
+        if (crowded && t.attackSearchWork >= 2000) break;
+        obstacles ||= PF.unitObstacles(this, false);
+        const before = PF.budget;
+        route = PF.unitPath(this.x, this.y, goal.x, goal.y, r, obstacles, 0, this.owner, true,
+          crowded ? Math.max(1, 2000 - t.attackSearchWork) : Infinity);
+        t.attackSearchWork += Math.max(1, before - PF.budget);
+      }
+      tested++;
+      if (!route?.length || Math.hypot(route.at(-1)[0] - goal.x, route.at(-1)[1] - goal.y) > .01) continue;
+      approach = {target:t, unit:this, tx:t.x, ty:t.y, range, x:goal.x, y:goal.y, expires:GAME.tick + 24};
+      this.attackApproach = approach; claims.set(this.id, approach);
+      this.path = route; this.pi = 0; this.pgx = goal.x; this.pgy = goal.y; this.pathExact = true; this.pathDynamic = true;
+      this.repathAt = GAME.tick + 120; this.pathRetryAt = 0; this.lastD = undefined;
+      this.moveTo(goal.x, goal.y, .001); return;
+    }
+    // A surrounded target does not justify moving its idle defenders or dropping attack.
+    // Continue with other edges next time instead of repeating unreachable near-side pockets.
+    this.path = null; this.attackCandidateOffset = offset + tested;
+    this.attackRetryAt = GAME.tick + (tested ? 6 + this.id % 6 : 1 + this.id % 3);
   }
 
   fire(t, w) {
@@ -5565,7 +5699,7 @@ const UI = {
   init() {
     const $ = (id) => document.getElementById(id);
     this.el = { cv: $('game'), mm: $('minimap'), info: $('info'), cmd: $('cmd'), msgs: $('msgs'), tip: $('tip'),
-      min: $('r-min'), gas: $('r-gas'), sup: $('r-sup'), supIco: $('r-sup-ico'), console: $('console'), test: $('test'), help: $('help'),
+      min: $('r-min'), gas: $('r-gas'), sup: $('r-sup'), supIco: $('r-sup-ico'), fps: $('game-fps'), console: $('console'), test: $('test'), help: $('help'),
       bottomEdge: $('bottom-edge'), mouseLock: $('mouse-lock'), pointerCursor: $('locked-cursor') };
     this.mmCtx = this.el.mm.getContext('2d');
     this.mmTerrain = ART.minimapTerrain();
@@ -6462,10 +6596,16 @@ const UI = {
       g.beginPath(); g.arc(pg.x / TILE, pg.y / TILE, 3 + (pg.t % 24) / 2, 0, 6.283); g.stroke();
     }
     this.pings = this.pings.filter(pg => pg.t < 72);
-    // 화면 사각형
+    // 사용자가 요청한 정사각형 화면 위치 표시. 실제 전장 비율/카메라는 유지한다.
     g.strokeStyle = '#fff'; g.lineWidth = 1;
-    const vh = VIEW.h - this.consoleH() / VIEW.scale;
-    g.strokeRect(VIEW.x / TILE + 0.5, VIEW.y / TILE + 0.5, VIEW.w / TILE, vh / TILE);
+    const box = this.minimapViewport();
+    g.strokeRect(box.x + .5, box.y + .5, box.size, box.size);
+  },
+  minimapViewport() {
+    const height = Math.max(1, VIEW.h - this.consoleH() / VIEW.scale);
+    const size = Math.min(Math.max(VIEW.w, height) / TILE, MAP_W - 1, MAP_H - 1);
+    return {size, x:Math.max(0, Math.min(MAP_W - 1 - size, (VIEW.x + VIEW.w / 2) / TILE - size / 2)),
+      y:Math.max(0, Math.min(MAP_H - 1 - size, (VIEW.y + height / 2) / TILE - size / 2))};
   },
 
   // ---------------- 프레임 ----------------
@@ -6506,6 +6646,10 @@ const UI = {
     if (fr % 4 === 0) this.drawMinimap();
   },
   renderRes() {
+    if (this.el.fps) {
+      const text = GAME.performance ? 'FPS ' + GAME.performance.fps : 'FPS —';
+      if (this.el.fps.textContent !== text) this.el.fps.textContent = text;
+    }
     const pl = P(GAME.control);
     if (!pl) return;
     this.el.min.textContent = Math.floor(pl.min);
@@ -6563,13 +6707,16 @@ const UI = {
     popup.style.width = width + 'px'; popup.style.maxHeight = Math.max(48, Math.min(height, window.innerHeight - top - 12)) + 'px';
     this.menuSelect = {select, trigger, popup, options, index:Math.max(0, options.findIndex(button => button.value === select.value))};
     document.body.appendChild(popup); trigger.setAttribute('aria-expanded', 'true');
-    this.highlightMenuSelect(this.menuSelect.index);
+    const position = this.menuSelectPositions?.get(select);
+    this.highlightMenuSelect(this.menuSelect.index, !position || position.value !== select.value);
+    if (position && position.value === select.value) popup.scrollTop = position.scrollTop;
   },
-  highlightMenuSelect(index) {
+  highlightMenuSelect(index, scroll = true) {
     const menu = this.menuSelect; if (!menu) return;
     menu.index = Math.max(0, Math.min(menu.options.length - 1, index));
     menu.options.forEach((button, i) => button.classList.toggle('active', i === menu.index));
-    const button = menu.options[menu.index]; button?.focus({preventScroll:true}); button?.scrollIntoView({block:'nearest'});
+    const button = menu.options[menu.index]; button?.focus({preventScroll:true});
+    if (scroll) button?.scrollIntoView({block:'nearest'});
   },
   chooseMenuSelect(value) {
     const menu = this.menuSelect; if (!menu) return;
@@ -6579,6 +6726,8 @@ const UI = {
   },
   closeMenuSelect(focus = false) {
     const menu = this.menuSelect; if (!menu) return;
+    if (!this.menuSelectPositions) this.menuSelectPositions = new WeakMap();
+    this.menuSelectPositions.set(menu.select, {value:menu.select.value, scrollTop:menu.popup.scrollTop});
     this.menuSelect = null; menu.popup.remove(); menu.trigger.setAttribute('aria-expanded', 'false');
     if (focus) menu.trigger.focus({preventScroll:true});
   },

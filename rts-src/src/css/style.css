@@ -9,6 +9,7 @@ button.on { background: linear-gradient(#2c5a8c, #183050); border-color: #7ab0ff
 #topbar { position: absolute; top: 0; right: 0; display: flex; gap: 14px; align-items: center; padding: 4px 10px; background: rgba(0,0,0,0.55); border-bottom-left-radius: 6px; z-index: 5; }
 #topbar .res { display: flex; align-items: center; gap: 4px; min-width: 70px; font-weight: bold; color: #e8e8e8; text-shadow: 1px 1px 0 #000; }
 #topbar .res img { width: 18px; height: 18px; image-rendering: pixelated; }
+#game-fps { min-width: 58px; color: #b9e8ad; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 #r-sup.cap { color: #ff4040; }
 #topbar .menu-btns { display: flex; gap: 4px; margin-left: 8px; }
 #topbar .menu-btns button { padding: 1px 6px; font-size: 11px; }

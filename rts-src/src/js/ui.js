@@ -14,7 +14,7 @@ const UI = {
   init() {
     const $ = (id) => document.getElementById(id);
     this.el = { cv: $('game'), mm: $('minimap'), info: $('info'), cmd: $('cmd'), msgs: $('msgs'), tip: $('tip'),
-      min: $('r-min'), gas: $('r-gas'), sup: $('r-sup'), supIco: $('r-sup-ico'), console: $('console'), test: $('test'), help: $('help'),
+      min: $('r-min'), gas: $('r-gas'), sup: $('r-sup'), supIco: $('r-sup-ico'), fps: $('game-fps'), console: $('console'), test: $('test'), help: $('help'),
       bottomEdge: $('bottom-edge'), mouseLock: $('mouse-lock'), pointerCursor: $('locked-cursor') };
     this.mmCtx = this.el.mm.getContext('2d');
     this.mmTerrain = ART.minimapTerrain();
@@ -911,10 +911,16 @@ const UI = {
       g.beginPath(); g.arc(pg.x / TILE, pg.y / TILE, 3 + (pg.t % 24) / 2, 0, 6.283); g.stroke();
     }
     this.pings = this.pings.filter(pg => pg.t < 72);
-    // 화면 사각형
+    // 사용자가 요청한 정사각형 화면 위치 표시. 실제 전장 비율/카메라는 유지한다.
     g.strokeStyle = '#fff'; g.lineWidth = 1;
-    const vh = VIEW.h - this.consoleH() / VIEW.scale;
-    g.strokeRect(VIEW.x / TILE + 0.5, VIEW.y / TILE + 0.5, VIEW.w / TILE, vh / TILE);
+    const box = this.minimapViewport();
+    g.strokeRect(box.x + .5, box.y + .5, box.size, box.size);
+  },
+  minimapViewport() {
+    const height = Math.max(1, VIEW.h - this.consoleH() / VIEW.scale);
+    const size = Math.min(Math.max(VIEW.w, height) / TILE, MAP_W - 1, MAP_H - 1);
+    return {size, x:Math.max(0, Math.min(MAP_W - 1 - size, (VIEW.x + VIEW.w / 2) / TILE - size / 2)),
+      y:Math.max(0, Math.min(MAP_H - 1 - size, (VIEW.y + height / 2) / TILE - size / 2))};
   },
 
   // ---------------- 프레임 ----------------
@@ -955,6 +961,10 @@ const UI = {
     if (fr % 4 === 0) this.drawMinimap();
   },
   renderRes() {
+    if (this.el.fps) {
+      const text = GAME.performance ? 'FPS ' + GAME.performance.fps : 'FPS —';
+      if (this.el.fps.textContent !== text) this.el.fps.textContent = text;
+    }
     const pl = P(GAME.control);
     if (!pl) return;
     this.el.min.textContent = Math.floor(pl.min);
@@ -1012,13 +1022,16 @@ const UI = {
     popup.style.width = width + 'px'; popup.style.maxHeight = Math.max(48, Math.min(height, window.innerHeight - top - 12)) + 'px';
     this.menuSelect = {select, trigger, popup, options, index:Math.max(0, options.findIndex(button => button.value === select.value))};
     document.body.appendChild(popup); trigger.setAttribute('aria-expanded', 'true');
-    this.highlightMenuSelect(this.menuSelect.index);
+    const position = this.menuSelectPositions?.get(select);
+    this.highlightMenuSelect(this.menuSelect.index, !position || position.value !== select.value);
+    if (position && position.value === select.value) popup.scrollTop = position.scrollTop;
   },
-  highlightMenuSelect(index) {
+  highlightMenuSelect(index, scroll = true) {
     const menu = this.menuSelect; if (!menu) return;
     menu.index = Math.max(0, Math.min(menu.options.length - 1, index));
     menu.options.forEach((button, i) => button.classList.toggle('active', i === menu.index));
-    const button = menu.options[menu.index]; button?.focus({preventScroll:true}); button?.scrollIntoView({block:'nearest'});
+    const button = menu.options[menu.index]; button?.focus({preventScroll:true});
+    if (scroll) button?.scrollIntoView({block:'nearest'});
   },
   chooseMenuSelect(value) {
     const menu = this.menuSelect; if (!menu) return;
@@ -1028,6 +1041,8 @@ const UI = {
   },
   closeMenuSelect(focus = false) {
     const menu = this.menuSelect; if (!menu) return;
+    if (!this.menuSelectPositions) this.menuSelectPositions = new WeakMap();
+    this.menuSelectPositions.set(menu.select, {value:menu.select.value, scrollTop:menu.popup.scrollTop});
     this.menuSelect = null; menu.popup.remove(); menu.trigger.setAttribute('aria-expanded', 'false');
     if (focus) menu.trigger.focus({preventScroll:true});
   },

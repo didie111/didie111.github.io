@@ -1,0 +1,614 @@
+{
+  "scenario": {
+    "baselineCommit": "c856034a095e90dcbbb8fd30da5ff3cbfca400d0",
+    "currentVersion": "2026.10.03-sc1.21",
+    "seed": 42,
+    "simulationTicksPerSecond": 24,
+    "terrain": "flat open, no height or other buildings",
+    "target": {
+      "type": "cc",
+      "owner": 1,
+      "tx": 24,
+      "ty": 24,
+      "hp": 100000
+    },
+    "attackerType": "zergling",
+    "owner": 0,
+    "formation": "x=target.x-260+(i%4)*20; y=target.y-130+floor(i/4)*22",
+    "order": "explicit attack target",
+    "renderingIncluded": false,
+    "runtime": "Node v24.19.0",
+    "runsWereSequential": true
+  },
+  "twentyFour": {
+    "before": [
+      {
+        "run": 1,
+        "version": "2026.10.02-sc1.20",
+        "attackers": 24,
+        "ticks": 240,
+        "elapsedMs": 1311.95,
+        "meanTickMs": 5.46,
+        "p95TickMs": 25.5,
+        "maxTickMs": 87.22,
+        "firstAttackTicks": [
+          25,
+          26,
+          31,
+          36,
+          38,
+          39,
+          43,
+          49,
+          58,
+          62,
+          86,
+          96,
+          102,
+          123,
+          131,
+          153,
+          158,
+          178,
+          183,
+          186,
+          193,
+          220,
+          223
+        ],
+        "remaining": 1,
+        "samples": [
+          {
+            "second": 1,
+            "fired": 0,
+            "inRange": 1
+          },
+          {
+            "second": 2,
+            "fired": 7,
+            "inRange": 8
+          },
+          {
+            "second": 3,
+            "fired": 10,
+            "inRange": 10
+          },
+          {
+            "second": 4,
+            "fired": 12,
+            "inRange": 12
+          },
+          {
+            "second": 5,
+            "fired": 13,
+            "inRange": 13
+          },
+          {
+            "second": 6,
+            "fired": 15,
+            "inRange": 15
+          },
+          {
+            "second": 7,
+            "fired": 17,
+            "inRange": 17
+          },
+          {
+            "second": 8,
+            "fired": 20,
+            "inRange": 21
+          },
+          {
+            "second": 9,
+            "fired": 21,
+            "inRange": 21
+          },
+          {
+            "second": 10,
+            "fired": 23,
+            "inRange": 23
+          }
+        ]
+      }
+    ],
+    "after": [
+      {
+        "run": 1,
+        "version": "2026.10.03-sc1.21",
+        "attackers": 24,
+        "ticks": 240,
+        "elapsedMs": 686.27,
+        "meanTickMs": 2.86,
+        "p95TickMs": 16.73,
+        "maxTickMs": 134.39,
+        "firstAttackTicks": [
+          23,
+          23,
+          30,
+          35,
+          36,
+          38,
+          38,
+          40,
+          41,
+          42,
+          55,
+          58,
+          60,
+          62,
+          71,
+          75,
+          77,
+          78,
+          92,
+          96,
+          99,
+          111,
+          111,
+          123
+        ],
+        "remaining": 0,
+        "samples": [
+          {
+            "second": 1,
+            "fired": 2,
+            "inRange": 2
+          },
+          {
+            "second": 2,
+            "fired": 10,
+            "inRange": 10
+          },
+          {
+            "second": 3,
+            "fired": 15,
+            "inRange": 15
+          },
+          {
+            "second": 4,
+            "fired": 20,
+            "inRange": 20
+          },
+          {
+            "second": 5,
+            "fired": 23,
+            "inRange": 23
+          },
+          {
+            "second": 6,
+            "fired": 24,
+            "inRange": 24
+          },
+          {
+            "second": 7,
+            "fired": 24,
+            "inRange": 24
+          },
+          {
+            "second": 8,
+            "fired": 24,
+            "inRange": 24
+          },
+          {
+            "second": 9,
+            "fired": 24,
+            "inRange": 24
+          },
+          {
+            "second": 10,
+            "fired": 24,
+            "inRange": 24
+          }
+        ]
+      }
+    ]
+  },
+  "fourHundred": {
+    "before": [
+      {
+        "run": 1,
+        "version": "2026.10.02-sc1.20",
+        "attackers": 400,
+        "ticks": 120,
+        "elapsedMs": 7042.43,
+        "meanTickMs": 58.65,
+        "p95TickMs": 242.48,
+        "maxTickMs": 337.12,
+        "firstAttackTicks": [
+          25,
+          26,
+          31,
+          31,
+          36,
+          41,
+          43,
+          44,
+          49,
+          55,
+          64,
+          70,
+          71,
+          76,
+          79,
+          80,
+          87,
+          97,
+          99,
+          100,
+          109,
+          112,
+          112,
+          116
+        ],
+        "remaining": 376,
+        "samples": [
+          {
+            "second": 1,
+            "fired": 0,
+            "inRange": 1
+          },
+          {
+            "second": 2,
+            "fired": 8,
+            "inRange": 9
+          },
+          {
+            "second": 3,
+            "fired": 13,
+            "inRange": 13
+          },
+          {
+            "second": 4,
+            "fired": 17,
+            "inRange": 18
+          },
+          {
+            "second": 5,
+            "fired": 24,
+            "inRange": 24
+          }
+        ]
+      },
+      {
+        "run": 2,
+        "version": "2026.10.02-sc1.20",
+        "attackers": 400,
+        "ticks": 120,
+        "elapsedMs": 7072.21,
+        "meanTickMs": 58.9,
+        "p95TickMs": 251.35,
+        "maxTickMs": 371.51,
+        "firstAttackTicks": [
+          25,
+          26,
+          31,
+          31,
+          36,
+          41,
+          43,
+          44,
+          49,
+          55,
+          64,
+          70,
+          71,
+          76,
+          79,
+          80,
+          87,
+          97,
+          99,
+          100,
+          109,
+          112,
+          112,
+          116
+        ],
+        "remaining": 376,
+        "samples": [
+          {
+            "second": 1,
+            "fired": 0,
+            "inRange": 1
+          },
+          {
+            "second": 2,
+            "fired": 8,
+            "inRange": 9
+          },
+          {
+            "second": 3,
+            "fired": 13,
+            "inRange": 13
+          },
+          {
+            "second": 4,
+            "fired": 17,
+            "inRange": 18
+          },
+          {
+            "second": 5,
+            "fired": 24,
+            "inRange": 24
+          }
+        ]
+      },
+      {
+        "run": 3,
+        "version": "2026.10.02-sc1.20",
+        "attackers": 400,
+        "ticks": 120,
+        "elapsedMs": 6903.05,
+        "meanTickMs": 57.5,
+        "p95TickMs": 249.28,
+        "maxTickMs": 338.55,
+        "firstAttackTicks": [
+          25,
+          26,
+          31,
+          31,
+          36,
+          41,
+          43,
+          44,
+          49,
+          55,
+          64,
+          70,
+          71,
+          76,
+          79,
+          80,
+          87,
+          97,
+          99,
+          100,
+          109,
+          112,
+          112,
+          116
+        ],
+        "remaining": 376,
+        "samples": [
+          {
+            "second": 1,
+            "fired": 0,
+            "inRange": 1
+          },
+          {
+            "second": 2,
+            "fired": 8,
+            "inRange": 9
+          },
+          {
+            "second": 3,
+            "fired": 13,
+            "inRange": 13
+          },
+          {
+            "second": 4,
+            "fired": 17,
+            "inRange": 18
+          },
+          {
+            "second": 5,
+            "fired": 24,
+            "inRange": 24
+          }
+        ]
+      }
+    ],
+    "after": [
+      {
+        "run": 1,
+        "version": "2026.10.03-sc1.21",
+        "attackers": 400,
+        "ticks": 120,
+        "elapsedMs": 7096,
+        "meanTickMs": 59.1,
+        "p95TickMs": 105.35,
+        "maxTickMs": 231.62,
+        "firstAttackTicks": [
+          23,
+          24,
+          28,
+          29,
+          30,
+          34,
+          36,
+          36,
+          36,
+          37,
+          39,
+          42,
+          49,
+          49,
+          59,
+          65,
+          71,
+          73,
+          75,
+          76,
+          80,
+          80,
+          81,
+          90,
+          94,
+          100,
+          105,
+          106,
+          109,
+          116
+        ],
+        "remaining": 370,
+        "samples": [
+          {
+            "second": 1,
+            "fired": 2,
+            "inRange": 2
+          },
+          {
+            "second": 2,
+            "fired": 12,
+            "inRange": 14
+          },
+          {
+            "second": 3,
+            "fired": 17,
+            "inRange": 18
+          },
+          {
+            "second": 4,
+            "fired": 25,
+            "inRange": 25
+          },
+          {
+            "second": 5,
+            "fired": 30,
+            "inRange": 30
+          }
+        ]
+      },
+      {
+        "run": 2,
+        "version": "2026.10.03-sc1.21",
+        "attackers": 400,
+        "ticks": 120,
+        "elapsedMs": 7588.13,
+        "meanTickMs": 63.2,
+        "p95TickMs": 111.89,
+        "maxTickMs": 234.41,
+        "firstAttackTicks": [
+          23,
+          24,
+          28,
+          29,
+          30,
+          34,
+          36,
+          36,
+          36,
+          37,
+          39,
+          42,
+          49,
+          49,
+          59,
+          65,
+          71,
+          73,
+          75,
+          76,
+          80,
+          80,
+          81,
+          90,
+          94,
+          100,
+          105,
+          106,
+          109,
+          116
+        ],
+        "remaining": 370,
+        "samples": [
+          {
+            "second": 1,
+            "fired": 2,
+            "inRange": 2
+          },
+          {
+            "second": 2,
+            "fired": 12,
+            "inRange": 14
+          },
+          {
+            "second": 3,
+            "fired": 17,
+            "inRange": 18
+          },
+          {
+            "second": 4,
+            "fired": 25,
+            "inRange": 25
+          },
+          {
+            "second": 5,
+            "fired": 30,
+            "inRange": 30
+          }
+        ]
+      },
+      {
+        "run": 3,
+        "version": "2026.10.03-sc1.21",
+        "attackers": 400,
+        "ticks": 120,
+        "elapsedMs": 7055.84,
+        "meanTickMs": 58.77,
+        "p95TickMs": 105.01,
+        "maxTickMs": 226.16,
+        "firstAttackTicks": [
+          23,
+          24,
+          28,
+          29,
+          30,
+          34,
+          36,
+          36,
+          36,
+          37,
+          39,
+          42,
+          49,
+          49,
+          59,
+          65,
+          71,
+          73,
+          75,
+          76,
+          80,
+          80,
+          81,
+          90,
+          94,
+          100,
+          105,
+          106,
+          109,
+          116
+        ],
+        "remaining": 370,
+        "samples": [
+          {
+            "second": 1,
+            "fired": 2,
+            "inRange": 2
+          },
+          {
+            "second": 2,
+            "fired": 12,
+            "inRange": 14
+          },
+          {
+            "second": 3,
+            "fired": 17,
+            "inRange": 18
+          },
+          {
+            "second": 4,
+            "fired": 25,
+            "inRange": 25
+          },
+          {
+            "second": 5,
+            "fired": 30,
+            "inRange": 30
+          }
+        ]
+      }
+    ]
+  }
+}

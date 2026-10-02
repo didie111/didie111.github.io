@@ -290,6 +290,30 @@ test('dropdown keyboard navigation and wheel scroll stay inside the game while l
  let prevented=0;c.UI.keyDown({key:'ArrowDown',preventDefault(){prevented++;}});c.UI.keyDown({key:'Enter',preventDefault(){prevented++;}});
  assert.equal(select.value,'darktemplar');assert.equal(prevented,2);assert.equal(c.document.pointerLockElement,c.canvas);
 });
+test('spawn list reopens at its exact previous scroll position after selection, dismissal and F10',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);const {select,trigger}=picker(c);trigger.click();
+ c.UI.menuSelect.popup.scrollTop=143;c.UI.chooseMenuSelect('darktemplar');trigger.click();
+ assert.equal(select.value,'darktemplar');assert.equal(c.UI.menuSelect.popup.scrollTop,143);
+ c.UI.menuSelect.popup.scrollTop=219;c.UI.closeMenuSelect();trigger.click();assert.equal(c.UI.menuSelect.popup.scrollTop,219);
+ c.UI.menuSelect.popup.scrollTop=312;c.UI.toggleTest(false);c.UI.toggleTest(true);trigger.click();
+ assert.equal(c.UI.menuSelect.popup.scrollTop,312);assert.equal(c.document.pointerLockElement,c.canvas);
+});
+test('each spawn menu list keeps its own position and external changes reveal the newly selected option',()=>{
+ const c=camera(),a=picker(c),b=picker(c);a.trigger.click();c.UI.menuSelect.popup.scrollTop=88;c.UI.chooseMenuSelect('darktemplar');
+ b.trigger.click();c.UI.menuSelect.popup.scrollTop=177;c.UI.chooseMenuSelect('barracks');
+ a.trigger.click();assert.equal(c.UI.menuSelect.popup.scrollTop,88);c.UI.closeMenuSelect();
+ b.trigger.click();assert.equal(c.UI.menuSelect.popup.scrollTop,177);c.UI.closeMenuSelect();
+ a.select.value='barracks';a.trigger.click();assert.equal(c.UI.menuSelect.options[2].scrolled,true);
+});
+test('minimap camera indicator stays square, centered when possible and inside the map at every edge and zoom',()=>{
+ const c=camera();
+ for(const scale of [1,1.25,2,3])for(const pos of [[1800,1800],[0,0],[4096-c.VIEW.w,4096-c.VIEW.h]]){
+  c.VIEW.scale=scale;[c.VIEW.x,c.VIEW.y]=pos;const before={...c.VIEW},box=c.UI.minimapViewport();
+  assert.ok(box.size>0);assert.ok(box.x>=0&&box.y>=0);assert.ok(box.x+box.size<=127&&box.y+box.size<=127);
+  if(pos[0]===1800){near(box.x+box.size/2,(c.VIEW.x+c.VIEW.w/2)/32);near(box.y+box.size/2,(c.VIEW.y+(c.VIEW.h-c.UI.consoleH()/scale)/2)/32);}
+  assert.deepEqual({...c.VIEW},before,'indicator does not distort the actual game camera');
+ }
+});
 test('a click outside the dropdown only dismisses it; F10 closes its popup while retaining lock',()=>{
  const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);const {trigger}=picker(c);trigger.click();
  c.hit(c.canvas);let commands=0;c.UI.rightClick=()=>commands++;c.canvasEvents.mousedown({button:2,preventDefault(){}});

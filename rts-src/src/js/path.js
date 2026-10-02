@@ -70,7 +70,7 @@ const PF = (() => {
     return MAP.walk[i] === 1 && (MAP.occ[i] === 0 || MAP.occ[i] === ignoreId) && !(avoid && avoid.has(i));
   }
 
-  function find(sx, sy, gx, gy, ignoreId, avoid) {
+  function find(sx, sy, gx, gy, ignoreId, avoid, maxNodes = 9000) {
     const st = nearestPassable(sx, sy, 4, ignoreId, avoid);
     const gl = nearestPassable(gx, gy, 12, ignoreId, avoid);
     if (!st || !gl) return null;
@@ -85,7 +85,7 @@ const PF = (() => {
       if (closedGen[cur] === gen) continue;
       closedGen[cur] = gen;
       if (cur === goal) { best = cur; break; }
-      if (++nodes > 9000) break;
+      if (++nodes > Math.min(9000, maxNodes)) break;
       const cx = cur % MAP_W, cy = (cur / MAP_W) | 0;
       const h = oct(cx, cy, gx, gy);
       if (h < bestH) { bestH = h; best = cur; }
@@ -148,8 +148,8 @@ const PF = (() => {
   }
 
   // 월드 좌표 경로 (스무딩 포함)
-  function worldPath(x0, y0, x1, y1, r, ignoreId, obstacles) {
-    const tiles = find(Math.floor(x0 / TILE), Math.floor(y0 / TILE), Math.floor(x1 / TILE), Math.floor(y1 / TILE), ignoreId, obstacles && obstacles.cells);
+  function worldPath(x0, y0, x1, y1, r, ignoreId, obstacles, maxNodes = 9000) {
+    const tiles = find(Math.floor(x0 / TILE), Math.floor(y0 / TILE), Math.floor(x1 / TILE), Math.floor(y1 / TILE), ignoreId, obstacles && obstacles.cells, maxNodes);
     if (!tiles) return null;
     const pts = tiles.map(([x, y]) => [x * TILE + 16, y * TILE + 16]);
     const last = tiles[tiles.length - 1];
@@ -180,22 +180,40 @@ const PF = (() => {
     }) || null;
   }
 
-  function unitPath(x0, y0, x1, y1, r, obstacles, group, owner) {
-    const escape = circlePath(x0, y0, x1, y1, r, obstacles);
-    if (escape) return escape;
-    const fine = localPath(x0, y0, x1, y1, r, obstacles, goalBlocker(x1, y1, r, obstacles.units, group, owner));
-    if (fine) return fine;
-    const coarse = worldPath(x0, y0, x1, y1, r, 0, obstacles);
-    if (coarse && coarse.length) {
-      const end = coarse[coarse.length - 1];
-      let ax = x0, ay = y0;
-      const valid = coarse.every(([bx, by]) => {
-        const clear = lineClear(ax, ay, bx, by, Math.max(3, r * 0.75), 0) && unitsClear(ax, ay, bx, by, r, obstacles.units);
-        ax = bx; ay = by; return clear;
-      });
-      if (Math.hypot(end[0] - x1, end[1] - y1) < 1 && valid) return coarse;
+  function unitPath(x0, y0, x1, y1, r, obstacles, group, owner, requireGoal = false, maxWork = Infinity) {
+    const available = budget, allowance = Math.min(budget, maxWork);
+    budget = allowance;
+    try {
+      const completeCoarse = () => {
+        const p = worldPath(x0, y0, x1, y1, r, 0, obstacles, requireGoal ? Math.max(0, budget) : 9000);
+        if (!p?.length || Math.hypot(p.at(-1)[0] - x1, p.at(-1)[1] - y1) >= 1) return null;
+        let ax = x0, ay = y0;
+        const valid = p.every(([bx, by]) => {
+          const clear = lineClear(ax, ay, bx, by, Math.max(3, r * .75), 0) && unitsClear(ax, ay, bx, by, r, obstacles.units);
+          ax = bx; ay = by; return clear;
+        });
+        return valid ? p : null;
+      };
+      // In a large attacking crowd, try the cheap tile route before building
+      // a visibility graph around many bodies. Every segment is still checked.
+      if (requireGoal && Number.isFinite(maxWork)) {
+        const coarse = completeCoarse();
+        if (coarse) return coarse;
+        if (budget <= 0) return null;
+      }
+      const escape = circlePath(x0, y0, x1, y1, r, obstacles);
+      if (escape) return escape;
+      const fine = localPath(x0, y0, x1, y1, r, obstacles, goalBlocker(x1, y1, r, obstacles.units, group, owner));
+      // A melee border choice needs a complete route. A partial local path can
+      // end before a wall's corner even when the coarse route reaches that side.
+      // Ordinary movement/recovery keeps its existing short partial paths.
+      if (fine && (!requireGoal || Math.hypot(fine.at(-1)[0] - x1, fine.at(-1)[1] - y1) < .01)) return fine;
+      if (requireGoal && budget <= 0) return null;
+      return completeCoarse();
+    } finally {
+      // Keep the global tick budget accurate after a bounded attack search.
+      budget = available - allowance + budget;
     }
-    return null;
   }
 
   function compactPath(points) {
