@@ -8,6 +8,7 @@ const UI = {
   groups: [], lastGroup: { k: -1, t: 0 }, clicks: [], pings: [], lastAlert: null, alertT: -9999,
   mouse: { x: 0, y: 0, wx: 0, wy: 0, inside: false, drag: null, overUI: false },
   cardSig: '', infoSig: '', card: [], lastClick: { t: 0, id: 0 },
+  lockWanted: false, lockPending: false, lockActive: false, lockMenuExit: false, lockRequestId: 0,
   el: {},
 
   init() {
@@ -37,44 +38,83 @@ const UI = {
 
   pointerLocked() { return !!this.el.cv && document.pointerLockElement === this.el.cv; },
   pointerAt(e) { return this.pointerLocked() ? {clientX: this.mouse.x, clientY: this.mouse.y} : e; },
-  releaseMouse() { if (this.pointerLocked()) document.exitPointerLock?.(); },
+  pointerMenuOpen() { return [this.el.test, this.el.help].some(el => el && !el.classList.contains('hidden')); },
+  updateMouseLockButton() {
+    const button = this.el.mouseLock;
+    if (!button) return;
+    const enabled = this.lockWanted || this.pointerLocked();
+    button.textContent = !enabled ? '마우스 고정' : this.pointerMenuOpen() ? '마우스 고정 (메뉴 중)' : this.pointerLocked() ? '마우스 해제 (Esc)' : '마우스 고정 (복귀 대기)';
+    button.classList.toggle('on', enabled); button.setAttribute('aria-pressed', String(enabled));
+  },
+  releaseMouse() {
+    this.lockWanted = false; this.lockMenuExit = false;
+    if (this.pointerLocked()) document.exitPointerLock?.();
+    this.updateMouseLockButton();
+  },
   toggleMouseLock() {
-    if (this.pointerLocked()) { this.releaseMouse(); return; }
+    if (this.lockWanted || this.pointerLocked()) { this.releaseMouse(); return; }
     if (!GAME.running || GAME.over || this.lockPending) return;
-    if (!this.el.cv.requestPointerLock) { this.message('이 브라우저는 마우스 고정을 지원하지 않습니다.'); return; }
     // Native selects and dragging need the ordinary pointer. Lock only the play area.
     if (this.el.test && !this.el.test.classList.contains('hidden')) this.toggleTest(false);
-    this.el.help?.classList.add?.('hidden');
+    if (this.el.help && !this.el.help.classList.contains('hidden')) this.toggleHelp(false);
+    this.requestMouseLock(false);
+  },
+  requestMouseLock(resume) {
+    if (!GAME.running || GAME.over || document.hidden || document.hasFocus?.() === false || this.pointerMenuOpen() || this.pointerLocked() || this.lockPending) return;
+    if (!this.el.cv.requestPointerLock) { this.message('이 브라우저는 마우스 고정을 지원하지 않습니다.'); return; }
     document.activeElement?.blur?.();
-    this.lockPending = true; this.lockError = false;
-    const fail = () => {
-      this.lockPending = false;
-      if (!this.lockError) { this.lockError = true; this.message('마우스 고정을 시작하지 못했습니다. 버튼을 다시 눌러주세요.'); }
-    };
+    this.lockWanted = true; this.lockPending = true; this.lockError = false; this.lockResumeRequest = resume;
+    const id = ++this.lockRequestId;
+    const fail = () => { if (id === this.lockRequestId && this.lockPending) this.pointerLockFailed(); };
+    this.updateMouseLockButton();
     try { const request = this.el.cv.requestPointerLock(); request?.catch(fail); } catch { fail(); }
+  },
+  pointerLockFailed() {
+    this.lockPending = false;
+    if (!this.lockResumeRequest) this.lockWanted = false;
+    this.updateMouseLockButton();
+    if (!this.lockError) {
+      this.lockError = true;
+      this.message(this.lockWanted ? '마우스 고정 복귀를 기다립니다. 게임 화면을 클릭하면 다시 고정됩니다.' : '마우스 고정을 시작하지 못했습니다. 버튼을 다시 눌러주세요.');
+    }
+  },
+  syncMenuPointer() {
+    if (this.pointerMenuOpen()) {
+      if (this.pointerLocked()) { this.lockMenuExit = true; document.exitPointerLock?.(); }
+    } else if (this.lockWanted) this.requestMouseLock(true);
+    this.updateMouseLockButton();
   },
   pointerLockChanged() {
     const locked = this.pointerLocked();
-    // Also cover an asynchronous lock request finishing after F10 was opened.
-    if (locked && this.el.test && !this.el.test.classList.contains('hidden')) { this.releaseMouse(); return; }
-    this.lockPending = false; this.keys = {}; this.mouse.drag = null; this.mmDrag = false; this.lockedTarget = null;
+    const wasActive = this.lockActive, menuExit = this.lockMenuExit;
+    this.lockActive = locked;
+    if (locked) {
+      this.lockPending = false; this.lockError = false;
+      // A late request must not trap a menu or undo an explicit Esc/blur release.
+      if (!this.lockWanted || this.pointerMenuOpen()) {
+        this.lockMenuExit = this.lockWanted && this.pointerMenuOpen();
+        document.exitPointerLock?.(); return;
+      }
+    } else {
+      this.lockMenuExit = false;
+      if (wasActive) { this.lockPending = false; if (!menuExit) this.lockWanted = false; }
+    }
+    this.keys = {}; this.mouse.drag = null; this.mmDrag = false; this.lockedTarget = null;
     this.mouse.inside = locked;
     if (locked) {
       this.mouse.x = Math.max(0, Math.min(window.innerWidth - 1, this.mouse.x));
       this.mouse.y = Math.max(0, Math.min(window.innerHeight - 1, this.mouse.y));
     }
     this.el.pointerCursor?.classList.toggle('hidden', !locked);
-    if (this.el.mouseLock) {
-      this.el.mouseLock.textContent = locked ? '마우스 해제 (Esc)' : '마우스 고정';
-      this.el.mouseLock.classList.toggle('on', locked); this.el.mouseLock.setAttribute('aria-pressed', String(locked));
-    }
+    this.updateMouseLockButton();
     this.updateCursor();
+    if (!locked && menuExit && this.lockWanted && !this.pointerMenuOpen()) this.requestMouseLock(true);
   },
   routeLockedDown(e) {
     if (!this.pointerLocked()) return false;
     const hit = document.elementFromPoint(this.mouse.x, this.mouse.y);
     if (!hit || hit === this.el.cv) return false;
-    if (hit.closest('#test,#help')) { e.preventDefault(); this.releaseMouse(); return true; }
+    if (hit.closest('#test,#help')) { e.preventDefault(); this.syncMenuPointer(); return true; }
     const target = hit.closest('button,input,select,label,.btn,.wf,.qs,#minimap') || hit;
     if (e.button === 0 && target.id === 'hud-f10') {
       e.preventDefault(); this.toggleTest(true); return true;
@@ -128,12 +168,12 @@ const UI = {
     });
     document.addEventListener('mouseleave', () => { if (!this.pointerLocked()) this.mouse.inside = false; });
     document.addEventListener('pointerlockchange', () => this.pointerLockChanged());
-    document.addEventListener('pointerlockerror', () => {
-      this.lockPending = false;
-      if (!this.lockError) { this.lockError = true; this.message('마우스 고정을 시작하지 못했습니다. 버튼을 다시 눌러주세요.'); }
-    });
+    document.addEventListener('pointerlockerror', () => this.pointerLockFailed());
     cv.addEventListener('mousedown', (e) => {
       SND.init();
+      if (this.lockWanted && !this.pointerLocked() && !this.pointerMenuOpen() && e.isTrusted !== false) {
+        this.requestMouseLock(true); e.preventDefault(); return;
+      }
       if (this.routeLockedDown(e)) return;
       const p = this.pointerAt(e), [wx, wy] = RENDER.toWorld(p.clientX, p.clientY);
       if (e.button === 0) {
@@ -194,7 +234,9 @@ const UI = {
   minimapAt(e) { const [wx, wy] = this.mmWorld(e); RENDER.centerOn(wx, wy); },
 
   keyDown(e) {
-    if (e.key === 'Escape' && this.pointerLocked()) { this.releaseMouse(); return; }
+    if (e.key === 'Escape' && (this.pointerLocked() || this.lockWanted)) {
+      const locked = this.pointerLocked(); this.releaseMouse(); if (locked) return;
+    }
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) {
       if (e.key === 'Escape' && this.mode && this.mode.kind === 'spawn') { this.cancelMode(); return; }
       if (e.key === 'F10') { e.preventDefault(); this.toggleTest(); }
@@ -206,7 +248,7 @@ const UI = {
     if (e.key === 'Alt') { this.keys.Alt = true; e.preventDefault(); }
     const k = e.key;
     if (k === 'F10' || k === '`') { e.preventDefault(); this.toggleTest(); return; }
-    if (k === 'F1') { e.preventDefault(); this.el.help.classList.toggle('hidden'); if (!this.el.help.classList.contains('hidden')) this.releaseMouse(); return; }
+    if (k === 'F1') { e.preventDefault(); this.toggleHelp(); return; }
     if (k === 'F9' || k === 'Pause') { e.preventDefault(); GAME.paused = !GAME.paused; this.message(GAME.paused ? '일시 정지' : '게임 재개'); return; }
     if (k === 'Escape') { if (this.mode) this.cancelMode(); else if (this.menu) { this.menu = null; this.cardSig = ''; } else this.escQueue(); return; }
     if (k === ' ') { e.preventDefault(); if (this.lastAlert) RENDER.centerOn(this.lastAlert[0], this.lastAlert[1]); return; }
@@ -985,10 +1027,15 @@ const UI = {
   },
   toggleTest(v) {
     const show = v === undefined ? this.el.test.classList.contains('hidden') : v;
-    if (show) this.releaseMouse();
-    else this.finishTestDrag();
+    if (!show) this.finishTestDrag();
     this.el.test.classList.toggle('hidden', !show);
+    this.syncMenuPointer();
     if (show) this.positionTestPanel();
+  },
+  toggleHelp(v) {
+    const show = v === undefined ? this.el.help.classList.contains('hidden') : v;
+    this.el.help.classList.toggle('hidden', !show);
+    this.syncMenuPointer();
   },
   // 미리보기와 클릭 생성이 같은 좌표/배치 검사 결과를 사용한다. 엔티티를 만들지 않는다.
   spawnLayout(wx, wy) {

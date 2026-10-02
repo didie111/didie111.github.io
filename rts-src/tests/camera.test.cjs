@@ -28,7 +28,7 @@ function camera() {
   for (const file of ['render', 'ui']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/js', file + '.js'), 'utf8'), ctx);
   const { UI, VIEW } = vm.runInContext('({UI, VIEW})', ctx);
   UI.el = { cv: canvas, console: { offsetHeight: 160, addEventListener() {} }, mm: {addEventListener(){}},
-    test:{classList:classes()}, mouseLock:{classList:classes(),setAttribute(k,v){this[k]=v;}},
+    test:{classList:classes()}, help:{classList:classes()}, mouseLock:{classList:classes(),setAttribute(k,v){this[k]=v;}},
     pointerCursor:{classList:classes(),style:{}} };
   UI.message=()=>{};
   VIEW.w = 800; VIEW.h = 640; VIEW.scale = 1.25; VIEW.x = 1800; VIEW.y = 1800;
@@ -141,4 +141,94 @@ test('a delayed pointer lock completion cannot trap an already opened F10 menu',
  const c=camera();c.UI.bindInput();c.canvas.requestPointerLock=()=>{};c.UI.toggleMouseLock();
  c.UI.toggleTest(true);c.document.pointerLockElement=c.canvas;c.documentEvents.pointerlockchange();
  assert.equal(c.document.pointerLockElement,null);assert.equal(c.UI.el.test.classList.contains('hidden'),false);
+ assert.equal(c.UI.lockWanted,true);c.UI.toggleTest(false);assert.equal(c.UI.lockPending,true);
+});
+
+test('F10 pauses pointer lock without disabling it and closes back into locked gameplay',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();
+ c.UI.keyDown({key:'F10',preventDefault(){}});
+ assert.equal(c.document.pointerLockElement,null);assert.equal(c.UI.lockWanted,true);
+ assert.equal(c.UI.el.mouseLock['aria-pressed'],'true');assert.match(c.UI.el.mouseLock.textContent,/메뉴 중/);
+ assert.equal(c.UI.el.pointerCursor.classList.contains('hidden'),true);
+ c.UI.keyDown({key:'F10',target:{tagName:'SELECT'},preventDefault(){}});
+ assert.equal(c.document.pointerLockElement,c.canvas);assert.equal(c.UI.lockWanted,true);
+ assert.equal(c.UI.el.pointerCursor.classList.contains('hidden'),false);
+});
+test('closing an unlocked F10 menu never enables pointer lock',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleTest(true);c.UI.toggleTest(false);
+ assert.equal(c.document.pointerLockElement,null);assert.equal(c.UI.lockWanted,false);
+ assert.equal(c.UI.el.mouseLock['aria-pressed'],'false');
+});
+test('F10 and help restore pointer lock only after the final open panel closes',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);c.UI.toggleHelp(true);
+ c.UI.toggleTest(false);assert.equal(c.document.pointerLockElement,null);assert.equal(c.UI.lockWanted,true);
+ c.UI.toggleHelp(false);assert.equal(c.document.pointerLockElement,c.canvas);
+ c.UI.keyDown({key:'F1',preventDefault(){}});assert.equal(c.document.pointerLockElement,null);
+ c.UI.keyDown({key:'F1',preventDefault(){}});assert.equal(c.document.pointerLockElement,c.canvas);
+});
+test('turning off the paused lock button cancels restoration without closing the menu',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);c.UI.toggleMouseLock();
+ assert.equal(c.UI.lockWanted,false);assert.equal(c.UI.el.test.classList.contains('hidden'),false);
+ c.UI.toggleTest(false);assert.equal(c.document.pointerLockElement,null);
+});
+test('Escape during a menu cancels restoration and still cancels the spawn preview',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);
+ c.UI.mode={kind:'spawn'};c.UI.cancelMode=()=>{c.UI.mode=null;};
+ c.UI.keyDown({key:'Escape',target:{tagName:'SELECT'}});
+ assert.equal(c.UI.lockWanted,false);assert.equal(c.UI.mode,null);
+ c.UI.toggleTest(false);assert.equal(c.document.pointerLockElement,null);
+});
+test('focus loss or game end cancels restoration while a menu has paused the lock',()=>{
+ for(const end of ['blur','hidden','game end']){
+  const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);
+  if(end==='blur')c.windowEvents.blur();
+  else if(end==='hidden'){c.document.hidden=true;c.documentEvents.visibilitychange();c.document.hidden=false;}
+  else{c.setGame('GAME.over=true');c.UI.releaseMouse();}
+  c.UI.toggleTest(false);assert.equal(c.UI.lockWanted,false,end);assert.equal(c.document.pointerLockElement,null,end);
+ }
+});
+test('a browser unlock gesture clears the setting and does not trigger automatic relocking',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();
+ c.document.pointerLockElement=null;c.documentEvents.pointerlockchange();
+ assert.equal(c.UI.lockWanted,false);assert.equal(c.UI.el.mouseLock['aria-pressed'],'false');
+ c.UI.toggleTest(true);c.UI.toggleTest(false);assert.equal(c.document.pointerLockElement,null);
+});
+test('closing F10 before its asynchronous unlock finishes restores after the unlock event',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();let exits=0;
+ c.document.exitPointerLock=()=>{exits++;};
+ c.UI.toggleTest(true);c.UI.toggleTest(false);
+ assert.equal(exits,1);assert.equal(c.UI.lockWanted,true);
+ c.document.pointerLockElement=null;c.documentEvents.pointerlockchange();
+ assert.equal(c.document.pointerLockElement,c.canvas);assert.equal(c.UI.lockPending,false);
+});
+test('opening and closing F10 during a pending initial request never duplicates that request',()=>{
+ const c=camera();c.UI.bindInput();let requests=0;c.canvas.requestPointerLock=()=>{requests++;};
+ c.UI.toggleMouseLock();c.UI.toggleTest(true);c.UI.toggleTest(false);assert.equal(requests,1);
+ c.document.pointerLockElement=c.canvas;c.documentEvents.pointerlockchange();
+ assert.equal(c.document.pointerLockElement,c.canvas);assert.equal(c.UI.lockWanted,true);
+});
+test('Escape cancels an initial pending request even if that request completes later',()=>{
+ const c=camera();c.UI.bindInput();c.canvas.requestPointerLock=()=>{};c.UI.toggleMouseLock();
+ c.UI.keyDown({key:'Escape',target:{tagName:'SELECT'}});assert.equal(c.UI.lockWanted,false);
+ c.document.pointerLockElement=c.canvas;c.documentEvents.pointerlockchange();
+ assert.equal(c.document.pointerLockElement,null);assert.equal(c.UI.lockWanted,false);
+});
+test('a denied restoration keeps the setting and a map click retries without issuing a command',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);
+ const messages=[];c.UI.message=m=>messages.push(m);c.canvas.requestPointerLock=()=>{throw Error('gesture required');};
+ c.UI.toggleTest(false);c.documentEvents.pointerlockerror();
+ assert.equal(c.UI.lockWanted,true);assert.equal(c.UI.lockPending,false);assert.equal(messages.length,1);
+ assert.match(c.UI.el.mouseLock.textContent,/복귀 대기/);
+ c.canvas.requestPointerLock=()=>{c.document.pointerLockElement=c.canvas;c.documentEvents.pointerlockchange();};
+ let commands=0;c.UI.rightClick=()=>commands++;let prevented=false;
+ c.canvasEvents.mousedown({button:2,isTrusted:true,preventDefault(){prevented=true;}});
+ assert.equal(c.document.pointerLockElement,c.canvas);assert.equal(commands,0);assert.equal(prevented,true);
+});
+test('late promise rejection from an old successful request cannot cancel a new restoration',()=>{
+ const c=camera();c.UI.bindInput();let oldFail,requests=0;
+ c.canvas.requestPointerLock=()=>{requests++;return{catch(fn){if(requests===1)oldFail=fn;}};};
+ c.UI.toggleMouseLock();c.document.pointerLockElement=c.canvas;c.documentEvents.pointerlockchange();
+ c.UI.toggleTest(true);c.UI.toggleTest(false);assert.equal(requests,2);
+ oldFail();assert.equal(c.UI.lockPending,true);assert.equal(c.UI.lockWanted,true);
+ c.document.pointerLockElement=c.canvas;c.documentEvents.pointerlockchange();assert.equal(c.UI.lockPending,false);
 });
