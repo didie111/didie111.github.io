@@ -1,35 +1,46 @@
 'use strict';
 // 확장 데이터: Blizzard StarCraft Compendium 수치/역할을 참고한 웹게임 구현.
 // 원작 MPQ/엔진을 포함하지 않으며 투사체/애니메이션/길찾기는 자체 구현이다.
-const RTS_VERSION = '2026.10.02-sc1.17';
-// BWAPI UnitType.cpp d727fed: acceleration (1 = iscript), turn N/256 circle,
-// halt distance N/256 px. Keep the project's top speeds; animation strides are separate.
+const RTS_VERSION = '2026.10.02-sc1.18';
+// flingy.dat: [acceleration, turn N/256 circle, halt N/256 px, movement control].
+// Control 0: acceleration + braking; 1: acceleration without braking; 2: iscript.
+// The acceleration field alone does not identify walking units (notably templars).
 const GROUND_MOTION = {
-  marine: [1, 40, 1],
-  ghost: [1, 40, 1],
-  vulture: [100, 40, 14569],
-  goliath: [1, 17, 1],
-  tank: [1, 13, 1],
-  scv: [67, 40, 12227],
-  firebat: [1, 40, 1],
-  medic: [1, 40, 1],
-  zergling: [1, 27, 1],
-  hydra: [1, 27, 1],
-  ultralisk: [1, 40, 1],
-  broodling: [1, 27, 1],
-  drone: [67, 40, 12227],
-  defiler: [1, 27, 1],
-  infested_terran: [1, 40, 1],
-  dtemplar: [27, 40, 13474],
-  dark_archon: [160, 40, 5120],
-  probe: [67, 40, 12227],
-  zealot: [1, 40, 1],
-  dragoon: [1, 40, 1],
-  htemplar: [27, 40, 13474],
-  archon: [160, 40, 5120],
-  reaver: [1, 20, 1],
-  lurker: [1, 40, 1],
+  marine: [1, 40, 1, 2],
+  ghost: [1, 40, 1, 2],
+  vulture: [100, 40, 14569, 0],
+  goliath: [1, 17, 1, 2],
+  tank: [1, 13, 1, 2],
+  scv: [67, 40, 12227, 0],
+  firebat: [1, 40, 1, 2],
+  medic: [1, 40, 1, 2],
+  zergling: [1, 27, 1, 2],
+  hydra: [1, 27, 1, 2],
+  ultralisk: [1, 40, 1, 2],
+  broodling: [1, 27, 1, 2],
+  drone: [67, 40, 12227, 0],
+  defiler: [1, 27, 1, 2],
+  infested_terran: [1, 40, 1, 2],
+  dtemplar: [27, 40, 13474, 2],
+  dark_archon: [160, 40, 5120, 0],
+  probe: [67, 40, 12227, 0],
+  zealot: [1, 40, 1, 2],
+  dragoon: [1, 40, 1, 2],
+  htemplar: [27, 40, 13474, 1],
+  archon: [160, 40, 5120, 0],
+  reaver: [1, 20, 1, 2],
+  lurker: [1, 40, 1, 2],
 };
+const AIR_MOTION = {
+  wraith: [67,40,21745,0], vessel: [50,40,5120,0], dropship: [17,20,37756,0], bc: [27,20,7585,0],
+  valkyrie: [65,30,21901,0], overlord: [27,20,840,0], mutalisk: [67,40,21745,0],
+  queen: [67,40,21745,0], guardian: [27,20,7585,0], scourge: [107,40,13616,0],
+  devourer: [48,30,17067,0], corsair: [67,30,17067,0], shuttle: [17,20,37756,0],
+  scout: [48,30,17067,0], arbiter: [33,40,24824,0], carrier: [27,20,13474,0], observer: [27,20,13474,0],
+};
+const LIFT_MOTION = [33, 27, 2763, 0];
+const MINE_MOTION = [1, 127, 1, 2];
+const MINE_HOVER_TARGETS = new Set(['vulture','scv','drone','probe','archon','dark_archon','spider_mine']);
 Object.assign(UNITS, {
   valkyrie: { name: '발키리', race: 'T', hp: 200, armor: 2, size: 'large', air: true, speed: 6.6, sight: 8, r: 16,
     cost: [250, 125], supply: 3, time: 750, mech: true, from: 'starport', hotkey: 'V', req: ['armory'], addon: 'control_tower',
@@ -62,6 +73,19 @@ Object.assign(UNITS, {
     spells: ['recall', 'stasis'], cloakAura: 4 * TILE, armorUpg: 'p_aa' },
 });
 UNITS.carrier.hotkey = 'C'; UNITS.carrier.ammo = 'interceptor';
+// Exact DAT fixed-point speeds for flingy-controlled units. Walking retains mean gait speed.
+for (const [type, speed256] of Object.entries({ scv:1280, drone:1280, probe:1280, vulture:1707,
+  htemplar:853, archon:1280, dark_archon:1280, wraith:1707, vessel:1280, dropship:1400, bc:640,
+  valkyrie:1690, overlord:213, mutalisk:1707, queen:1707, guardian:640, scourge:1707, devourer:1280,
+  corsair:1707, shuttle:1133, scout:1280, arbiter:1280, carrier:853, observer:853 })) UNITS[type].speed = speed256 / 256;
+UNITS.infested_terran.speed = 5.82; UNITS.ultralisk.speed = 5.12; UNITS.reaver.speed = 1.78; UNITS.lurker.speed = 5.82;
+UNITS.spider_mine.speed = 16;
+UNITS.broodling.gw.range = 2; UNITS.infested_terran.gw.range = 3;
+// Devourer spreads acid spores, not weapon damage, to nearby flyers.
+delete UNITS.devourer.aw.splash;
+UNITS.valkyrie.aw.airSplash = true; UNITS.corsair.aw.airSplash = true;
+UNITS.archon.gw.splashBoth = true; UNITS.archon.aw.splashBoth = true;
+UNITS.scout.aw.inc = 1;
 UNITS.htemplar.spells.push('archon_merge'); UNITS.dtemplar.spells = ['dark_archon_merge'];
 UNITS.mutalisk.spells = ['guardian_morph', 'devourer_morph']; UNITS.corsair.spells = ['disruption_web'];
 UNITS.tank.addon = 'machine_shop'; UNITS.dropship.addon = 'control_tower'; UNITS.vessel.addon = 'control_tower'; UNITS.bc.addon = 'control_tower';
@@ -92,6 +116,9 @@ BUILD_MENU.P[1].push('robo_support', 'observatory', 'arbiter_tribunal');
 Object.assign(BUILD_KEYS, { robo_support: 'B', observatory: 'O', arbiter_tribunal: 'A' });
 BUILDINGS.pool.research.push('adrenal');
 Object.assign(TECH, {
+  gravitic_drive: { name:'그라비틱 드라이브', cost:[200,200], time:2500, hotkey:'G', desc:'셔틀 이동 속도 증가' },
+  gravitic_boosters: { name:'그라비틱 부스터', cost:[150,150], time:2000, hotkey:'G', desc:'옵저버 이동 속도 증가' },
+  gravitic_thrusters: { name:'그라비틱 스러스터', cost:[200,200], time:2500, hotkey:'G', desc:'스카웃 이동 속도 증가' },
   adrenal: { name: '아드레날 글랜드', cost: [200, 200], time: 1500, req: ['hive'], hotkey: 'A', desc: '저글링 공격 간격 감소' },
   ensnare_t: { name: '인스네어', cost: [100, 100], time: 1200, hotkey: 'E', desc: '퀸의 이동 감속 능력' },
   broodlings_t: { name: '스폰 브루들링', cost: [100, 100], time: 1200, hotkey: 'B', desc: '지상 생체 유닛을 브루들링으로 변환' },
@@ -104,6 +131,9 @@ Object.assign(TECH, {
   scarab_damage: { name: '스캐럽 공격력', cost: [200, 200], time: 1500, hotkey: 'S', desc: '스캐럽 공격력 100 → 125' },
   disruption_web_t: { name: '디스럽션 웹', cost: [200, 200], time: 1200, hotkey: 'D', desc: '영역 내 지상 무기 사용 억제' },
 });
+BUILDINGS.robo_support.research.push('gravitic_drive');
+BUILDINGS.observatory.research.push('gravitic_boosters');
+BUILDINGS.fleet_beacon.research.push('gravitic_thrusters');
 Object.assign(SPELLS, {
   parasite: { name: '패러사이트', hotkey: 'P', target: 'unit', energy: 75, range: 12, desc: '대상 시야 공유' },
   ensnare: { name: '인스네어', hotkey: 'E', target: 'point', energy: 75, tech: 'ensnare_t', range: 9, desc: '영역 내 유닛 감속/클로킹 노출' },

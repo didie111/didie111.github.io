@@ -64,10 +64,19 @@ button.on { background: linear-gradient(#2c5a8c, #183050); border-color: #7ab0ff
 .pbar { position: relative; height: 16px; border: 1px solid #4a6a3a; background: #081008; margin-top: 4px; }
 .pbar > div { height: 100%; background: linear-gradient(#40c040, #1a701a); }
 .pbar span { position: absolute; inset: 0; text-align: center; font-size: 11px; line-height: 14px; color: #fff; text-shadow: 1px 1px 0 #000; }
-.multi { display: grid; grid-template-columns: repeat(6, 44px); grid-auto-rows: 44px; gap: 6px; }
-.multi .wf { border: 1px solid #2a4a2a; background: #000; cursor: pointer; }
+.multi-head { display: flex; align-items: center; gap: 7px; height: 18px; margin-bottom: 3px; color: #a6e7a6; font-size: 11px; white-space: nowrap; overflow-x: auto; scrollbar-width: none; }
+.multi-head > span, .producer-tab { flex-shrink: 0; }
+.multi-head small { color: #6c9674; font-size: 10px; }
+.producer-tab { font: inherit; max-width: 150px; overflow: hidden; text-overflow: ellipsis; border: 1px solid #365238; background: #101d13; color: #8ea68f; padding: 1px 5px; cursor: pointer; }
+.producer-tab.active { color: #d6ffd5; border-color: #83b575; background: #264129; }
+.multi { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-auto-rows: 35px; gap: 3px; width: 100%; max-width: 301px; }
+.multi .wf { position: relative; min-width: 0; border: 1px solid #2a4a2a; background: #000; cursor: pointer; }
 .multi .wf:hover { border-color: #8f8; }
-.multi .wf img { width: 42px; height: 42px; image-rendering: pixelated; }
+.multi .wf img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.wf-health, .wf-shield, .wf-progress { position: absolute; left: 0; bottom: 0; height: 2px; background: #4ddb52; }
+.wf-shield { bottom: 2px; background: #649bea; }
+.wf-progress { bottom: 4px; background: #edc45e; }
+.wf-queue { position: absolute; right: 1px; top: 0; font-size: 9px; color: #ffe59e; text-shadow: 1px 1px #000; }
 
 #tip { position: absolute; z-index: 20; background: rgba(8,12,8,0.95); border: 1px solid #7a9a6a; padding: 6px 8px; max-width: 260px; pointer-events: none; line-height: 1.5; }
 #tip .k { color: #ffe060; }
@@ -141,18 +150,19 @@ button.on { background: linear-gradient(#2c5a8c, #183050); border-color: #7ab0ff
   <table>
     <tr><td>마우스 고정 / Esc</td><td>하단 메뉴 옆 버튼으로 게임 안에 마우스를 고정합니다. Esc로 해제합니다. F10을 열면 메뉴 조작을 위해 해제됩니다.</td></tr>
     <tr><td>가장자리 화면 이동</td><td>화면의 위·좌·우 끝, 하단 패널 아래의 좁은 띠에서 이동합니다. 방향키·미니맵도 사용할 수 있습니다.</td></tr>
-    <tr><td>좌클릭 / 드래그</td><td>유닛 선택 · 박스 선택 (최대 12기)</td></tr>
+    <tr><td>좌클릭 / 드래그</td><td>유닛 최대 24기 · 생산 건물 최대 24개 선택</td></tr>
     <tr><td>Shift + 클릭</td><td>선택 추가 / 제거 · 명령 예약(웨이포인트)</td></tr>
     <tr><td>Ctrl + 클릭 · 더블클릭</td><td>화면 내 같은 종류 전체 선택</td></tr>
     <tr><td>우클릭</td><td>스마트 명령 (이동 / 공격 / 채취 / 탑승 / 집결)</td></tr>
     <tr><td>A · M · S · H · P</td><td>공격(어택땅) · 이동 · 정지 · 위치 사수 · 정찰</td></tr>
     <tr><td>Ctrl + 숫자 / 숫자</td><td>부대 지정 / 부대 선택 (두 번: 화면 이동)</td></tr>
+    <tr><td>생산 건물 여러 개 선택</td><td>종류 탭으로 생산 대상 선택 · 클릭마다 1기씩 대기열 분배</td></tr>
     <tr><td>B / V (SCV 선택)</td><td>기본 건물 / 고급 건물 메뉴</td></tr>
     <tr><td>Space</td><td>마지막 경보 위치로 이동</td></tr>
     <tr><td>방향키 · 화면 가장자리 · 미니맵</td><td>화면 스크롤</td></tr>
     <tr><td>가장자리 안쪽 24px · 하단 패널 아래</td><td>마우스로 화면 이동 (모서리는 대각선 이동)</td></tr>
     <tr><td>마우스 휠</td><td>확대 / 축소</td></tr>
-    <tr><td>F10 또는 `</td><td>테스트 패널 (적 스폰 · 적군 조작 · AI on/off · 맵 공개)</td></tr>
+    <tr><td>F10 또는 `</td><td>테스트 패널 · 메뉴를 열면 마우스 고정 해제</td></tr>
     <tr><td>F10 창 제목줄 드래그</td><td>창 위치 이동 · 닫았다 열어도 위치 유지</td></tr>
     <tr><td>F9</td><td>일시정지</td></tr>
   </table>
@@ -185,7 +195,7 @@ const TILE = 32, MAP_W = 128, MAP_H = 128;
 const FPS = 24;
 const PLAYER = 0, ENEMY = 1, NEUTRAL = 2;
 const MAX_SUPPLY = 200;
-const MAX_SELECT = 12;
+const MAX_SELECT = 24;
 
 const TEAM = [
   { main: '#1c5ce8', dark: '#0a2a80', light: '#6f9dff', mm: '#3070ff', name: '파랑' },
@@ -554,35 +564,46 @@ function supplyText(v) { return (Math.round(v * 2) / 2).toString(); }
 'use strict';
 // 확장 데이터: Blizzard StarCraft Compendium 수치/역할을 참고한 웹게임 구현.
 // 원작 MPQ/엔진을 포함하지 않으며 투사체/애니메이션/길찾기는 자체 구현이다.
-const RTS_VERSION = '2026.10.02-sc1.17';
-// BWAPI UnitType.cpp d727fed: acceleration (1 = iscript), turn N/256 circle,
-// halt distance N/256 px. Keep the project's top speeds; animation strides are separate.
+const RTS_VERSION = '2026.10.02-sc1.18';
+// flingy.dat: [acceleration, turn N/256 circle, halt N/256 px, movement control].
+// Control 0: acceleration + braking; 1: acceleration without braking; 2: iscript.
+// The acceleration field alone does not identify walking units (notably templars).
 const GROUND_MOTION = {
-  marine: [1, 40, 1],
-  ghost: [1, 40, 1],
-  vulture: [100, 40, 14569],
-  goliath: [1, 17, 1],
-  tank: [1, 13, 1],
-  scv: [67, 40, 12227],
-  firebat: [1, 40, 1],
-  medic: [1, 40, 1],
-  zergling: [1, 27, 1],
-  hydra: [1, 27, 1],
-  ultralisk: [1, 40, 1],
-  broodling: [1, 27, 1],
-  drone: [67, 40, 12227],
-  defiler: [1, 27, 1],
-  infested_terran: [1, 40, 1],
-  dtemplar: [27, 40, 13474],
-  dark_archon: [160, 40, 5120],
-  probe: [67, 40, 12227],
-  zealot: [1, 40, 1],
-  dragoon: [1, 40, 1],
-  htemplar: [27, 40, 13474],
-  archon: [160, 40, 5120],
-  reaver: [1, 20, 1],
-  lurker: [1, 40, 1],
+  marine: [1, 40, 1, 2],
+  ghost: [1, 40, 1, 2],
+  vulture: [100, 40, 14569, 0],
+  goliath: [1, 17, 1, 2],
+  tank: [1, 13, 1, 2],
+  scv: [67, 40, 12227, 0],
+  firebat: [1, 40, 1, 2],
+  medic: [1, 40, 1, 2],
+  zergling: [1, 27, 1, 2],
+  hydra: [1, 27, 1, 2],
+  ultralisk: [1, 40, 1, 2],
+  broodling: [1, 27, 1, 2],
+  drone: [67, 40, 12227, 0],
+  defiler: [1, 27, 1, 2],
+  infested_terran: [1, 40, 1, 2],
+  dtemplar: [27, 40, 13474, 2],
+  dark_archon: [160, 40, 5120, 0],
+  probe: [67, 40, 12227, 0],
+  zealot: [1, 40, 1, 2],
+  dragoon: [1, 40, 1, 2],
+  htemplar: [27, 40, 13474, 1],
+  archon: [160, 40, 5120, 0],
+  reaver: [1, 20, 1, 2],
+  lurker: [1, 40, 1, 2],
 };
+const AIR_MOTION = {
+  wraith: [67,40,21745,0], vessel: [50,40,5120,0], dropship: [17,20,37756,0], bc: [27,20,7585,0],
+  valkyrie: [65,30,21901,0], overlord: [27,20,840,0], mutalisk: [67,40,21745,0],
+  queen: [67,40,21745,0], guardian: [27,20,7585,0], scourge: [107,40,13616,0],
+  devourer: [48,30,17067,0], corsair: [67,30,17067,0], shuttle: [17,20,37756,0],
+  scout: [48,30,17067,0], arbiter: [33,40,24824,0], carrier: [27,20,13474,0], observer: [27,20,13474,0],
+};
+const LIFT_MOTION = [33, 27, 2763, 0];
+const MINE_MOTION = [1, 127, 1, 2];
+const MINE_HOVER_TARGETS = new Set(['vulture','scv','drone','probe','archon','dark_archon','spider_mine']);
 Object.assign(UNITS, {
   valkyrie: { name: '발키리', race: 'T', hp: 200, armor: 2, size: 'large', air: true, speed: 6.6, sight: 8, r: 16,
     cost: [250, 125], supply: 3, time: 750, mech: true, from: 'starport', hotkey: 'V', req: ['armory'], addon: 'control_tower',
@@ -615,6 +636,19 @@ Object.assign(UNITS, {
     spells: ['recall', 'stasis'], cloakAura: 4 * TILE, armorUpg: 'p_aa' },
 });
 UNITS.carrier.hotkey = 'C'; UNITS.carrier.ammo = 'interceptor';
+// Exact DAT fixed-point speeds for flingy-controlled units. Walking retains mean gait speed.
+for (const [type, speed256] of Object.entries({ scv:1280, drone:1280, probe:1280, vulture:1707,
+  htemplar:853, archon:1280, dark_archon:1280, wraith:1707, vessel:1280, dropship:1400, bc:640,
+  valkyrie:1690, overlord:213, mutalisk:1707, queen:1707, guardian:640, scourge:1707, devourer:1280,
+  corsair:1707, shuttle:1133, scout:1280, arbiter:1280, carrier:853, observer:853 })) UNITS[type].speed = speed256 / 256;
+UNITS.infested_terran.speed = 5.82; UNITS.ultralisk.speed = 5.12; UNITS.reaver.speed = 1.78; UNITS.lurker.speed = 5.82;
+UNITS.spider_mine.speed = 16;
+UNITS.broodling.gw.range = 2; UNITS.infested_terran.gw.range = 3;
+// Devourer spreads acid spores, not weapon damage, to nearby flyers.
+delete UNITS.devourer.aw.splash;
+UNITS.valkyrie.aw.airSplash = true; UNITS.corsair.aw.airSplash = true;
+UNITS.archon.gw.splashBoth = true; UNITS.archon.aw.splashBoth = true;
+UNITS.scout.aw.inc = 1;
 UNITS.htemplar.spells.push('archon_merge'); UNITS.dtemplar.spells = ['dark_archon_merge'];
 UNITS.mutalisk.spells = ['guardian_morph', 'devourer_morph']; UNITS.corsair.spells = ['disruption_web'];
 UNITS.tank.addon = 'machine_shop'; UNITS.dropship.addon = 'control_tower'; UNITS.vessel.addon = 'control_tower'; UNITS.bc.addon = 'control_tower';
@@ -645,6 +679,9 @@ BUILD_MENU.P[1].push('robo_support', 'observatory', 'arbiter_tribunal');
 Object.assign(BUILD_KEYS, { robo_support: 'B', observatory: 'O', arbiter_tribunal: 'A' });
 BUILDINGS.pool.research.push('adrenal');
 Object.assign(TECH, {
+  gravitic_drive: { name:'그라비틱 드라이브', cost:[200,200], time:2500, hotkey:'G', desc:'셔틀 이동 속도 증가' },
+  gravitic_boosters: { name:'그라비틱 부스터', cost:[150,150], time:2000, hotkey:'G', desc:'옵저버 이동 속도 증가' },
+  gravitic_thrusters: { name:'그라비틱 스러스터', cost:[200,200], time:2500, hotkey:'G', desc:'스카웃 이동 속도 증가' },
   adrenal: { name: '아드레날 글랜드', cost: [200, 200], time: 1500, req: ['hive'], hotkey: 'A', desc: '저글링 공격 간격 감소' },
   ensnare_t: { name: '인스네어', cost: [100, 100], time: 1200, hotkey: 'E', desc: '퀸의 이동 감속 능력' },
   broodlings_t: { name: '스폰 브루들링', cost: [100, 100], time: 1200, hotkey: 'B', desc: '지상 생체 유닛을 브루들링으로 변환' },
@@ -657,6 +694,9 @@ Object.assign(TECH, {
   scarab_damage: { name: '스캐럽 공격력', cost: [200, 200], time: 1500, hotkey: 'S', desc: '스캐럽 공격력 100 → 125' },
   disruption_web_t: { name: '디스럽션 웹', cost: [200, 200], time: 1200, hotkey: 'D', desc: '영역 내 지상 무기 사용 억제' },
 });
+BUILDINGS.robo_support.research.push('gravitic_drive');
+BUILDINGS.observatory.research.push('gravitic_boosters');
+BUILDINGS.fleet_beacon.research.push('gravitic_thrusters');
 Object.assign(SPELLS, {
   parasite: { name: '패러사이트', hotkey: 'P', target: 'unit', energy: 75, range: 12, desc: '대상 시야 공유' },
   ensnare: { name: '인스네어', hotkey: 'E', target: 'point', energy: 75, tech: 'ensnare_t', range: 9, desc: '영역 내 유닛 감속/클로킹 노출' },
@@ -964,6 +1004,25 @@ function updateCreep() {
 // ===================================================================
 const PF = (() => {
   const N = MAP_W * MAP_H;
+  const prefixWidth = MAP_W + 1, terrainPrefix = new Uint32Array((MAP_W + 1) * (MAP_H + 1));
+  let terrainFrame = false, terrainDirty = true;
+  function terrainRectEmpty(x0, y0, x1, y1) {
+    if (!terrainFrame || x0 < 0 || y0 < 0 || x1 >= MAP_W || y1 >= MAP_H) return false;
+    if (terrainDirty) {
+      terrainPrefix.fill(0);
+      for (let y = 0; y < MAP_H; y++) {
+        let row = 0;
+        for (let x = 0; x < MAP_W; x++) {
+          const i = y * MAP_W + x;
+          row += MAP.walk[i] !== 1 || MAP.occ[i] !== 0 ? 1 : 0;
+          terrainPrefix[(y + 1) * prefixWidth + x + 1] = terrainPrefix[y * prefixWidth + x + 1] + row;
+        }
+      }
+      terrainDirty = false;
+    }
+    return terrainPrefix[(y1+1)*prefixWidth+x1+1] - terrainPrefix[y0*prefixWidth+x1+1] -
+      terrainPrefix[(y1+1)*prefixWidth+x0] + terrainPrefix[y0*prefixWidth+x0] === 0;
+  }
   const g = new Float32Array(N), f = new Float32Array(N);
   const parent = new Int32Array(N);
   const openGen = new Uint32Array(N), closedGen = new Uint32Array(N);
@@ -1055,6 +1114,7 @@ const PF = (() => {
   // 물리 보정과 동일한 원-타일 충돌 판정. 모서리에 접한 유닛도 바깥쪽으로 이동할 수 있다.
   function positionClear(x, y, r, ignoreId) {
     if (x - r < 0 || y - r < 0 || x + r > MAP_W * TILE || y + r > MAP_H * TILE) return false;
+    if (terrainRectEmpty(tileOf(x-r), tileOf(y-r), tileOf(x+r), tileOf(y+r))) return true;
     for (let ty = tileOf(y - r); ty <= tileOf(y + r); ty++) for (let tx = tileOf(x - r); tx <= tileOf(x + r); tx++) {
       if (passable(tx, ty, ignoreId)) continue;
       const qx = Math.max(tx * TILE, Math.min(x, (tx + 1) * TILE));
@@ -1070,6 +1130,9 @@ const PF = (() => {
       top = Math.min(y0, y1) - r, bottom = Math.max(y0, y1) + r;
     if (left < 0 || top < 0 || right > MAP_W * TILE || bottom > MAP_H * TILE) return false;
     const tx0 = tileOf(left), tx1 = tileOf(right), ty0 = tileOf(top), ty1 = tileOf(bottom);
+    // Long visibility-graph edges in open terrain need four prefix lookups, not
+    // hundreds of swept-circle samples. Near any blocker, use the exact existing checks.
+    if (terrainRectEmpty(tx0, ty0, tx1, ty1)) return true;
     if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) <= 64) {
       let open = true;
       for (let y = ty0; y <= ty1 && open; y++) for (let x = tx0; x <= tx1; x++)
@@ -1204,7 +1267,7 @@ const PF = (() => {
   function localPath(x0, y0, x1, y1, r, obstacles, occupiedGoal) {
     const step = 8, limit = 16, width = limit * 2 + 1;
     const key = (x, y) => (y + limit) * width + x + limit;
-    const units = obstacles.units.filter(u => (u.x - x0) ** 2 + (u.y - y0) ** 2 < (250 + u.r + r) ** 2);
+    const units = indexUnits(obstacles.units.filter(u => (u.x - x0) ** 2 + (u.y - y0) ** 2 < (250 + u.r + r) ** 2));
     const rr = Math.max(3, r * 0.75), start = key(0, 0);
     const scores = new Map([[start, 0]]), parents = new Map(), nodes = new Map();
     const queue = [], closed = new Set();
@@ -1292,7 +1355,10 @@ const PF = (() => {
   }
   return {
     find, worldPath, lineClear, positionClear, localPath, unitPath, nearestPassable, passable, unitsClear, unitObstacles, goalBlocker, compactPath,
-    resetBudget() { budget = 24000; }, get budget() { return budget; },
+    resetBudget() { budget = 24000; terrainFrame = false; },
+    beginTick() { budget = 24000; terrainFrame = true; terrainDirty = true; },
+    endTick() { terrainFrame = false; }, invalidateTerrain() { terrainDirty = true; },
+    get budget() { return budget; },
   };
 })();
 
@@ -1472,6 +1538,7 @@ function createBuilding(type, owner, tx, ty, done) {
   return e;
 }
 function occupy(e, on) {
+  PF.invalidateTerrain();
   const d = e.def;
   for (let y = e.ty0; y < e.ty0 + d.h; y++) for (let x = e.tx0; x < e.tx0 + d.w; x++) {
     if (!inMap(x, y)) continue;
@@ -1686,7 +1753,7 @@ function fx(kind, x, y, opt) {
 //  엔티티(유닛/건물) — 명령 처리, 이동, 전투, 채취, 건설, 생산
 // ===================================================================
 let GROUP_ID = 1;
-const SPEED_UPGRADES = { zergling: 'metabolic', hydra: 'muscular', zealot: 'legs', vulture: 'ion', overlord: 'pneumatized', ultralisk: 'anabolic' };
+const SPEED_UPGRADES = { zergling: 'metabolic', hydra: 'muscular', zealot: 'legs', vulture: 'ion', overlord: 'pneumatized', ultralisk: 'anabolic', shuttle:'gravitic_drive', observer:'gravitic_boosters', scout:'gravitic_thrusters' };
 
 class Entity {
   constructor(type, owner, x, y) {
@@ -1719,9 +1786,9 @@ class Entity {
   // ---------- 스탯 ----------
   get speed() {
     const d = this.def; let s = d.speed || 0;
-    if (this.lifted) return 1.1;
+    if (this.lifted) return 1;
     const modifier = (hasTech(this.owner, SPEED_UPGRADES[this.type]) ? 1 : 0) + (this.stimT > 0 ? 1 : 0) - (this.ensnareT > 0 ? 1 : 0);
-    if (modifier > 0) s = Math.max(s * 1.5, 10 / 3);
+    if (modifier > 0) s = this.type === 'scout' ? 6 + 2 / 3 : Math.max(s * 1.5, 10 / 3);
     if (modifier < 0) s /= 2;
     return s;
   }
@@ -1840,7 +1907,15 @@ class Entity {
     if (this.lockT > 0) this.lockT--;
     if (this.stasisT > 0) this.stasisT--;
     if (this.maelstromT > 0) this.maelstromT--;
-    if (this.acidT > 0 && --this.acidT <= 0) this.acidSpores = 0;
+    if (this.acidTimers) {
+      let count = 0, longest = 0;
+      for (let i = 0; i < 9; i++) if (this.acidTimers[i] > 0) {
+        this.acidTimers[i]--; if (this.acidTimers[i] > 0) count++;
+        longest = Math.max(longest, this.acidTimers[i]);
+      }
+      this.acidSpores = count; this.acidT = longest;
+      if (!count) this.acidTimers = null;
+    } else if (this.acidT > 0 && --this.acidT <= 0) this.acidSpores = 0;
     if (this.matrixT > 0) { if (--this.matrixT <= 0) this.matrixHp = 0; }
     if (this.maxEnergy && this.energy < this.maxEnergy && !(this.isBuilding && !this.done)) this.energy = Math.min(this.maxEnergy, this.energy + 0.03125);
     if (this.maxSh && this.sh < this.maxSh && this.done) this.sh = Math.min(this.maxSh, this.sh + 0.027);
@@ -1851,12 +1926,17 @@ class Entity {
     }
     if (this.irrT > 0) {
       this.irrT--;
-      for (const o of SH.query(this.x, this.y, 40)) {
-        if (o.dead || o.hidden || o.isBuilding || !o.def.bio || o.air !== this.air) continue;
-        if (dist(o.x, o.y, this.x, this.y) <= 32 + o.r || o === this) o.takeRaw(0.4167, this.irrSrc);
+      if (this.irrT % 8 === 0) for (const o of this.burrowed ? [this] : this.inside ? [this.inside] : SH.query(this.x, this.y, 160)) {
+        if (o.dead || (!this.inside && o.hidden) || o.isBuilding || !o.def.bio || ['larva','egg','lurker_egg'].includes(o.type) || (o.burrowed && o !== this)) continue;
+        if (this.inside || edgeDist(this, o) <= 32 || o === this)
+          dealDamage(this.irrSrc || null, o, {dmg:Math.floor(250*256/75)/256,type:'spell',noRetaliate:true}, 1);
       }
     }
-    if (this.plagueT > 0) { this.plagueT--; if (this.hp > 1) this.hp = Math.max(1, this.hp - 0.5); }
+    if (this.plagueT > 0) {
+      this.plagueT--;
+      const damage = Math.floor(300*256/76)/256;
+      if (this.plagueT % 8 === 0 && !(this.stasisT > 0) && this.hp > damage) this.hp -= damage;
+    }
     if (this.isBuilding && this.race === 'T' && this.done && this.hp < this.maxHp / 3 && !this.dead) {
       this.hp -= 0.08; if (this.hp <= 0) killEntity(this, null);
     }
@@ -2077,7 +2157,7 @@ class Entity {
     if (this.air || this.lifted) {
       const s = Math.min(sp, d);
       this.vx = dx / d * s; this.vy = dy / d * s;
-      this.dir = Math.atan2(dy, dx);
+      this.moveWaypoint = [x, y];
       return false;
     }
     // 목표를 막던 몸체가 움직이면 이전의 조정된 도착점은 더 이상 유효하지 않다.
@@ -2140,7 +2220,7 @@ class Entity {
     const s = Math.min(sp, wd);
     this.vx = wdx / wd * s; this.vy = wdy / wd * s;
     this.moveWaypoint = [wx, wy];
-    if (!GROUND_MOTION[this.type]) this.dir = Math.atan2(wdy, wdx);
+    if (!GROUND_MOTION[this.type] && this.type !== 'spider_mine') this.dir = Math.atan2(wdy, wdx);
     // 막힘 감지
     if (this.lastD !== undefined && d > this.lastD - 0.05 * sp) this.stuck = (this.stuck || 0) + 1;
     else this.stuck = Math.max(0, (this.stuck || 0) - 2);
@@ -2442,16 +2522,17 @@ class Entity {
       if ((GAME.tick + this.id) % 4) return;
       for (const e of SH.query(this.x, this.y, 3 * TILE)) {
         if (e.dead || e.hidden || e.air || e.isBuilding || e.lifted || !isEnemy(this.owner, e.owner)) continue;
-        if (e.type === 'vulture' || e.type === 'spider_mine' || e.burrowed) continue;
+        if (MINE_HOVER_TARGETS.has(e.type) || e.burrowed || e.stasisT > 0) continue;
         if (dist(e.x, e.y, this.x, this.y) <= 3 * TILE) { t = e; break; }
       }
       if (!t) return;
       this.mineTgt = t; this.burrowed = false;
     }
     const d = edgeDist(this, t);
-    if (d <= 4) {
+    if (d > 576) { this.mineTgt = null; this.burrowT = 60; return; }
+    if (d <= 30) {
       const w = this.def.gw;
-      splashDamage(this, this.x, this.y, w, this.src && !this.src.dead ? this.src : this, true, false);
+      splashDamage(this.src || this, this.x, this.y, w, this, true, false, t);
       fx('explode', this.x, this.y, { life: 16, size: 1 });
       SND.play('boom', this.x, this.y);
       killEntity(this, null, true);
@@ -2674,10 +2755,19 @@ function completeBuilding(b) {
   b.done = true; b.prog = b.def.time;
   b.hp = Math.max(b.hp, b.maxHp * 0.999); if (b.maxSh) b.sh = b.maxSh;
   if (b.hp > b.maxHp * 0.99) b.hp = b.maxHp;
-  if (b.race === 'T' && b.builder && !b.builder.dead) { const w = b.builder; if (w.orders[0] && w.orders[0].tgt === b) w.nextOrder(); b.builder = null; }
+  if (b.race === 'T' && b.builder && !b.builder.dead) {
+    const w = b.builder, constructing = w.orders[0]?.t === 'construct' && w.orders[0].tgt === b;
+    if (constructing) {
+      w.nextOrder();
+      // A queued player command takes priority over the default refinery order.
+      if (!w.orders.length && b.def.onGeyser && w.owner === b.owner)
+        w.issue({ t: 'gather', tgt: b, phase: w.carry ? 'ret' : 'go' });
+    }
+    b.builder = null;
+  }
   notify(b.owner, 'done' + b.id, b.def.name + ' 건설 완료', 'done');
   if (b.def.larvaHall) b.larvaT = 300;
-  if (b.def.onGeyser && b.geyser) b.geyser.amount = b.geyser.amount || 5000;
+  if (b.def.onGeyser && b.geyser && b.geyser.amount == null) b.geyser.amount = 5000;
   if (typeof AI !== 'undefined') AI.onBuilt(b);
 }
 
@@ -2813,7 +2903,7 @@ const PROJ = {
   spit:   { speed: 8, color: '#a0e040' }, particle: { speed: 9, color: '#80c0ff' },
   tentacle: { speed: 0, delay: 8 }, spore: { speed: 8, color: '#d0ff90' },
   neutron:{ speed: 12, color: '#60ffff' }, interceptor: { speed: 9, color: '#ffe000' },
-  yamato: { speed: 9, color: '#ff8020' }, lock: { speed: 9, color: '#80ff80' }, scarab: { speed: 7, color: '#ffe090' },
+  yamato: { speed: 9, color: '#ff8020' }, lock: { speed: 9, color: '#80ff80' }, scarab: { speed: 16, color: '#ffe090' },
 };
 
 function fireWeapon(src, t, w) {
@@ -2829,7 +2919,7 @@ function fireWeapon(src, t, w) {
   if (!t.airTarget && range > 40 && !w.splash && !w.line && underSwarm(t)) miss = true;
   SND.play(w.proj || w.fx || 'melee', from.x, from.y, src);
   if (w.suicide) {
-    if (w.splash) splashDamage(src, t.x, t.y, w, src, !!w.friendly, !!t.airTarget);
+    if (w.splash) splashDamage(src, t.x, t.y, w, src, !!w.friendly, !!t.airTarget, t);
     else dealDamage(src, t, w, 1);
     fx('zsplat', t.x, t.y, { life: 14, size: 0.6 });
     killEntity(src, null, true);
@@ -2845,6 +2935,7 @@ function fireWeapon(src, t, w) {
     const ang = Math.atan2(t.y - from.y, t.x - from.x);
     const ox = from.x + Math.cos(ang) * Math.min(from.r || 8, 14), oy = from.y + Math.sin(ang) * Math.min(from.r || 8, 14) - (src.air ? 0 : 3);
     const pr = { kind: w.proj, x: ox, y: oy, sx: ox, sy: oy, tgt: t, tx: t.x, ty: t.y, src, w, mult: 1, miss, hits, t: 0, delay: p.delay || 0, bounce: w.bounce || 0, hitList: [] };
+    pr.primary = t;
     if (w.proj === 'siege' || w.proj === 'tentacle') pr.tgt = null; // 지점 공격
     GAME.projectiles.push(pr);
     if (w.proj === 'shell' || w.proj === 'siege') fx('muzzle', ox, oy, { life: 5, ang, size: w.proj === 'siege' ? 1.6 : 1 });
@@ -2856,7 +2947,7 @@ function fireWeapon(src, t, w) {
   if (w.fx === 'flame') {
     fx('flame', from.x + Math.cos(ang) * 8, from.y + Math.sin(ang) * 8, { life: 10, ang });
     for (let k = 0; k < hits; k++) dealDamage(src, t, w, 1, miss);
-    if (w.splash) splashAround(src, t, w);
+    if (w.splash && !miss) splashAround(src, t, w);
     return;
   }
   if (w.fx === 'gun') { fx('muzzle', from.x + Math.cos(ang) * 9, from.y + Math.sin(ang) * 9 - 3, { life: 3, ang, size: 0.6 }); fx('hitspark', t.x + (Math.random() - 0.5) * t.r, t.y + (Math.random() - 0.5) * t.r, { life: 6, miss }); }
@@ -2873,59 +2964,70 @@ function underSwarm(t) {
   return false;
 }
 
+function addAcidSpore(e) {
+  if (!e.acidTimers) {
+    e.acidTimers = new Array(9).fill(0);
+    for (let i = 0; i < (e.acidSpores || 0); i++) e.acidTimers[i] = e.acidT || 1200;
+  }
+  let oldest = 0;
+  for (let i = 1; i < 9; i++) if (e.acidTimers[i] < e.acidTimers[oldest]) oldest = i;
+  e.acidTimers[oldest] = 1200;
+  e.acidSpores = e.acidTimers.filter(t => t > 0).length; e.acidT = 1200;
+}
+
 // 피해 적용 (원작 공식: 보호막 → 방어력 차감 → 크기 보정, 최소 0.5)
 function dealDamage(src, t, w, mult, miss) {
   if (!t || t.dead || t.hidden || t.stasisT > 0) return;
   if (src && src.hallucination) return;
   if (miss) { fx('miss', t.x, t.y - 6, { life: 10 }); return; }
-  let dmg = (src ? src.weaponDmg(w) : w.dmg) * (mult || 1);
+  let dmg = (src ? src.weaponDmg(w) : w.dmg) * (mult ?? 1);
   const spell = w.type === 'spell';
   if (t.hallucination) dmg *= 2;
-  if (!spell) dmg += t.acidSpores || 0;
   if (dmg <= 0) return;
+  dmg = Math.max(.5, dmg + (t.acidSpores || 0));
   if (t.matrixHp > 0) {
     const a = Math.min(t.matrixHp, dmg); t.matrixHp -= a; dmg -= a;
     fx('matrixhit', t.x, t.y, { life: 6 });
-    if (dmg <= 0) { t.hp = Math.max(1, t.hp - 0.5); t.onAttacked(src); return; }
   }
-  if (t.sh > 0) {
-    const sd = spell ? dmg : dmg - t.shArmor;
-    if (sd <= t.sh) { t.sh -= Math.max(sd, 0.5); dmg = 0; fx('shield', t.x, t.y, { life: 6, r: t.r }); }
-    else { dmg = sd - t.sh; t.sh = 0; }
+  let shieldDamage = 0;
+  if (t.sh >= 1) {
+    if (!spell) dmg = dmg > t.shArmor ? dmg - t.shArmor : .5;
+    shieldDamage = Math.min(t.sh, dmg); t.sh -= shieldDamage; dmg -= shieldDamage;
+    if (shieldDamage) fx('shield', t.x, t.y, { life: 6, r: t.r });
   }
-  if (dmg > 0) {
-    const size = t.isBuilding ? 'large' : t.def.size;
-    let hd = spell ? dmg : (dmg - t.armor) * DMG_MULT[w.type][size];
-    hd = Math.max(0.5, hd);
+  const size = t.isBuilding ? 'large' : t.def.size;
+  let hd = spell ? dmg : Math.max(0, dmg - t.armor) * DMG_MULT[w.type][size];
+  // The HP floor applies only if this hit did not deal shield damage.
+  if (!shieldDamage) hd = Math.max(.5, hd);
+  if (hd > 0) {
     t.hitT = 3;
     t.takeRaw(hd, src);
   }
-  if (!t.dead) t.onAttacked(src);
+  if (!t.dead && !w.noRetaliate) t.onAttacked(src);
 }
 
 function splashAround(src, t, w) {
   const r = w.splash;
-  for (const e of SH.query(t.x, t.y, r[2] + 30)) {
-    if (e === t || e.dead || e.hidden || e.airTarget !== t.airTarget) continue;
+  for (const e of SH.query(t.x, t.y, r[2] + 96)) {
+    if (e === t || e === src || e.dead || e.hidden || e.def.resource || (!w.splashBoth && !!e.airTarget !== !!t.airTarget)) continue;
     if (!isEnemy(src.owner, e.owner)) continue;
-    const d = Math.max(0, dist(e.x, e.y, t.x, t.y) - e.r);
-    const m = d <= r[0] ? 1 : d <= r[1] ? 0.5 : d <= r[2] ? 0.25 : 0;
+    const d = edgeDistPt(e, t.x, t.y);
+    const m = !w.airSplash && d <= r[0] ? 1 : e.burrowed ? 0 : d <= r[1] ? 0.5 : d <= r[2] ? 0.25 : 0;
     if (m) for (let k = 0; k < (w.hits || 1); k++) dealDamage(src, e, w, m);
   }
 }
 
 // 지점 스플래시 (시즈 탱크 / 마인 / 커세어)
-function splashDamage(src, x, y, w, attacker, friendly, air) {
+function splashDamage(src, x, y, w, attacker, friendly, air, primary = null) {
   const r = w.splash;
-  for (const e of SH.query(x, y, r[2] + 30)) {
+  for (const e of SH.query(x, y, r[2] + 96)) {
     if (e.dead || e.hidden || e === attacker) continue;
     if (!!e.airTarget !== !!air) continue;
     if (e.def.resource) continue;
-    if (!friendly && !isEnemy(attacker.owner, e.owner)) continue;
-    if (e.type === 'spider_mine' && e.owner === attacker.owner) continue;
-    const d = Math.max(0, (e.isBuilding ? edgeDistPt(e, x, y) : dist(e.x, e.y, x, y) - e.r));
-    const m = d <= r[0] ? 1 : d <= r[1] ? 0.5 : d <= r[2] ? 0.25 : 0;
-    if (m) dealDamage(attacker.dead ? null : attacker, e, w, m);
+    if (!friendly && e !== primary && !isEnemy(attacker.owner, e.owner)) continue;
+    const d = edgeDistPt(e, x, y);
+    const m = (air && e === primary) || (!air && d <= r[0]) ? (d <= r[2] ? 1 : 0) : e.burrowed ? 0 : d <= r[1] ? .5 : d <= r[2] ? .25 : 0;
+    if (m) for (let k = 0; k < (w.hits || 1); k++) dealDamage(src || attacker, e, w, m);
   }
 }
 
@@ -2934,7 +3036,7 @@ function lurkerSpines(src, t, w) {
   const len = src.range(w) + 16;
   const x1 = src.x + Math.cos(ang) * len, y1 = src.y + Math.sin(ang) * len;
   fx('spines', src.x, src.y, { life: 16, ang, len });
-  for (const e of SH.query((src.x + x1) / 2, (src.y + y1) / 2, len / 2 + 30)) {
+  for (const e of SH.query((src.x + x1) / 2, (src.y + y1) / 2, len / 2 + 96)) {
     if (e.dead || e.hidden || e.airTarget || !isEnemy(src.owner, e.owner)) continue;
     // 선분과 거리
     const px = e.x - src.x, py = e.y - src.y;
@@ -2946,25 +3048,49 @@ function lurkerSpines(src, t, w) {
 }
 
 function updateProjectiles() {
-  const out = [];
-  for (const p of GAME.projectiles) {
+  const out = [], current = GAME.projectiles;
+  GAME.projectiles = out;
+  for (const p of current) {
     p.t++;
     if (p.delay > 0) { p.delay--; if (p.kind === 'interceptor' && p.src && !p.src.dead) { p.x = p.src.x; p.y = p.src.y; } out.push(p); continue; }
     const def = PROJ[p.kind] || { speed: 10 };
     if (p.kind === 'tentacle') {
-      if (p.tgt === null) { const tt = findUnitAt(p.tx, p.ty, p.src); if (tt) dealDamage(p.src, tt, p.w, 1, p.miss); }
+      if (p.tgt === null) { const tt = p.primary && !p.primary.dead && !p.primary.hidden && edgeDistPt(p.primary, p.tx, p.ty) < 6 ? p.primary : findUnitAt(p.tx, p.ty, p.src); if (tt) dealDamage(p.src, tt, p.w, 1, p.miss); }
       continue;
     }
     if (p.tgt && !p.tgt.dead && !p.tgt.hidden) { p.tx = p.tgt.x; p.ty = p.tgt.y; }
     let spd = def.speed;
+    if (p.kind === 'scarab') {
+      // OpenBW ScarabAttack: ground pursuit, seven initial no-collision frames, 90-frame lifetime.
+      if (p.t > 90 || !p.tgt || p.tgt.dead || p.tgt.hidden) continue;
+      if (edgeDistPt(p.tgt, p.x, p.y) <= 10) { onProjectileHit(p); continue; }
+      const near = p.t <= 7 ? [] : SH.queryGround(p.x, p.y, 200).filter(e => e !== p.src && e !== p.tgt);
+      const ignore = p.tgt.isBuilding ? p.tgt.id : 0;
+      const clear = (x, y) => PF.lineClear(p.x, p.y, x, y, 3, ignore) && PF.unitsClear(p.x, p.y, x, y, 3, near);
+      let x = p.tx, y = p.ty;
+      if (!clear(x, y)) {
+        if (!p.path || !p.path.length || p.t >= p.repathAt) {
+          p.path = PF.localPath(p.x, p.y, x, y, 3, {units:near,cells:new Set()}, null);
+          p.repathAt = p.t + 12;
+        }
+        while (p.path?.length && dist(p.x,p.y,p.path[0][0],p.path[0][1]) < .01) p.path.shift();
+        if (!p.path?.length) { out.push(p); continue; }
+        [x, y] = p.path[0];
+      } else p.path = null;
+      const dx = x - p.x, dy = y - p.y, d = Math.hypot(dx,dy), step = Math.min(spd,d);
+      const nx = p.x + dx / (d || 1) * step, ny = p.y + dy / (d || 1) * step;
+      if (clear(nx, ny)) { p.x=nx; p.y=ny; p.dir=Math.atan2(dy,dx); } else p.path=null;
+      out.push(p); continue;
+    }
     if (p.kind === 'interceptor') {
       // 캐리어 인터셉터: 궤도를 돌며 공격 후 복귀
       p.ang += 0.25;
       const ox = Math.cos(p.ang) * 18, oy = Math.sin(p.ang) * 18;
       const dx = p.tx + ox - p.x, dy = p.ty + oy - p.y, d = Math.hypot(dx, dy);
+      if (!p.src || p.src.dead || !p.tgt || p.tgt.dead || p.tgt.hidden) continue;
       if (d < 20 && !p.fired) {
         p.fired = true;
-        if (p.tgt && !p.tgt.dead) { dealDamage(p.src && !p.src.dead ? p.src : null, p.tgt, p.w, 1, false); fx('beam', p.x, p.y, { life: 3, x2: p.tgt.x, y2: p.tgt.y, color: '#ffe000' }); }
+        if (p.tgt && !p.tgt.dead) { dealDamage(p.src, p.tgt, p.w, 1, p.miss); fx('beam', p.x, p.y, { life: 3, x2: p.tgt.x, y2: p.tgt.y, color: '#ffe000' }); }
       }
       if (p.fired) {
         if (!p.src || p.src.dead) continue;
@@ -2985,7 +3111,6 @@ function updateProjectiles() {
     p.x += dx / d * spd; p.y += dy / d * spd; p.dir = Math.atan2(dy, dx);
     out.push(p);
   }
-  GAME.projectiles = out;
 }
 
 function findUnitAt(x, y, src) {
@@ -2999,7 +3124,7 @@ function findUnitAt(x, y, src) {
 }
 
 function onProjectileHit(p) {
-  const w = p.w, src = p.src && !p.src.dead ? p.src : null;
+  const w = p.w, src = p.src || null;
   if (p.emp) {
     for (const e of SH.query(p.x, p.y, 100)) if (!e.dead && !e.hidden && e !== p.src && !(e.stasisT > 0) && dist(e.x, e.y, p.x, p.y) <= 64 + e.r) { e.sh = 0; e.energy = 0; }
     fx('empfx', p.x, p.y, { life: 20 }); return;
@@ -3007,15 +3132,15 @@ function onProjectileHit(p) {
   switch (p.kind) {
     case 'siege':
       fx('explode', p.x, p.y, { life: 14, size: 1.2 });
-      if (!p.miss) splashDamage(src, p.x, p.y, w, p.src, true, false); else fx('miss', p.x, p.y, { life: 10 });
+      if (!p.miss) splashDamage(src, p.x, p.y, w, p.src, true, false, p.primary); else fx('miss', p.x, p.y, { life: 10 });
       SND.play('boom', p.x, p.y);
       return;
     case 'neutron':
       fx('explode', p.x, p.y, { life: 8, size: 0.5, color: '#60ffff' });
-      if (p.tgt && !p.tgt.dead) splashDamage(src, p.x, p.y, w, p.src, false, true);
+      if (!p.miss && p.tgt && !p.tgt.dead) splashDamage(src, p.x, p.y, w, p.src, false, true, p.tgt);
       return;
     case 'scarab':
-      if (p.src) splashDamage(src, p.x, p.y, w, p.src, false, false);
+      if (p.src && !p.miss) splashDamage(src, p.x, p.y, w, p.src, false, false, p.tgt);
       fx('explode', p.x, p.y, { life: 12, size: 1 }); return;
     case 'glaive': {
       const t = p.tgt;
@@ -3047,9 +3172,9 @@ function onProjectileHit(p) {
       const col = PROJ[p.kind] && PROJ[p.kind].color;
       if (p.kind === 'missile' || p.kind === 'grenade' || p.kind === 'shell' || p.kind === 'plasma') fx('explode', t.x, t.y, { life: 8, size: p.kind === 'plasma' ? 0.5 : 0.6, color: p.kind === 'plasma' ? '#a0d8ff' : undefined });
       else fx('hitspark', t.x, t.y, { life: 6, color: col });
-      if (w.splash && p.kind !== 'neutron') splashAround(p.src || t, t, w);
+      if (w.splash && !p.miss) splashAround(p.src || t, t, w);
       if (w.acid && !p.miss) for (const e of SH.query(t.x, t.y, 80)) {
-        if (!e.dead && !e.hidden && e.airTarget && isEnemy(p.src.owner, e.owner) && dist(e.x, e.y, t.x, t.y) <= 48 + e.r) { e.acidSpores = Math.min(9, (e.acidSpores || 0) + 1); e.acidT = 900; }
+        if (!e.dead && !e.hidden && !(e.stasisT > 0) && e.airTarget && (e === t || isEnemy(p.src.owner, e.owner)) && dist(e.x, e.y, t.x, t.y) <= 48 + e.r) addAcidSpore(e);
       }
     }
   }
@@ -3064,10 +3189,10 @@ function updateAreas() {
       if (a.t <= 320 && (!a.src || a.src.dead || a.src.lockT > 0 || a.src.stasisT > 0 || a.src.maelstromT > 0 || !a.src.orders[0] || a.src.orders[0].t !== 'nuke')) continue;
       if (a.t === 320) a.src.nextOrder();
       if (a.t === a.life) {
-        for (const e of SH.query(a.x, a.y, 240)) {
+        for (const e of SH.query(a.x, a.y, 352)) {
           if (e.dead || e.hidden || e.def.resource || e.stasisT > 0) continue;
-          const d = edgeDistPt(e, a.x, a.y), mult = d <= 64 ? 1 : d <= 128 ? 0.5 : d <= 192 ? 0.25 : 0;
-          if (mult) dealDamage(a.src && !a.src.dead ? a.src : null, e, { dmg: Math.max(500, (e.maxHp + e.maxSh) * 2 / 3), type: 'spell' }, mult);
+          const d = edgeDistPt(e, a.x, a.y), mult = d <= 128 ? 1 : d <= 192 ? 0.5 : d <= 256 ? 0.25 : 0;
+          if (mult) dealDamage(a.src || null, e, { dmg: Math.max(500, (e.maxHp + e.maxSh) * 2 / 3), type: 'explosive' }, mult);
         }
         fx('explode', a.x, a.y, { life: 48, size: 6 }); SND.play('bigboom', a.x, a.y);
       }
@@ -3077,9 +3202,9 @@ function updateAreas() {
       for (const e of SH.query(a.x, a.y, a.r + 30)) {
         if (e.dead || e.hidden || e.isBuilding) continue;
         if (dist(e.x, e.y, a.x, a.y) > a.r + e.r * 0.5) continue;
-        if (e.stormAt === st) continue;
-        e.stormAt = st;
-        dealDamage(a.src && !a.src.dead ? a.src : null, e, { dmg: 14, type: 'spell' }, 1);
+        if ((e.stormNextAt || 0) > st) continue;
+        e.stormNextAt = st + 8;
+        dealDamage(a.src || null, e, { dmg: 14, type: 'spell' }, 1);
       }
     }
     if (a.t < a.life) out.push(a);
@@ -3123,7 +3248,7 @@ function castSpell(c, s, tgt, x, y) {
     case 'plague':
       for (const e of SH.query(x, y, 80)) {
         if (e.dead || e.hidden || dist(e.x, e.y, x, y) > 48 + e.r) continue;
-        if (e.def.resource) continue;
+        if (e.def.resource || e.stasisT > 0) continue;
         e.plagueT = 600; e.onAttacked(c);
       }
       fx('plaguefx', x, y, { life: 30 });
@@ -3146,7 +3271,7 @@ function castSpell(c, s, tgt, x, y) {
       else notify(c.owner, 'mech', '기계 유닛에게만 사용할 수 있습니다.', 'err');
       break;
     case 'restoration':
-      if (tgt) { tgt.irrT = 0; tgt.plagueT = 0; tgt.lockT = 0; tgt.ensnareT = 0; tgt.blinded = false; tgt.parasiteOwner = undefined; tgt.acidSpores = 0; tgt.acidT = 0; fx('cast', tgt.x, tgt.y, { life: 12, color: '#ffffff' }); }
+      if (tgt) { tgt.irrT = 0; tgt.plagueT = 0; tgt.lockT = 0; tgt.ensnareT = 0; tgt.blinded = false; tgt.parasiteOwner = undefined; tgt.acidSpores = 0; tgt.acidT = 0; tgt.acidTimers = null; fx('cast', tgt.x, tgt.y, { life: 12, color: '#ffffff' }); }
       break;
     case 'consume':
       if (tgt && tgt.owner === c.owner && tgt.race === 'Z' && !tgt.isBuilding && tgt !== c) { killEntity(tgt, null); c.energy = Math.min(c.maxEnergy, c.energy + 50); }
@@ -3163,7 +3288,7 @@ function castSpell(c, s, tgt, x, y) {
       break;
     case 'nuclear_strike':
       silo.nukeReady = false; c.issue({ t: 'nuke' });
-      GAME.areas.push({ kind: 'nuke', x, y, r: 192, t: 0, life: 360, src: c, owner: c.owner });
+      GAME.areas.push({ kind: 'nuke', x, y, r: 256, t: 0, life: 360, src: c, owner: c.owner });
       if (typeof UI !== 'undefined') UI.message('핵 공격이 감지되었습니다!'); break;
     case 'ensnare':
     case 'maelstrom':
@@ -3217,6 +3342,18 @@ function cmdTrain(b, type) {
   pay(b.owner, d.cost);
   b.queue.push({ kind: 'unit', type, prog: 0, total: d.time, started: false });
   return true;
+}
+
+function cmdTrainSelected(buildings, type) {
+  const d = UNITS[type];
+  const eligible = buildings.filter(b => !b.dead && b.done && !b.lifted && !b.morph &&
+    (b.def.produces || []).includes(type) && b.queue.length < 5 &&
+    (!d.addon || attachedAddon(b, d.addon)));
+  // One click buys one unit. Repeated clicks distribute work among the selected producers.
+  const work = b => b.queue.reduce((n, q) => n + q.total - q.prog, 0);
+  eligible.sort((a, b) => work(a) - work(b) || a.id - b.id);
+  if (!eligible.length) { if (buildings[0]) notify(buildings[0].owner, 'q', '생산 가능한 건물 또는 빈 대기열이 없습니다.', 'err'); return false; }
+  return cmdTrain(eligible[0], type);
 }
 
 function attachedAddon(b, type) {
@@ -3497,10 +3634,12 @@ function directionDifference(to, from) {
 // then heading. The same integrator drives ordinary paths and MoveToLegal.
 function groundMovement(e, x, y, limit = e.speed) {
   const dx = x - e.x, dy = y - e.y, distance = Math.hypot(dx, dy);
-  const profile = GROUND_MOTION[e.type];
+  const profile = e.lifted ? LIFT_MOTION : e.type === 'spider_mine' ? MINE_MOTION : GROUND_MOTION[e.type] || AIR_MOTION[e.type];
   if (!profile || !distance) { e.vx = 0; e.vy = 0; e.currentSpeed = 0; return; }
-  const [acceleration, turn, halt] = profile, scripted = acceleration === 1;
-  const desired = Math.atan2(dy, dx), headingTurn = turn * Math.PI * 2 / 256,
+  const [acceleration, turn, halt, control] = profile, scripted = control === 2;
+  const modifier = scripted ? 0 : (hasTech(e.owner, SPEED_UPGRADES[e.type]) ? 1 : 0) + (e.stimT > 0 ? 1 : 0) - (e.ensnareT > 0 ? 1 : 0);
+  const motionScale = scripted ? 1 : modifier > 0 ? 2 : modifier < 0 ? .75 : 1;
+  const desired = Math.atan2(dy, dx), headingTurn = turn * motionScale * Math.PI * 2 / 256,
     velocityTurn = scripted ? headingTurn : headingTurn / 2;
   const delta = directionDifference(desired, e.velocityDirection);
   e.velocityDirection += Math.max(-velocityTurn, Math.min(velocityTurn, delta));
@@ -3509,11 +3648,11 @@ function groundMovement(e, x, y, limit = e.speed) {
     // Iscript's large-turn gate; animation strides still use the project's average speed.
     e.currentSpeed = Math.abs(headingError) >= Math.PI / 4 ? 0 : e.speed;
   } else {
-    const a = acceleration / 256, remainingTurn = Math.abs(directionDifference(desired, e.velocityDirection));
+    const a = acceleration * motionScale / 256, remainingTurn = Math.abs(directionDifference(desired, e.velocityDirection));
     let accelerate = remainingTurn < 1e-6 || distance >= 32 ||
       Math.ceil(remainingTurn * 2 / headingTurn) * e.currentSpeed * 1.5 <= distance;
-    const haltDistance = Math.abs(e.currentSpeed - e.def.speed) < 1e-6 ? halt / 256 : e.currentSpeed ** 2 / (2 * a);
-    if (haltDistance >= distance) accelerate = false;
+    const haltDistance = motionScale === 1 && Math.abs(e.currentSpeed - e.def.speed) < 1e-6 ? halt / 256 : e.currentSpeed ** 2 / (2 * a);
+    if (control === 0 && haltDistance >= distance) accelerate = false;
     e.currentSpeed = Math.max(0, Math.min(e.speed, e.currentSpeed + (accelerate ? a : -a)));
   }
   e.dir += Math.max(-headingTurn, Math.min(headingTurn, headingError));
@@ -3754,7 +3893,7 @@ function physics() {
           else { e.vx = 0; e.vy = 0; e.currentSpeed = 0; e.blockedTicks = (e.blockedTicks || 0) + 1; }
         }
       }
-    } else if (!e.air && !e.lifted && !e.isBuilding && GROUND_MOTION[e.type]) {
+    } else if (e.lifted || e.type === 'spider_mine' || GROUND_MOTION[e.type] || AIR_MOTION[e.type]) {
       if (e.moving) {
         const length = Math.hypot(e.vx, e.vy), waypoint = e.moveWaypoint || [e.x + e.vx, e.y + e.vy];
         groundMovement(e, waypoint[0], waypoint[1], length);
@@ -3801,7 +3940,7 @@ function resolveTerrain(e) {
 
 function gameTick() {
   GAME.tick++;
-  PF.resetBudget();
+  PF.beginTick();
   SH.clear();
   const ents = GAME.entities;
   GAME.detectors = [];
@@ -3823,6 +3962,7 @@ function gameTick() {
   recomputeSupply();
   if (typeof AI !== 'undefined') AI.update();
   if (GAME.tick % 24 === 0) checkVictory();
+  PF.endTick();
 }
 Entity.prototype.isWorkerGathering = function () {
   if (!this.def.worker) return false;
@@ -5443,6 +5583,10 @@ const UI = {
     if (this.pointerLocked()) { this.releaseMouse(); return; }
     if (!GAME.running || GAME.over || this.lockPending) return;
     if (!this.el.cv.requestPointerLock) { this.message('이 브라우저는 마우스 고정을 지원하지 않습니다.'); return; }
+    // Native selects and dragging need the ordinary pointer. Lock only the play area.
+    if (this.el.test && !this.el.test.classList.contains('hidden')) this.toggleTest(false);
+    this.el.help?.classList.add?.('hidden');
+    document.activeElement?.blur?.();
     this.lockPending = true; this.lockError = false;
     const fail = () => {
       this.lockPending = false;
@@ -5452,6 +5596,8 @@ const UI = {
   },
   pointerLockChanged() {
     const locked = this.pointerLocked();
+    // Also cover an asynchronous lock request finishing after F10 was opened.
+    if (locked && this.el.test && !this.el.test.classList.contains('hidden')) { this.releaseMouse(); return; }
     this.lockPending = false; this.keys = {}; this.mouse.drag = null; this.mmDrag = false; this.lockedTarget = null;
     this.mouse.inside = locked;
     if (locked) {
@@ -5469,7 +5615,11 @@ const UI = {
     if (!this.pointerLocked()) return false;
     const hit = document.elementFromPoint(this.mouse.x, this.mouse.y);
     if (!hit || hit === this.el.cv) return false;
+    if (hit.closest('#test,#help')) { e.preventDefault(); this.releaseMouse(); return true; }
     const target = hit.closest('button,input,select,label,.btn,.wf,.qs,#minimap') || hit;
+    if (e.button === 0 && target.id === 'hud-f10') {
+      e.preventDefault(); this.toggleTest(true); return true;
+    }
     this.lockedTarget = target; e.preventDefault();
     target.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true,
       clientX:this.mouse.x, clientY:this.mouse.y, button:e.button, buttons:e.buttons,
@@ -5515,6 +5665,7 @@ const UI = {
       this.mouse.inside = true;
       this.mouse.overUI = (locked ? document.elementFromPoint(this.mouse.x, this.mouse.y) : e.target) !== cv;
       if (this.mmDrag) this.minimapAt(this.pointerAt(e), true);
+      if (locked) this.updateCursor();
     });
     document.addEventListener('mouseleave', () => { if (!this.pointerLocked()) this.mouse.inside = false; });
     document.addEventListener('pointerlockchange', () => this.pointerLockChanged());
@@ -5596,7 +5747,7 @@ const UI = {
     if (e.key === 'Alt') { this.keys.Alt = true; e.preventDefault(); }
     const k = e.key;
     if (k === 'F10' || k === '`') { e.preventDefault(); this.toggleTest(); return; }
-    if (k === 'F1') { e.preventDefault(); this.el.help.classList.toggle('hidden'); return; }
+    if (k === 'F1') { e.preventDefault(); this.el.help.classList.toggle('hidden'); if (!this.el.help.classList.contains('hidden')) this.releaseMouse(); return; }
     if (k === 'F9' || k === 'Pause') { e.preventDefault(); GAME.paused = !GAME.paused; this.message(GAME.paused ? '일시 정지' : '게임 재개'); return; }
     if (k === 'Escape') { if (this.mode) this.cancelMode(); else if (this.menu) { this.menu = null; this.cardSig = ''; } else this.escQueue(); return; }
     if (k === ' ') { e.preventDefault(); if (this.lastAlert) RENDER.centerOn(this.lastAlert[0], this.lastAlert[1]); return; }
@@ -5612,9 +5763,9 @@ const UI = {
     }
   },
   groupKey(n, set, add) {
-    const own = this.selection.filter(e => e.owner === GAME.control && !e.dead);
+    const own = this.normalizeSelection(this.selection.filter(e => e.owner === GAME.control));
     if (set) { this.groups[n] = own.slice(); this.message('부대 ' + n + ' 지정'); return; }
-    if (add) { const g = (this.groups[n] || []).filter(e => !e.dead); for (const e of own) if (!g.includes(e) && g.length < MAX_SELECT) g.push(e); this.groups[n] = g; return; }
+    if (add) { this.groups[n] = this.normalizeSelection((this.groups[n] || []).concat(own)); return; }
     const g = (this.groups[n] || []).filter(e => !e.dead && e.owner === GAME.control && !e.hidden);
     if (!g.length) return;
     const now = performance.now();
@@ -5623,6 +5774,10 @@ const UI = {
     this.setSelection(g);
   },
   escQueue() {
+    if (this.selection.length > 1 && this.selection.every(e => e.owner === GAME.control && this.productionBuilding(e))) {
+      for (const b of this.selection) if (b.queue.length) cmdCancelQueue(b, b.queue.length - 1);
+      return;
+    }
     const b = this.selection.length === 1 && this.selection[0];
     if (!b || b.owner !== GAME.control) return;
     if (b.isBuilding && b.queue.length) cmdCancelQueue(b, b.queue.length - 1);
@@ -5653,9 +5808,15 @@ const UI = {
     return best;
   },
   selectable(e) { return e && !e.dead && !e.hidden && e.type !== 'spider_mine'; },
+  productionBuilding(e) { return !!(e?.isBuilding && (e.def.produces?.length || e.def.larvaHall)); },
+  normalizeSelection(arr) {
+    const unique = [...new Set(arr)].filter(e => this.selectable(e)), first = unique[0];
+    if (!first) return [];
+    if (first.owner !== GAME.control || (first.isBuilding && !this.productionBuilding(first))) return [first];
+    return unique.filter(e => e.owner === GAME.control && (first.isBuilding ? this.productionBuilding(e) : !e.isBuilding)).slice(0, MAX_SELECT);
+  },
   setSelection(arr) {
-    const own = arr.filter(e => this.selectable(e));
-    this.selection = own.slice(0, MAX_SELECT);
+    this.selection = this.normalizeSelection(arr);
     this.menu = null; this.cardSig = ''; this.infoSig = '';
   },
   clickSelect(wx, wy, shift, ctrl) {
@@ -5665,16 +5826,16 @@ const UI = {
     const now = performance.now();
     const dbl = this.lastClick.id === e.id && now - this.lastClick.t < 350;
     this.lastClick = { t: now, id: e.id };
-    if ((ctrl || dbl) && e.owner === p && !e.isBuilding) {
+    if ((ctrl || dbl) && e.owner === p && (!e.isBuilding || this.productionBuilding(e))) {
       const same = GAME.entities.filter(o => !o.dead && !o.hidden && o.owner === p && o.type === e.type && this.onScreen(o));
       same.sort((a, b) => dist(a.x, a.y, e.x, e.y) - dist(b.x, b.y, e.x, e.y));
       this.setSelection(shift ? this.selection.concat(same.filter(o => !this.selection.includes(o))) : same);
       SND.play('click'); return;
     }
-    if (shift && e.owner === p && !e.isBuilding && this.selection.every(s => s.owner === p && !s.isBuilding)) {
+    if (shift && e.owner === p && (!e.isBuilding || this.productionBuilding(e)) && this.selection.every(s => s.owner === p && s.isBuilding === e.isBuilding && (!s.isBuilding || this.productionBuilding(s)))) {
       const i = this.selection.indexOf(e);
       if (i >= 0) this.selection.splice(i, 1); else if (this.selection.length < MAX_SELECT) this.selection.push(e);
-      this.cardSig = ''; this.menu = null; return;
+      this.cardSig = ''; this.infoSig = ''; this.menu = null; return;
     }
     this.setSelection([e]);
     SND.play('click');
@@ -5688,12 +5849,12 @@ const UI = {
     const nonLarva = c.filter(e => e.type !== 'larva' && e.type !== 'egg' && e.type !== 'lurker_egg');
     if (nonLarva.length) c = nonLarva;
     if (!c.length) {
-      const b = GAME.entities.find(e => !e.dead && !e.hidden && e.owner === p && e.isBuilding && inBox(e));
-      if (b) c = [b];
+      c = GAME.entities.filter(e => this.selectable(e) && e.owner === p && this.productionBuilding(e) && inBox(e));
+      if (!c.length) { const b = GAME.entities.find(e => this.selectable(e) && e.owner === p && e.isBuilding && inBox(e)); if (b) c = [b]; }
     }
     if (!c.length) { const any = GAME.entities.find(e => !e.dead && !e.hidden && e.owner !== p && inBox(e) && isVisibleTo(e, p) && !isCloakedFor(e, p)); if (any) c = [any]; }
     if (!c.length) { if (!shift) this.setSelection([]); return; }
-    if (shift && this.selection.every(s => s.owner === p && !s.isBuilding) && !c[0].isBuilding) c = this.selection.concat(c.filter(e => !this.selection.includes(e)));
+    if (shift && this.selection.every(s => s.owner === p && s.isBuilding === c[0].isBuilding) && (!c[0].isBuilding || this.productionBuilding(c[0]))) c = this.selection.concat(c);
     this.setSelection(c);
     SND.play('click');
   },
@@ -5818,6 +5979,25 @@ const UI = {
         }, { cost: d.cost, disabled: !!miss, desc: miss ? '필요: ' + BUILDINGS[miss].name : (d.provides ? '인구수 +' + d.provides : '') });
       });
       card[8] = B(ART.cmdIcon('back'), 'ESCAPE', '뒤로', () => { this.menu = null; this.cardSig = ''; });
+      return card;
+    }
+    // 여러 생산 건물: 종류 탭은 생산 명령의 대상만 바꾸고 선택은 유지한다.
+    if (u0.isBuilding && us.length > 1) {
+      if (!types.has(this.producerType)) this.producerType = u0.type;
+      const producers = us.filter(b => b.type === this.producerType), d = producers[0].def;
+      let i = 0;
+      for (const t of d.produces || []) {
+        const ud = UNITS[t], miss = missingReq(p, ud.req), ready = producers.some(b => b.done && !b.lifted && !b.morph && (!ud.addon || attachedAddon(b, ud.addon)));
+        card[i++] = B(ART.icon(t, p), ud.hotkey, ud.name, () => cmdTrainSelected(producers, t),
+          { cost: ud.cost, sup: ud.supply, disabled: !!miss || !ready, desc: miss ? '필요: ' + BUILDINGS[miss].name : '클릭마다 대기열이 짧은 선택 건물에 1기 생산' });
+      }
+      if (d.larvaHall) card[0] = B(ART.icon('larva', p), 'S', '선택 건물의 라바 선택', () => {
+        const halls = new Set(producers); this.setSelection(GAME.entities.filter(e => this.selectable(e) && e.type === 'larva' && halls.has(e.hatch)));
+      });
+      card[7] = B(ART.cmdIcon('rally'), 'R', '전체 집결 지점', () => this.setMode({ kind: 'target', cmd: 'rally' }));
+      if (us.some(b => b.queue.length)) card[8] = B(ART.cmdIcon('cancel'), 'ESCAPE', '선택 건물의 마지막 생산 취소', () => {
+        for (const b of us) if (b.queue.length) cmdCancelQueue(b, b.queue.length - 1);
+      });
       return card;
     }
     // 건물
@@ -5983,10 +6163,20 @@ const UI = {
     const el = this.el.info;
     if (!sel.length) { if (this.infoSig !== 'none') { el.innerHTML = ''; this.infoSig = 'none'; } return; }
     if (sel.length > 1) {
-      const sig = 'm' + sel.map(e => e.id + ':' + Math.ceil(e.hp / e.maxHp * 3)).join(',');
+      const buildings = sel[0].isBuilding, types = [...new Set(sel.map(e => e.type))];
+      if (buildings && !types.includes(this.producerType)) this.producerType = sel[0].type;
+      const sig = 'm' + this.producerType + sel.map(e => e.id + ':' + Math.ceil(e.hp / e.maxHp * 100) + ':' + (e.maxSh ? Math.ceil(e.sh / e.maxSh * 100) : 0) + ':' + e.queue.length + ':' + Math.floor((e.queue[0]?.prog || 0) / (e.queue[0]?.total || 1) * 10)).join(',');
       if (sig !== this.infoSig) {
         this.infoSig = sig;
-        el.innerHTML = '<div class="multi">' + sel.map((e, i) => '<div class="wf" data-i="' + i + '"><img src="' + ART.wireframe(e.type, e.owner, e.hp / e.maxHp) + '"></div>').join('') + '</div>';
+        el.innerHTML = '<div class="multi-head"><span>' + (buildings ? '생산 건물 ' : '부대 ') + sel.length + '/' + MAX_SELECT + '</span>' +
+          (buildings ? types.map(t => '<button class="producer-tab' + (t === this.producerType ? ' active' : '') + '" data-type="' + t + '">' + BUILDINGS[t].name + ' ' + sel.filter(e => e.type === t).length + '</button>').join('') : '<small>Shift: 제외 · Ctrl: 같은 종류</small>') + '</div>' +
+          '<div class="multi">' + sel.map((e, i) => '<div class="wf" data-i="' + i + '" title="' + e.def.name + ' · ' + Math.ceil(e.hp) + '/' + e.maxHp + (buildings ? ' · 생산 대기 ' + e.queue.length : '') + '"><img src="' + ART.wireframe(e.type, e.owner, e.hp / e.maxHp) + '">' +
+          '<i class="wf-health" style="width:' + Math.round(e.hp / e.maxHp * 100) + '%;background:' + (e.hp > e.maxHp * .66 ? '#4ddb52' : e.hp > e.maxHp * .33 ? '#dfcf42' : '#e44c45') + '"></i>' +
+          (e.maxSh ? '<i class="wf-shield" style="width:' + Math.round(e.sh / e.maxSh * 100) + '%"></i>' : '') +
+          (buildings && e.queue.length ? '<span class="wf-queue">' + e.queue.length + '</span><i class="wf-progress" style="width:' + Math.floor(e.queue[0].prog / e.queue[0].total * 100) + '%"></i>' : '') + '</div>').join('') + '</div>';
+        el.querySelectorAll('.producer-tab').forEach(b => b.addEventListener('mousedown', ev => {
+          ev.stopPropagation(); this.producerType = b.dataset.type; this.cardSig = ''; this.infoSig = '';
+        }));
         el.querySelectorAll('.wf').forEach(w => w.addEventListener('mousedown', (ev) => {
           ev.stopPropagation(); const e = sel[+w.dataset.i]; if (!e) return;
           if (ev.shiftKey) { this.selection.splice(this.selection.indexOf(e), 1); this.cardSig = ''; this.infoSig = ''; }
@@ -6022,7 +6212,7 @@ const UI = {
     else if (!e.isBuilding || e.canAttack) {
       const w = d.gw || d.aw;
       const parts = [];
-      if (w) { const up = w.upg && w.upg !== 'none' ? upgLevel(e.owner, w.upg) : 0; parts.push('공격 ' + w.dmg + (up ? '+' + (w.inc || 1) * up : '') + (w.hits > 1 ? '×' + w.hits : '')); }
+      if (w) { const up = w.upg && w.upg !== 'none' ? upgLevel(e.owner, w.upg) : 0, hits = e.type === 'carrier' ? e.ammo || 0 : w.hits || 1; parts.push('공격 ' + (e.type === 'reaver' ? e.weaponDmg(w) : w.dmg) + (up ? '+' + (w.inc || 1) * up : '') + (hits !== 1 ? '×' + hits : '')); }
       parts.push('방어 ' + e.armor);
       if (e.maxEnergy) parts.push('<span class="e">에너지 ' + Math.floor(e.energy) + '/' + e.maxEnergy + '</span>');
       l2 = parts.join(' · ');

@@ -4,6 +4,25 @@
 // ===================================================================
 const PF = (() => {
   const N = MAP_W * MAP_H;
+  const prefixWidth = MAP_W + 1, terrainPrefix = new Uint32Array((MAP_W + 1) * (MAP_H + 1));
+  let terrainFrame = false, terrainDirty = true;
+  function terrainRectEmpty(x0, y0, x1, y1) {
+    if (!terrainFrame || x0 < 0 || y0 < 0 || x1 >= MAP_W || y1 >= MAP_H) return false;
+    if (terrainDirty) {
+      terrainPrefix.fill(0);
+      for (let y = 0; y < MAP_H; y++) {
+        let row = 0;
+        for (let x = 0; x < MAP_W; x++) {
+          const i = y * MAP_W + x;
+          row += MAP.walk[i] !== 1 || MAP.occ[i] !== 0 ? 1 : 0;
+          terrainPrefix[(y + 1) * prefixWidth + x + 1] = terrainPrefix[y * prefixWidth + x + 1] + row;
+        }
+      }
+      terrainDirty = false;
+    }
+    return terrainPrefix[(y1+1)*prefixWidth+x1+1] - terrainPrefix[y0*prefixWidth+x1+1] -
+      terrainPrefix[(y1+1)*prefixWidth+x0] + terrainPrefix[y0*prefixWidth+x0] === 0;
+  }
   const g = new Float32Array(N), f = new Float32Array(N);
   const parent = new Int32Array(N);
   const openGen = new Uint32Array(N), closedGen = new Uint32Array(N);
@@ -95,6 +114,7 @@ const PF = (() => {
   // 물리 보정과 동일한 원-타일 충돌 판정. 모서리에 접한 유닛도 바깥쪽으로 이동할 수 있다.
   function positionClear(x, y, r, ignoreId) {
     if (x - r < 0 || y - r < 0 || x + r > MAP_W * TILE || y + r > MAP_H * TILE) return false;
+    if (terrainRectEmpty(tileOf(x-r), tileOf(y-r), tileOf(x+r), tileOf(y+r))) return true;
     for (let ty = tileOf(y - r); ty <= tileOf(y + r); ty++) for (let tx = tileOf(x - r); tx <= tileOf(x + r); tx++) {
       if (passable(tx, ty, ignoreId)) continue;
       const qx = Math.max(tx * TILE, Math.min(x, (tx + 1) * TILE));
@@ -110,6 +130,9 @@ const PF = (() => {
       top = Math.min(y0, y1) - r, bottom = Math.max(y0, y1) + r;
     if (left < 0 || top < 0 || right > MAP_W * TILE || bottom > MAP_H * TILE) return false;
     const tx0 = tileOf(left), tx1 = tileOf(right), ty0 = tileOf(top), ty1 = tileOf(bottom);
+    // Long visibility-graph edges in open terrain need four prefix lookups, not
+    // hundreds of swept-circle samples. Near any blocker, use the exact existing checks.
+    if (terrainRectEmpty(tx0, ty0, tx1, ty1)) return true;
     if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) <= 64) {
       let open = true;
       for (let y = ty0; y <= ty1 && open; y++) for (let x = tx0; x <= tx1; x++)
@@ -244,7 +267,7 @@ const PF = (() => {
   function localPath(x0, y0, x1, y1, r, obstacles, occupiedGoal) {
     const step = 8, limit = 16, width = limit * 2 + 1;
     const key = (x, y) => (y + limit) * width + x + limit;
-    const units = obstacles.units.filter(u => (u.x - x0) ** 2 + (u.y - y0) ** 2 < (250 + u.r + r) ** 2);
+    const units = indexUnits(obstacles.units.filter(u => (u.x - x0) ** 2 + (u.y - y0) ** 2 < (250 + u.r + r) ** 2));
     const rr = Math.max(3, r * 0.75), start = key(0, 0);
     const scores = new Map([[start, 0]]), parents = new Map(), nodes = new Map();
     const queue = [], closed = new Set();
@@ -332,7 +355,10 @@ const PF = (() => {
   }
   return {
     find, worldPath, lineClear, positionClear, localPath, unitPath, nearestPassable, passable, unitsClear, unitObstacles, goalBlocker, compactPath,
-    resetBudget() { budget = 24000; }, get budget() { return budget; },
+    resetBudget() { budget = 24000; terrainFrame = false; },
+    beginTick() { budget = 24000; terrainFrame = true; terrainDirty = true; },
+    endTick() { terrainFrame = false; }, invalidateTerrain() { terrainDirty = true; },
+    get budget() { return budget; },
   };
 })();
 

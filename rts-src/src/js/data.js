@@ -7,7 +7,7 @@ const TILE = 32, MAP_W = 128, MAP_H = 128;
 const FPS = 24;
 const PLAYER = 0, ENEMY = 1, NEUTRAL = 2;
 const MAX_SUPPLY = 200;
-const MAX_SELECT = 12;
+const MAX_SELECT = 24;
 
 const TEAM = [
   { main: '#1c5ce8', dark: '#0a2a80', light: '#6f9dff', mm: '#3070ff', name: '파랑' },

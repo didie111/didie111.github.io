@@ -10,7 +10,7 @@ const PROJ = {
   spit:   { speed: 8, color: '#a0e040' }, particle: { speed: 9, color: '#80c0ff' },
   tentacle: { speed: 0, delay: 8 }, spore: { speed: 8, color: '#d0ff90' },
   neutron:{ speed: 12, color: '#60ffff' }, interceptor: { speed: 9, color: '#ffe000' },
-  yamato: { speed: 9, color: '#ff8020' }, lock: { speed: 9, color: '#80ff80' }, scarab: { speed: 7, color: '#ffe090' },
+  yamato: { speed: 9, color: '#ff8020' }, lock: { speed: 9, color: '#80ff80' }, scarab: { speed: 16, color: '#ffe090' },
 };
 
 function fireWeapon(src, t, w) {
@@ -26,7 +26,7 @@ function fireWeapon(src, t, w) {
   if (!t.airTarget && range > 40 && !w.splash && !w.line && underSwarm(t)) miss = true;
   SND.play(w.proj || w.fx || 'melee', from.x, from.y, src);
   if (w.suicide) {
-    if (w.splash) splashDamage(src, t.x, t.y, w, src, !!w.friendly, !!t.airTarget);
+    if (w.splash) splashDamage(src, t.x, t.y, w, src, !!w.friendly, !!t.airTarget, t);
     else dealDamage(src, t, w, 1);
     fx('zsplat', t.x, t.y, { life: 14, size: 0.6 });
     killEntity(src, null, true);
@@ -42,6 +42,7 @@ function fireWeapon(src, t, w) {
     const ang = Math.atan2(t.y - from.y, t.x - from.x);
     const ox = from.x + Math.cos(ang) * Math.min(from.r || 8, 14), oy = from.y + Math.sin(ang) * Math.min(from.r || 8, 14) - (src.air ? 0 : 3);
     const pr = { kind: w.proj, x: ox, y: oy, sx: ox, sy: oy, tgt: t, tx: t.x, ty: t.y, src, w, mult: 1, miss, hits, t: 0, delay: p.delay || 0, bounce: w.bounce || 0, hitList: [] };
+    pr.primary = t;
     if (w.proj === 'siege' || w.proj === 'tentacle') pr.tgt = null; // 지점 공격
     GAME.projectiles.push(pr);
     if (w.proj === 'shell' || w.proj === 'siege') fx('muzzle', ox, oy, { life: 5, ang, size: w.proj === 'siege' ? 1.6 : 1 });
@@ -53,7 +54,7 @@ function fireWeapon(src, t, w) {
   if (w.fx === 'flame') {
     fx('flame', from.x + Math.cos(ang) * 8, from.y + Math.sin(ang) * 8, { life: 10, ang });
     for (let k = 0; k < hits; k++) dealDamage(src, t, w, 1, miss);
-    if (w.splash) splashAround(src, t, w);
+    if (w.splash && !miss) splashAround(src, t, w);
     return;
   }
   if (w.fx === 'gun') { fx('muzzle', from.x + Math.cos(ang) * 9, from.y + Math.sin(ang) * 9 - 3, { life: 3, ang, size: 0.6 }); fx('hitspark', t.x + (Math.random() - 0.5) * t.r, t.y + (Math.random() - 0.5) * t.r, { life: 6, miss }); }
@@ -70,59 +71,70 @@ function underSwarm(t) {
   return false;
 }
 
+function addAcidSpore(e) {
+  if (!e.acidTimers) {
+    e.acidTimers = new Array(9).fill(0);
+    for (let i = 0; i < (e.acidSpores || 0); i++) e.acidTimers[i] = e.acidT || 1200;
+  }
+  let oldest = 0;
+  for (let i = 1; i < 9; i++) if (e.acidTimers[i] < e.acidTimers[oldest]) oldest = i;
+  e.acidTimers[oldest] = 1200;
+  e.acidSpores = e.acidTimers.filter(t => t > 0).length; e.acidT = 1200;
+}
+
 // 피해 적용 (원작 공식: 보호막 → 방어력 차감 → 크기 보정, 최소 0.5)
 function dealDamage(src, t, w, mult, miss) {
   if (!t || t.dead || t.hidden || t.stasisT > 0) return;
   if (src && src.hallucination) return;
   if (miss) { fx('miss', t.x, t.y - 6, { life: 10 }); return; }
-  let dmg = (src ? src.weaponDmg(w) : w.dmg) * (mult || 1);
+  let dmg = (src ? src.weaponDmg(w) : w.dmg) * (mult ?? 1);
   const spell = w.type === 'spell';
   if (t.hallucination) dmg *= 2;
-  if (!spell) dmg += t.acidSpores || 0;
   if (dmg <= 0) return;
+  dmg = Math.max(.5, dmg + (t.acidSpores || 0));
   if (t.matrixHp > 0) {
     const a = Math.min(t.matrixHp, dmg); t.matrixHp -= a; dmg -= a;
     fx('matrixhit', t.x, t.y, { life: 6 });
-    if (dmg <= 0) { t.hp = Math.max(1, t.hp - 0.5); t.onAttacked(src); return; }
   }
-  if (t.sh > 0) {
-    const sd = spell ? dmg : dmg - t.shArmor;
-    if (sd <= t.sh) { t.sh -= Math.max(sd, 0.5); dmg = 0; fx('shield', t.x, t.y, { life: 6, r: t.r }); }
-    else { dmg = sd - t.sh; t.sh = 0; }
+  let shieldDamage = 0;
+  if (t.sh >= 1) {
+    if (!spell) dmg = dmg > t.shArmor ? dmg - t.shArmor : .5;
+    shieldDamage = Math.min(t.sh, dmg); t.sh -= shieldDamage; dmg -= shieldDamage;
+    if (shieldDamage) fx('shield', t.x, t.y, { life: 6, r: t.r });
   }
-  if (dmg > 0) {
-    const size = t.isBuilding ? 'large' : t.def.size;
-    let hd = spell ? dmg : (dmg - t.armor) * DMG_MULT[w.type][size];
-    hd = Math.max(0.5, hd);
+  const size = t.isBuilding ? 'large' : t.def.size;
+  let hd = spell ? dmg : Math.max(0, dmg - t.armor) * DMG_MULT[w.type][size];
+  // The HP floor applies only if this hit did not deal shield damage.
+  if (!shieldDamage) hd = Math.max(.5, hd);
+  if (hd > 0) {
     t.hitT = 3;
     t.takeRaw(hd, src);
   }
-  if (!t.dead) t.onAttacked(src);
+  if (!t.dead && !w.noRetaliate) t.onAttacked(src);
 }
 
 function splashAround(src, t, w) {
   const r = w.splash;
-  for (const e of SH.query(t.x, t.y, r[2] + 30)) {
-    if (e === t || e.dead || e.hidden || e.airTarget !== t.airTarget) continue;
+  for (const e of SH.query(t.x, t.y, r[2] + 96)) {
+    if (e === t || e === src || e.dead || e.hidden || e.def.resource || (!w.splashBoth && !!e.airTarget !== !!t.airTarget)) continue;
     if (!isEnemy(src.owner, e.owner)) continue;
-    const d = Math.max(0, dist(e.x, e.y, t.x, t.y) - e.r);
-    const m = d <= r[0] ? 1 : d <= r[1] ? 0.5 : d <= r[2] ? 0.25 : 0;
+    const d = edgeDistPt(e, t.x, t.y);
+    const m = !w.airSplash && d <= r[0] ? 1 : e.burrowed ? 0 : d <= r[1] ? 0.5 : d <= r[2] ? 0.25 : 0;
     if (m) for (let k = 0; k < (w.hits || 1); k++) dealDamage(src, e, w, m);
   }
 }
 
 // 지점 스플래시 (시즈 탱크 / 마인 / 커세어)
-function splashDamage(src, x, y, w, attacker, friendly, air) {
+function splashDamage(src, x, y, w, attacker, friendly, air, primary = null) {
   const r = w.splash;
-  for (const e of SH.query(x, y, r[2] + 30)) {
+  for (const e of SH.query(x, y, r[2] + 96)) {
     if (e.dead || e.hidden || e === attacker) continue;
     if (!!e.airTarget !== !!air) continue;
     if (e.def.resource) continue;
-    if (!friendly && !isEnemy(attacker.owner, e.owner)) continue;
-    if (e.type === 'spider_mine' && e.owner === attacker.owner) continue;
-    const d = Math.max(0, (e.isBuilding ? edgeDistPt(e, x, y) : dist(e.x, e.y, x, y) - e.r));
-    const m = d <= r[0] ? 1 : d <= r[1] ? 0.5 : d <= r[2] ? 0.25 : 0;
-    if (m) dealDamage(attacker.dead ? null : attacker, e, w, m);
+    if (!friendly && e !== primary && !isEnemy(attacker.owner, e.owner)) continue;
+    const d = edgeDistPt(e, x, y);
+    const m = (air && e === primary) || (!air && d <= r[0]) ? (d <= r[2] ? 1 : 0) : e.burrowed ? 0 : d <= r[1] ? .5 : d <= r[2] ? .25 : 0;
+    if (m) for (let k = 0; k < (w.hits || 1); k++) dealDamage(src || attacker, e, w, m);
   }
 }
 
@@ -131,7 +143,7 @@ function lurkerSpines(src, t, w) {
   const len = src.range(w) + 16;
   const x1 = src.x + Math.cos(ang) * len, y1 = src.y + Math.sin(ang) * len;
   fx('spines', src.x, src.y, { life: 16, ang, len });
-  for (const e of SH.query((src.x + x1) / 2, (src.y + y1) / 2, len / 2 + 30)) {
+  for (const e of SH.query((src.x + x1) / 2, (src.y + y1) / 2, len / 2 + 96)) {
     if (e.dead || e.hidden || e.airTarget || !isEnemy(src.owner, e.owner)) continue;
     // 선분과 거리
     const px = e.x - src.x, py = e.y - src.y;
@@ -143,25 +155,49 @@ function lurkerSpines(src, t, w) {
 }
 
 function updateProjectiles() {
-  const out = [];
-  for (const p of GAME.projectiles) {
+  const out = [], current = GAME.projectiles;
+  GAME.projectiles = out;
+  for (const p of current) {
     p.t++;
     if (p.delay > 0) { p.delay--; if (p.kind === 'interceptor' && p.src && !p.src.dead) { p.x = p.src.x; p.y = p.src.y; } out.push(p); continue; }
     const def = PROJ[p.kind] || { speed: 10 };
     if (p.kind === 'tentacle') {
-      if (p.tgt === null) { const tt = findUnitAt(p.tx, p.ty, p.src); if (tt) dealDamage(p.src, tt, p.w, 1, p.miss); }
+      if (p.tgt === null) { const tt = p.primary && !p.primary.dead && !p.primary.hidden && edgeDistPt(p.primary, p.tx, p.ty) < 6 ? p.primary : findUnitAt(p.tx, p.ty, p.src); if (tt) dealDamage(p.src, tt, p.w, 1, p.miss); }
       continue;
     }
     if (p.tgt && !p.tgt.dead && !p.tgt.hidden) { p.tx = p.tgt.x; p.ty = p.tgt.y; }
     let spd = def.speed;
+    if (p.kind === 'scarab') {
+      // OpenBW ScarabAttack: ground pursuit, seven initial no-collision frames, 90-frame lifetime.
+      if (p.t > 90 || !p.tgt || p.tgt.dead || p.tgt.hidden) continue;
+      if (edgeDistPt(p.tgt, p.x, p.y) <= 10) { onProjectileHit(p); continue; }
+      const near = p.t <= 7 ? [] : SH.queryGround(p.x, p.y, 200).filter(e => e !== p.src && e !== p.tgt);
+      const ignore = p.tgt.isBuilding ? p.tgt.id : 0;
+      const clear = (x, y) => PF.lineClear(p.x, p.y, x, y, 3, ignore) && PF.unitsClear(p.x, p.y, x, y, 3, near);
+      let x = p.tx, y = p.ty;
+      if (!clear(x, y)) {
+        if (!p.path || !p.path.length || p.t >= p.repathAt) {
+          p.path = PF.localPath(p.x, p.y, x, y, 3, {units:near,cells:new Set()}, null);
+          p.repathAt = p.t + 12;
+        }
+        while (p.path?.length && dist(p.x,p.y,p.path[0][0],p.path[0][1]) < .01) p.path.shift();
+        if (!p.path?.length) { out.push(p); continue; }
+        [x, y] = p.path[0];
+      } else p.path = null;
+      const dx = x - p.x, dy = y - p.y, d = Math.hypot(dx,dy), step = Math.min(spd,d);
+      const nx = p.x + dx / (d || 1) * step, ny = p.y + dy / (d || 1) * step;
+      if (clear(nx, ny)) { p.x=nx; p.y=ny; p.dir=Math.atan2(dy,dx); } else p.path=null;
+      out.push(p); continue;
+    }
     if (p.kind === 'interceptor') {
       // 캐리어 인터셉터: 궤도를 돌며 공격 후 복귀
       p.ang += 0.25;
       const ox = Math.cos(p.ang) * 18, oy = Math.sin(p.ang) * 18;
       const dx = p.tx + ox - p.x, dy = p.ty + oy - p.y, d = Math.hypot(dx, dy);
+      if (!p.src || p.src.dead || !p.tgt || p.tgt.dead || p.tgt.hidden) continue;
       if (d < 20 && !p.fired) {
         p.fired = true;
-        if (p.tgt && !p.tgt.dead) { dealDamage(p.src && !p.src.dead ? p.src : null, p.tgt, p.w, 1, false); fx('beam', p.x, p.y, { life: 3, x2: p.tgt.x, y2: p.tgt.y, color: '#ffe000' }); }
+        if (p.tgt && !p.tgt.dead) { dealDamage(p.src, p.tgt, p.w, 1, p.miss); fx('beam', p.x, p.y, { life: 3, x2: p.tgt.x, y2: p.tgt.y, color: '#ffe000' }); }
       }
       if (p.fired) {
         if (!p.src || p.src.dead) continue;
@@ -182,7 +218,6 @@ function updateProjectiles() {
     p.x += dx / d * spd; p.y += dy / d * spd; p.dir = Math.atan2(dy, dx);
     out.push(p);
   }
-  GAME.projectiles = out;
 }
 
 function findUnitAt(x, y, src) {
@@ -196,7 +231,7 @@ function findUnitAt(x, y, src) {
 }
 
 function onProjectileHit(p) {
-  const w = p.w, src = p.src && !p.src.dead ? p.src : null;
+  const w = p.w, src = p.src || null;
   if (p.emp) {
     for (const e of SH.query(p.x, p.y, 100)) if (!e.dead && !e.hidden && e !== p.src && !(e.stasisT > 0) && dist(e.x, e.y, p.x, p.y) <= 64 + e.r) { e.sh = 0; e.energy = 0; }
     fx('empfx', p.x, p.y, { life: 20 }); return;
@@ -204,15 +239,15 @@ function onProjectileHit(p) {
   switch (p.kind) {
     case 'siege':
       fx('explode', p.x, p.y, { life: 14, size: 1.2 });
-      if (!p.miss) splashDamage(src, p.x, p.y, w, p.src, true, false); else fx('miss', p.x, p.y, { life: 10 });
+      if (!p.miss) splashDamage(src, p.x, p.y, w, p.src, true, false, p.primary); else fx('miss', p.x, p.y, { life: 10 });
       SND.play('boom', p.x, p.y);
       return;
     case 'neutron':
       fx('explode', p.x, p.y, { life: 8, size: 0.5, color: '#60ffff' });
-      if (p.tgt && !p.tgt.dead) splashDamage(src, p.x, p.y, w, p.src, false, true);
+      if (!p.miss && p.tgt && !p.tgt.dead) splashDamage(src, p.x, p.y, w, p.src, false, true, p.tgt);
       return;
     case 'scarab':
-      if (p.src) splashDamage(src, p.x, p.y, w, p.src, false, false);
+      if (p.src && !p.miss) splashDamage(src, p.x, p.y, w, p.src, false, false, p.tgt);
       fx('explode', p.x, p.y, { life: 12, size: 1 }); return;
     case 'glaive': {
       const t = p.tgt;
@@ -244,9 +279,9 @@ function onProjectileHit(p) {
       const col = PROJ[p.kind] && PROJ[p.kind].color;
       if (p.kind === 'missile' || p.kind === 'grenade' || p.kind === 'shell' || p.kind === 'plasma') fx('explode', t.x, t.y, { life: 8, size: p.kind === 'plasma' ? 0.5 : 0.6, color: p.kind === 'plasma' ? '#a0d8ff' : undefined });
       else fx('hitspark', t.x, t.y, { life: 6, color: col });
-      if (w.splash && p.kind !== 'neutron') splashAround(p.src || t, t, w);
+      if (w.splash && !p.miss) splashAround(p.src || t, t, w);
       if (w.acid && !p.miss) for (const e of SH.query(t.x, t.y, 80)) {
-        if (!e.dead && !e.hidden && e.airTarget && isEnemy(p.src.owner, e.owner) && dist(e.x, e.y, t.x, t.y) <= 48 + e.r) { e.acidSpores = Math.min(9, (e.acidSpores || 0) + 1); e.acidT = 900; }
+        if (!e.dead && !e.hidden && !(e.stasisT > 0) && e.airTarget && (e === t || isEnemy(p.src.owner, e.owner)) && dist(e.x, e.y, t.x, t.y) <= 48 + e.r) addAcidSpore(e);
       }
     }
   }
@@ -261,10 +296,10 @@ function updateAreas() {
       if (a.t <= 320 && (!a.src || a.src.dead || a.src.lockT > 0 || a.src.stasisT > 0 || a.src.maelstromT > 0 || !a.src.orders[0] || a.src.orders[0].t !== 'nuke')) continue;
       if (a.t === 320) a.src.nextOrder();
       if (a.t === a.life) {
-        for (const e of SH.query(a.x, a.y, 240)) {
+        for (const e of SH.query(a.x, a.y, 352)) {
           if (e.dead || e.hidden || e.def.resource || e.stasisT > 0) continue;
-          const d = edgeDistPt(e, a.x, a.y), mult = d <= 64 ? 1 : d <= 128 ? 0.5 : d <= 192 ? 0.25 : 0;
-          if (mult) dealDamage(a.src && !a.src.dead ? a.src : null, e, { dmg: Math.max(500, (e.maxHp + e.maxSh) * 2 / 3), type: 'spell' }, mult);
+          const d = edgeDistPt(e, a.x, a.y), mult = d <= 128 ? 1 : d <= 192 ? 0.5 : d <= 256 ? 0.25 : 0;
+          if (mult) dealDamage(a.src || null, e, { dmg: Math.max(500, (e.maxHp + e.maxSh) * 2 / 3), type: 'explosive' }, mult);
         }
         fx('explode', a.x, a.y, { life: 48, size: 6 }); SND.play('bigboom', a.x, a.y);
       }
@@ -274,9 +309,9 @@ function updateAreas() {
       for (const e of SH.query(a.x, a.y, a.r + 30)) {
         if (e.dead || e.hidden || e.isBuilding) continue;
         if (dist(e.x, e.y, a.x, a.y) > a.r + e.r * 0.5) continue;
-        if (e.stormAt === st) continue;
-        e.stormAt = st;
-        dealDamage(a.src && !a.src.dead ? a.src : null, e, { dmg: 14, type: 'spell' }, 1);
+        if ((e.stormNextAt || 0) > st) continue;
+        e.stormNextAt = st + 8;
+        dealDamage(a.src || null, e, { dmg: 14, type: 'spell' }, 1);
       }
     }
     if (a.t < a.life) out.push(a);
@@ -320,7 +355,7 @@ function castSpell(c, s, tgt, x, y) {
     case 'plague':
       for (const e of SH.query(x, y, 80)) {
         if (e.dead || e.hidden || dist(e.x, e.y, x, y) > 48 + e.r) continue;
-        if (e.def.resource) continue;
+        if (e.def.resource || e.stasisT > 0) continue;
         e.plagueT = 600; e.onAttacked(c);
       }
       fx('plaguefx', x, y, { life: 30 });
@@ -343,7 +378,7 @@ function castSpell(c, s, tgt, x, y) {
       else notify(c.owner, 'mech', '기계 유닛에게만 사용할 수 있습니다.', 'err');
       break;
     case 'restoration':
-      if (tgt) { tgt.irrT = 0; tgt.plagueT = 0; tgt.lockT = 0; tgt.ensnareT = 0; tgt.blinded = false; tgt.parasiteOwner = undefined; tgt.acidSpores = 0; tgt.acidT = 0; fx('cast', tgt.x, tgt.y, { life: 12, color: '#ffffff' }); }
+      if (tgt) { tgt.irrT = 0; tgt.plagueT = 0; tgt.lockT = 0; tgt.ensnareT = 0; tgt.blinded = false; tgt.parasiteOwner = undefined; tgt.acidSpores = 0; tgt.acidT = 0; tgt.acidTimers = null; fx('cast', tgt.x, tgt.y, { life: 12, color: '#ffffff' }); }
       break;
     case 'consume':
       if (tgt && tgt.owner === c.owner && tgt.race === 'Z' && !tgt.isBuilding && tgt !== c) { killEntity(tgt, null); c.energy = Math.min(c.maxEnergy, c.energy + 50); }
@@ -360,7 +395,7 @@ function castSpell(c, s, tgt, x, y) {
       break;
     case 'nuclear_strike':
       silo.nukeReady = false; c.issue({ t: 'nuke' });
-      GAME.areas.push({ kind: 'nuke', x, y, r: 192, t: 0, life: 360, src: c, owner: c.owner });
+      GAME.areas.push({ kind: 'nuke', x, y, r: 256, t: 0, life: 360, src: c, owner: c.owner });
       if (typeof UI !== 'undefined') UI.message('핵 공격이 감지되었습니다!'); break;
     case 'ensnare':
     case 'maelstrom':

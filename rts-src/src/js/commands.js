@@ -17,6 +17,18 @@ function cmdTrain(b, type) {
   return true;
 }
 
+function cmdTrainSelected(buildings, type) {
+  const d = UNITS[type];
+  const eligible = buildings.filter(b => !b.dead && b.done && !b.lifted && !b.morph &&
+    (b.def.produces || []).includes(type) && b.queue.length < 5 &&
+    (!d.addon || attachedAddon(b, d.addon)));
+  // One click buys one unit. Repeated clicks distribute work among the selected producers.
+  const work = b => b.queue.reduce((n, q) => n + q.total - q.prog, 0);
+  eligible.sort((a, b) => work(a) - work(b) || a.id - b.id);
+  if (!eligible.length) { if (buildings[0]) notify(buildings[0].owner, 'q', '생산 가능한 건물 또는 빈 대기열이 없습니다.', 'err'); return false; }
+  return cmdTrain(eligible[0], type);
+}
+
 function attachedAddon(b, type) {
   return GAME.entities.find(a => !a.dead && a.done && a.owner === b.owner && a.def.addonOf === b.type &&
     (!type || a.type === type) && !b.lifted && a.tx0 === b.tx0 + b.def.w && a.ty0 === b.ty0 + b.def.h - 2);
@@ -295,10 +307,12 @@ function directionDifference(to, from) {
 // then heading. The same integrator drives ordinary paths and MoveToLegal.
 function groundMovement(e, x, y, limit = e.speed) {
   const dx = x - e.x, dy = y - e.y, distance = Math.hypot(dx, dy);
-  const profile = GROUND_MOTION[e.type];
+  const profile = e.lifted ? LIFT_MOTION : e.type === 'spider_mine' ? MINE_MOTION : GROUND_MOTION[e.type] || AIR_MOTION[e.type];
   if (!profile || !distance) { e.vx = 0; e.vy = 0; e.currentSpeed = 0; return; }
-  const [acceleration, turn, halt] = profile, scripted = acceleration === 1;
-  const desired = Math.atan2(dy, dx), headingTurn = turn * Math.PI * 2 / 256,
+  const [acceleration, turn, halt, control] = profile, scripted = control === 2;
+  const modifier = scripted ? 0 : (hasTech(e.owner, SPEED_UPGRADES[e.type]) ? 1 : 0) + (e.stimT > 0 ? 1 : 0) - (e.ensnareT > 0 ? 1 : 0);
+  const motionScale = scripted ? 1 : modifier > 0 ? 2 : modifier < 0 ? .75 : 1;
+  const desired = Math.atan2(dy, dx), headingTurn = turn * motionScale * Math.PI * 2 / 256,
     velocityTurn = scripted ? headingTurn : headingTurn / 2;
   const delta = directionDifference(desired, e.velocityDirection);
   e.velocityDirection += Math.max(-velocityTurn, Math.min(velocityTurn, delta));
@@ -307,11 +321,11 @@ function groundMovement(e, x, y, limit = e.speed) {
     // Iscript's large-turn gate; animation strides still use the project's average speed.
     e.currentSpeed = Math.abs(headingError) >= Math.PI / 4 ? 0 : e.speed;
   } else {
-    const a = acceleration / 256, remainingTurn = Math.abs(directionDifference(desired, e.velocityDirection));
+    const a = acceleration * motionScale / 256, remainingTurn = Math.abs(directionDifference(desired, e.velocityDirection));
     let accelerate = remainingTurn < 1e-6 || distance >= 32 ||
       Math.ceil(remainingTurn * 2 / headingTurn) * e.currentSpeed * 1.5 <= distance;
-    const haltDistance = Math.abs(e.currentSpeed - e.def.speed) < 1e-6 ? halt / 256 : e.currentSpeed ** 2 / (2 * a);
-    if (haltDistance >= distance) accelerate = false;
+    const haltDistance = motionScale === 1 && Math.abs(e.currentSpeed - e.def.speed) < 1e-6 ? halt / 256 : e.currentSpeed ** 2 / (2 * a);
+    if (control === 0 && haltDistance >= distance) accelerate = false;
     e.currentSpeed = Math.max(0, Math.min(e.speed, e.currentSpeed + (accelerate ? a : -a)));
   }
   e.dir += Math.max(-headingTurn, Math.min(headingTurn, headingError));
@@ -552,7 +566,7 @@ function physics() {
           else { e.vx = 0; e.vy = 0; e.currentSpeed = 0; e.blockedTicks = (e.blockedTicks || 0) + 1; }
         }
       }
-    } else if (!e.air && !e.lifted && !e.isBuilding && GROUND_MOTION[e.type]) {
+    } else if (e.lifted || e.type === 'spider_mine' || GROUND_MOTION[e.type] || AIR_MOTION[e.type]) {
       if (e.moving) {
         const length = Math.hypot(e.vx, e.vy), waypoint = e.moveWaypoint || [e.x + e.vx, e.y + e.vy];
         groundMovement(e, waypoint[0], waypoint[1], length);
@@ -599,7 +613,7 @@ function resolveTerrain(e) {
 
 function gameTick() {
   GAME.tick++;
-  PF.resetBudget();
+  PF.beginTick();
   SH.clear();
   const ents = GAME.entities;
   GAME.detectors = [];
@@ -621,6 +635,7 @@ function gameTick() {
   recomputeSupply();
   if (typeof AI !== 'undefined') AI.update();
   if (GAME.tick % 24 === 0) checkVictory();
+  PF.endTick();
 }
 Entity.prototype.isWorkerGathering = function () {
   if (!this.def.worker) return false;

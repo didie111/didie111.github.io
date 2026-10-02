@@ -3,7 +3,7 @@
 //  엔티티(유닛/건물) — 명령 처리, 이동, 전투, 채취, 건설, 생산
 // ===================================================================
 let GROUP_ID = 1;
-const SPEED_UPGRADES = { zergling: 'metabolic', hydra: 'muscular', zealot: 'legs', vulture: 'ion', overlord: 'pneumatized', ultralisk: 'anabolic' };
+const SPEED_UPGRADES = { zergling: 'metabolic', hydra: 'muscular', zealot: 'legs', vulture: 'ion', overlord: 'pneumatized', ultralisk: 'anabolic', shuttle:'gravitic_drive', observer:'gravitic_boosters', scout:'gravitic_thrusters' };
 
 class Entity {
   constructor(type, owner, x, y) {
@@ -36,9 +36,9 @@ class Entity {
   // ---------- 스탯 ----------
   get speed() {
     const d = this.def; let s = d.speed || 0;
-    if (this.lifted) return 1.1;
+    if (this.lifted) return 1;
     const modifier = (hasTech(this.owner, SPEED_UPGRADES[this.type]) ? 1 : 0) + (this.stimT > 0 ? 1 : 0) - (this.ensnareT > 0 ? 1 : 0);
-    if (modifier > 0) s = Math.max(s * 1.5, 10 / 3);
+    if (modifier > 0) s = this.type === 'scout' ? 6 + 2 / 3 : Math.max(s * 1.5, 10 / 3);
     if (modifier < 0) s /= 2;
     return s;
   }
@@ -157,7 +157,15 @@ class Entity {
     if (this.lockT > 0) this.lockT--;
     if (this.stasisT > 0) this.stasisT--;
     if (this.maelstromT > 0) this.maelstromT--;
-    if (this.acidT > 0 && --this.acidT <= 0) this.acidSpores = 0;
+    if (this.acidTimers) {
+      let count = 0, longest = 0;
+      for (let i = 0; i < 9; i++) if (this.acidTimers[i] > 0) {
+        this.acidTimers[i]--; if (this.acidTimers[i] > 0) count++;
+        longest = Math.max(longest, this.acidTimers[i]);
+      }
+      this.acidSpores = count; this.acidT = longest;
+      if (!count) this.acidTimers = null;
+    } else if (this.acidT > 0 && --this.acidT <= 0) this.acidSpores = 0;
     if (this.matrixT > 0) { if (--this.matrixT <= 0) this.matrixHp = 0; }
     if (this.maxEnergy && this.energy < this.maxEnergy && !(this.isBuilding && !this.done)) this.energy = Math.min(this.maxEnergy, this.energy + 0.03125);
     if (this.maxSh && this.sh < this.maxSh && this.done) this.sh = Math.min(this.maxSh, this.sh + 0.027);
@@ -168,12 +176,17 @@ class Entity {
     }
     if (this.irrT > 0) {
       this.irrT--;
-      for (const o of SH.query(this.x, this.y, 40)) {
-        if (o.dead || o.hidden || o.isBuilding || !o.def.bio || o.air !== this.air) continue;
-        if (dist(o.x, o.y, this.x, this.y) <= 32 + o.r || o === this) o.takeRaw(0.4167, this.irrSrc);
+      if (this.irrT % 8 === 0) for (const o of this.burrowed ? [this] : this.inside ? [this.inside] : SH.query(this.x, this.y, 160)) {
+        if (o.dead || (!this.inside && o.hidden) || o.isBuilding || !o.def.bio || ['larva','egg','lurker_egg'].includes(o.type) || (o.burrowed && o !== this)) continue;
+        if (this.inside || edgeDist(this, o) <= 32 || o === this)
+          dealDamage(this.irrSrc || null, o, {dmg:Math.floor(250*256/75)/256,type:'spell',noRetaliate:true}, 1);
       }
     }
-    if (this.plagueT > 0) { this.plagueT--; if (this.hp > 1) this.hp = Math.max(1, this.hp - 0.5); }
+    if (this.plagueT > 0) {
+      this.plagueT--;
+      const damage = Math.floor(300*256/76)/256;
+      if (this.plagueT % 8 === 0 && !(this.stasisT > 0) && this.hp > damage) this.hp -= damage;
+    }
     if (this.isBuilding && this.race === 'T' && this.done && this.hp < this.maxHp / 3 && !this.dead) {
       this.hp -= 0.08; if (this.hp <= 0) killEntity(this, null);
     }
@@ -394,7 +407,7 @@ class Entity {
     if (this.air || this.lifted) {
       const s = Math.min(sp, d);
       this.vx = dx / d * s; this.vy = dy / d * s;
-      this.dir = Math.atan2(dy, dx);
+      this.moveWaypoint = [x, y];
       return false;
     }
     // 목표를 막던 몸체가 움직이면 이전의 조정된 도착점은 더 이상 유효하지 않다.
@@ -457,7 +470,7 @@ class Entity {
     const s = Math.min(sp, wd);
     this.vx = wdx / wd * s; this.vy = wdy / wd * s;
     this.moveWaypoint = [wx, wy];
-    if (!GROUND_MOTION[this.type]) this.dir = Math.atan2(wdy, wdx);
+    if (!GROUND_MOTION[this.type] && this.type !== 'spider_mine') this.dir = Math.atan2(wdy, wdx);
     // 막힘 감지
     if (this.lastD !== undefined && d > this.lastD - 0.05 * sp) this.stuck = (this.stuck || 0) + 1;
     else this.stuck = Math.max(0, (this.stuck || 0) - 2);
@@ -759,16 +772,17 @@ class Entity {
       if ((GAME.tick + this.id) % 4) return;
       for (const e of SH.query(this.x, this.y, 3 * TILE)) {
         if (e.dead || e.hidden || e.air || e.isBuilding || e.lifted || !isEnemy(this.owner, e.owner)) continue;
-        if (e.type === 'vulture' || e.type === 'spider_mine' || e.burrowed) continue;
+        if (MINE_HOVER_TARGETS.has(e.type) || e.burrowed || e.stasisT > 0) continue;
         if (dist(e.x, e.y, this.x, this.y) <= 3 * TILE) { t = e; break; }
       }
       if (!t) return;
       this.mineTgt = t; this.burrowed = false;
     }
     const d = edgeDist(this, t);
-    if (d <= 4) {
+    if (d > 576) { this.mineTgt = null; this.burrowT = 60; return; }
+    if (d <= 30) {
       const w = this.def.gw;
-      splashDamage(this, this.x, this.y, w, this.src && !this.src.dead ? this.src : this, true, false);
+      splashDamage(this.src || this, this.x, this.y, w, this, true, false, t);
       fx('explode', this.x, this.y, { life: 16, size: 1 });
       SND.play('boom', this.x, this.y);
       killEntity(this, null, true);
@@ -991,10 +1005,19 @@ function completeBuilding(b) {
   b.done = true; b.prog = b.def.time;
   b.hp = Math.max(b.hp, b.maxHp * 0.999); if (b.maxSh) b.sh = b.maxSh;
   if (b.hp > b.maxHp * 0.99) b.hp = b.maxHp;
-  if (b.race === 'T' && b.builder && !b.builder.dead) { const w = b.builder; if (w.orders[0] && w.orders[0].tgt === b) w.nextOrder(); b.builder = null; }
+  if (b.race === 'T' && b.builder && !b.builder.dead) {
+    const w = b.builder, constructing = w.orders[0]?.t === 'construct' && w.orders[0].tgt === b;
+    if (constructing) {
+      w.nextOrder();
+      // A queued player command takes priority over the default refinery order.
+      if (!w.orders.length && b.def.onGeyser && w.owner === b.owner)
+        w.issue({ t: 'gather', tgt: b, phase: w.carry ? 'ret' : 'go' });
+    }
+    b.builder = null;
+  }
   notify(b.owner, 'done' + b.id, b.def.name + ' 건설 완료', 'done');
   if (b.def.larvaHall) b.larvaT = 300;
-  if (b.def.onGeyser && b.geyser) b.geyser.amount = b.geyser.amount || 5000;
+  if (b.def.onGeyser && b.geyser && b.geyser.amount == null) b.geyser.amount = 5000;
   if (typeof AI !== 'undefined') AI.onBuilt(b);
 }
 

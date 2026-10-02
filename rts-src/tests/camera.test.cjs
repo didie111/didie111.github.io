@@ -116,7 +116,7 @@ test('locked right clicks and drag selections use the virtual cursor coordinates
 });
 test('locked HUD clicks route to the visible control and never issue a map command',()=>{
  const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();const events=[];let clicks=0,commands=0;
- const button={closest:()=>button,contains:()=>true,dispatchEvent:e=>events.push(e),click:()=>clicks++};
+ const button={closest:s=>s==='#test,#help'?null:button,contains:()=>true,dispatchEvent:e=>events.push(e),click:()=>clicks++};
  c.hit(button);c.UI.mouse.x=230;c.UI.mouse.y=650;c.UI.rightClick=()=>commands++;
  c.canvasEvents.mousedown({button:0,clientX:500,clientY:400,preventDefault(){}});
  c.windowEvents.mouseup({button:0,clientX:500,clientY:400,isTrusted:true});
@@ -128,4 +128,17 @@ test('failed pointer lock leaves ordinary input available and reports a single f
  c.UI.toggleMouseLock();c.documentEvents.pointerlockerror();assert.equal(messages.length,1);
  assert.equal(c.UI.lockPending,false);assert.equal(c.document.pointerLockElement,null);
  c.windowEvents.mousemove({clientX:200,clientY:250,target:c.canvas});assert.equal(c.UI.mouse.x,200);assert.equal(c.UI.mouse.inside,true);
+});
+test('locking with F10 already visible closes it; clicking F10 unlocks before opening native controls',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleTest(true);c.UI.toggleMouseLock();
+ assert.ok(c.UI.el.test.classList.contains('hidden'));assert.equal(c.document.pointerLockElement,c.canvas);
+ const button={id:'hud-f10',closest:s=>s==='#test,#help'?null:button};c.hit(button);
+ c.canvasEvents.mousedown({button:0,preventDefault(){}});
+ assert.equal(c.document.pointerLockElement,null);assert.equal(c.UI.el.test.classList.contains('hidden'),false);
+ assert.equal(c.UI.mouse.drag,null);assert.equal(c.UI.lockedTarget,null);
+});
+test('a delayed pointer lock completion cannot trap an already opened F10 menu',()=>{
+ const c=camera();c.UI.bindInput();c.canvas.requestPointerLock=()=>{};c.UI.toggleMouseLock();
+ c.UI.toggleTest(true);c.document.pointerLockElement=c.canvas;c.documentEvents.pointerlockchange();
+ assert.equal(c.document.pointerLockElement,null);assert.equal(c.UI.el.test.classList.contains('hidden'),false);
 });

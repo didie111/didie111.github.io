@@ -1,0 +1,1410 @@
+{
+  "source": {
+    "pymsCommit": "bfc5d3aad0b5614a5aff72c223f8efa00afddfa4",
+    "path": "PyMS/Tests/DAT/",
+    "gitBlobs": {
+      "units.dat": "5c3944532544d5a8a0d19707760fe53c4f0c2482",
+      "flingy.dat": "a5b9105ef18fdf1a3858cd55a00169636246e8da",
+      "weapons.dat": "7c9893cd85b3e0e7c790a7e298da0831cc179865"
+    },
+    "schema": "PyMS/FileFormats/DAT/*DAT.py",
+    "notes": "Numeric reference only. Iscript-controlled walking speed must not be read from flingy topSpeed256; walking currently uses mean gait speed. Carrier/Reaver use child weapons; launcher timing and animation are separate."
+  },
+  "units": {
+    "scv": {
+      "unitId": 7,
+      "flingyId": 81,
+      "motion": {
+        "sprite": 239,
+        "topSpeed256": 1280,
+        "acceleration": 67,
+        "haltDistance256": 12227,
+        "turn": 40,
+        "iscriptMask": 30,
+        "control": 0
+      },
+      "hoverMineExemption": true,
+      "weapons": {
+        "ground": {
+          "id": 13,
+          "damage_amount": 5,
+          "damage_bonus": 1,
+          "weapon_cooldown": 15,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 2,
+          "minimum_range": 0,
+          "maximum_range": 10,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "marine": {
+      "unitId": 0,
+      "flingyId": 78,
+      "motion": {
+        "sprite": 235,
+        "topSpeed256": 1,
+        "acceleration": 1,
+        "haltDistance256": 1,
+        "turn": 40,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 0,
+          "damage_amount": 6,
+          "damage_bonus": 1,
+          "weapon_cooldown": 15,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 3,
+          "minimum_range": 0,
+          "maximum_range": 128,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        },
+        "air": {
+          "id": 0,
+          "damage_amount": 6,
+          "damage_bonus": 1,
+          "weapon_cooldown": 15,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 3,
+          "minimum_range": 0,
+          "maximum_range": 128,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "firebat": {
+      "unitId": 32,
+      "flingyId": 73,
+      "motion": {
+        "sprite": 228,
+        "topSpeed256": 1,
+        "acceleration": 1,
+        "haltDistance256": 1,
+        "turn": 40,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 25,
+          "damage_amount": 8,
+          "damage_bonus": 1,
+          "weapon_cooldown": 22,
+          "weapon_type": 2,
+          "explosion_type": 3,
+          "target_flags": 2,
+          "minimum_range": 0,
+          "maximum_range": 32,
+          "inner_splash_range": 15,
+          "medium_splash_range": 20,
+          "outer_splash_range": 25
+        }
+      }
+    },
+    "medic": {
+      "unitId": 34,
+      "flingyId": 189,
+      "motion": {
+        "sprite": 489,
+        "topSpeed256": 1,
+        "acceleration": 1,
+        "haltDistance256": 1,
+        "turn": 40,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {}
+    },
+    "ghost": {
+      "unitId": 1,
+      "flingyId": 74,
+      "motion": {
+        "sprite": 229,
+        "topSpeed256": 1,
+        "acceleration": 1,
+        "haltDistance256": 1,
+        "turn": 40,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 2,
+          "damage_amount": 10,
+          "damage_bonus": 1,
+          "weapon_cooldown": 22,
+          "weapon_type": 2,
+          "explosion_type": 1,
+          "target_flags": 3,
+          "minimum_range": 0,
+          "maximum_range": 224,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        },
+        "air": {
+          "id": 2,
+          "damage_amount": 10,
+          "damage_bonus": 1,
+          "weapon_cooldown": 22,
+          "weapon_type": 2,
+          "explosion_type": 1,
+          "target_flags": 3,
+          "minimum_range": 0,
+          "maximum_range": 224,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "vulture": {
+      "unitId": 2,
+      "flingyId": 88,
+      "motion": {
+        "sprite": 244,
+        "topSpeed256": 1707,
+        "acceleration": 100,
+        "haltDistance256": 14569,
+        "turn": 40,
+        "iscriptMask": 30,
+        "control": 0
+      },
+      "hoverMineExemption": true,
+      "weapons": {
+        "ground": {
+          "id": 4,
+          "damage_amount": 20,
+          "damage_bonus": 2,
+          "weapon_cooldown": 30,
+          "weapon_type": 2,
+          "explosion_type": 1,
+          "target_flags": 2,
+          "minimum_range": 0,
+          "maximum_range": 160,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "tank": {
+      "unitId": 5,
+      "flingyId": 82,
+      "motion": {
+        "sprite": 240,
+        "topSpeed256": 1,
+        "acceleration": 1,
+        "haltDistance256": 1,
+        "turn": 13,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 11,
+          "damage_amount": 30,
+          "damage_bonus": 3,
+          "weapon_cooldown": 37,
+          "weapon_type": 1,
+          "explosion_type": 1,
+          "target_flags": 2,
+          "minimum_range": 0,
+          "maximum_range": 224,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "tank_siege": {
+      "unitId": 30,
+      "flingyId": 84,
+      "motion": {
+        "sprite": 242,
+        "topSpeed256": 1,
+        "acceleration": 1,
+        "haltDistance256": 1,
+        "turn": 40,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 27,
+          "damage_amount": 70,
+          "damage_bonus": 5,
+          "weapon_cooldown": 75,
+          "weapon_type": 1,
+          "explosion_type": 2,
+          "target_flags": 2,
+          "minimum_range": 64,
+          "maximum_range": 384,
+          "inner_splash_range": 10,
+          "medium_splash_range": 25,
+          "outer_splash_range": 40
+        }
+      }
+    },
+    "goliath": {
+      "unitId": 3,
+      "flingyId": 75,
+      "motion": {
+        "sprite": 232,
+        "topSpeed256": 1,
+        "acceleration": 1,
+        "haltDistance256": 1,
+        "turn": 17,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 7,
+          "damage_amount": 12,
+          "damage_bonus": 1,
+          "weapon_cooldown": 22,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 2,
+          "minimum_range": 0,
+          "maximum_range": 192,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        },
+        "air": {
+          "id": 8,
+          "damage_amount": 10,
+          "damage_bonus": 2,
+          "weapon_cooldown": 22,
+          "weapon_type": 1,
+          "explosion_type": 1,
+          "target_flags": 1,
+          "minimum_range": 0,
+          "maximum_range": 160,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "wraith": {
+      "unitId": 8,
+      "flingyId": 80,
+      "motion": {
+        "sprite": 238,
+        "topSpeed256": 1707,
+        "acceleration": 67,
+        "haltDistance256": 21745,
+        "turn": 40,
+        "iscriptMask": 30,
+        "control": 0
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 16,
+          "damage_amount": 8,
+          "damage_bonus": 1,
+          "weapon_cooldown": 30,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 2,
+          "minimum_range": 0,
+          "maximum_range": 160,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        },
+        "air": {
+          "id": 15,
+          "damage_amount": 20,
+          "damage_bonus": 2,
+          "weapon_cooldown": 22,
+          "weapon_type": 1,
+          "explosion_type": 1,
+          "target_flags": 1,
+          "minimum_range": 0,
+          "maximum_range": 160,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "dropship": {
+      "unitId": 11,
+      "flingyId": 72,
+      "motion": {
+        "sprite": 227,
+        "topSpeed256": 1400,
+        "acceleration": 17,
+        "haltDistance256": 37756,
+        "turn": 20,
+        "iscriptMask": 30,
+        "control": 0
+      },
+      "hoverMineExemption": false,
+      "weapons": {}
+    },
+    "vessel": {
+      "unitId": 9,
+      "flingyId": 86,
+      "motion": {
+        "sprite": 246,
+        "topSpeed256": 1280,
+        "acceleration": 50,
+        "haltDistance256": 5120,
+        "turn": 40,
+        "iscriptMask": 127,
+        "control": 0
+      },
+      "hoverMineExemption": false,
+      "weapons": {}
+    },
+    "bc": {
+      "unitId": 12,
+      "flingyId": 70,
+      "motion": {
+        "sprite": 225,
+        "topSpeed256": 640,
+        "acceleration": 27,
+        "haltDistance256": 7585,
+        "turn": 20,
+        "iscriptMask": 127,
+        "control": 0
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 19,
+          "damage_amount": 25,
+          "damage_bonus": 3,
+          "weapon_cooldown": 30,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 2,
+          "minimum_range": 0,
+          "maximum_range": 192,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        },
+        "air": {
+          "id": 20,
+          "damage_amount": 25,
+          "damage_bonus": 3,
+          "weapon_cooldown": 30,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 1,
+          "minimum_range": 0,
+          "maximum_range": 192,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "spider_mine": {
+      "unitId": 13,
+      "flingyId": 89,
+      "motion": {
+        "sprite": 245,
+        "topSpeed256": 1,
+        "acceleration": 1,
+        "haltDistance256": 1,
+        "turn": 127,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": true,
+      "weapons": {
+        "ground": {
+          "id": 6,
+          "damage_amount": 125,
+          "damage_bonus": 0,
+          "weapon_cooldown": 22,
+          "weapon_type": 1,
+          "explosion_type": 2,
+          "target_flags": 18,
+          "minimum_range": 0,
+          "maximum_range": 10,
+          "inner_splash_range": 50,
+          "medium_splash_range": 75,
+          "outer_splash_range": 100
+        }
+      }
+    },
+    "larva": {
+      "unitId": 35,
+      "flingyId": 10,
+      "motion": {
+        "sprite": 149,
+        "topSpeed256": 1,
+        "acceleration": 1,
+        "haltDistance256": 1,
+        "turn": 20,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {}
+    },
+    "egg": {
+      "unitId": 36,
+      "flingyId": 6,
+      "motion": {
+        "sprite": 142,
+        "topSpeed256": 0,
+        "acceleration": 0,
+        "haltDistance256": 0,
+        "turn": 0,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {}
+    },
+    "drone": {
+      "unitId": 41,
+      "flingyId": 5,
+      "motion": {
+        "sprite": 140,
+        "topSpeed256": 1280,
+        "acceleration": 67,
+        "haltDistance256": 12227,
+        "turn": 40,
+        "iscriptMask": 30,
+        "control": 0
+      },
+      "hoverMineExemption": true,
+      "weapons": {
+        "ground": {
+          "id": 43,
+          "damage_amount": 5,
+          "damage_bonus": 0,
+          "weapon_cooldown": 22,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 2,
+          "minimum_range": 0,
+          "maximum_range": 32,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "zergling": {
+      "unitId": 37,
+      "flingyId": 15,
+      "motion": {
+        "sprite": 159,
+        "topSpeed256": 1,
+        "acceleration": 1,
+        "haltDistance256": 1,
+        "turn": 27,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 35,
+          "damage_amount": 5,
+          "damage_bonus": 1,
+          "weapon_cooldown": 8,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 2,
+          "minimum_range": 0,
+          "maximum_range": 15,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "hydra": {
+      "unitId": 38,
+      "flingyId": 8,
+      "motion": {
+        "sprite": 146,
+        "topSpeed256": 1,
+        "acceleration": 1,
+        "haltDistance256": 1,
+        "turn": 27,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 38,
+          "damage_amount": 10,
+          "damage_bonus": 1,
+          "weapon_cooldown": 15,
+          "weapon_type": 1,
+          "explosion_type": 1,
+          "target_flags": 3,
+          "minimum_range": 0,
+          "maximum_range": 128,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        },
+        "air": {
+          "id": 38,
+          "damage_amount": 10,
+          "damage_bonus": 1,
+          "weapon_cooldown": 15,
+          "weapon_type": 1,
+          "explosion_type": 1,
+          "target_flags": 3,
+          "minimum_range": 0,
+          "maximum_range": 128,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "lurker": {
+      "unitId": 103,
+      "flingyId": 186,
+      "motion": {
+        "sprite": 485,
+        "topSpeed256": 1,
+        "acceleration": 1,
+        "haltDistance256": 1,
+        "turn": 40,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 109,
+          "damage_amount": 20,
+          "damage_bonus": 2,
+          "weapon_cooldown": 37,
+          "weapon_type": 3,
+          "explosion_type": 3,
+          "target_flags": 2,
+          "minimum_range": 0,
+          "maximum_range": 192,
+          "inner_splash_range": 20,
+          "medium_splash_range": 20,
+          "outer_splash_range": 20
+        }
+      }
+    },
+    "lurker_egg": {
+      "unitId": 97,
+      "flingyId": 184,
+      "motion": {
+        "sprite": 481,
+        "topSpeed256": 0,
+        "acceleration": 0,
+        "haltDistance256": 0,
+        "turn": 0,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {}
+    },
+    "overlord": {
+      "unitId": 42,
+      "flingyId": 12,
+      "motion": {
+        "sprite": 153,
+        "topSpeed256": 213,
+        "acceleration": 27,
+        "haltDistance256": 840,
+        "turn": 20,
+        "iscriptMask": 30,
+        "control": 0
+      },
+      "hoverMineExemption": false,
+      "weapons": {}
+    },
+    "mutalisk": {
+      "unitId": 43,
+      "flingyId": 11,
+      "motion": {
+        "sprite": 151,
+        "topSpeed256": 1707,
+        "acceleration": 67,
+        "haltDistance256": 21745,
+        "turn": 40,
+        "iscriptMask": 30,
+        "control": 0
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 48,
+          "damage_amount": 9,
+          "damage_bonus": 1,
+          "weapon_cooldown": 30,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 3,
+          "minimum_range": 0,
+          "maximum_range": 96,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        },
+        "air": {
+          "id": 48,
+          "damage_amount": 9,
+          "damage_bonus": 1,
+          "weapon_cooldown": 30,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 3,
+          "minimum_range": 0,
+          "maximum_range": 96,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "scourge": {
+      "unitId": 47,
+      "flingyId": 0,
+      "motion": {
+        "sprite": 130,
+        "topSpeed256": 1707,
+        "acceleration": 107,
+        "haltDistance256": 13616,
+        "turn": 40,
+        "iscriptMask": 30,
+        "control": 0
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "air": {
+          "id": 55,
+          "damage_amount": 110,
+          "damage_bonus": 0,
+          "weapon_cooldown": 1,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 1,
+          "minimum_range": 0,
+          "maximum_range": 3,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "ultralisk": {
+      "unitId": 39,
+      "flingyId": 14,
+      "motion": {
+        "sprite": 157,
+        "topSpeed256": 1,
+        "acceleration": 1,
+        "haltDistance256": 1,
+        "turn": 40,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 40,
+          "damage_amount": 20,
+          "damage_bonus": 3,
+          "weapon_cooldown": 15,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 2,
+          "minimum_range": 0,
+          "maximum_range": 25,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "defiler": {
+      "unitId": 46,
+      "flingyId": 4,
+      "motion": {
+        "sprite": 138,
+        "topSpeed256": 1,
+        "acceleration": 1,
+        "haltDistance256": 1,
+        "turn": 27,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {}
+    },
+    "broodling": {
+      "unitId": 40,
+      "flingyId": 1,
+      "motion": {
+        "sprite": 133,
+        "topSpeed256": 1,
+        "acceleration": 1,
+        "haltDistance256": 1,
+        "turn": 27,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 42,
+          "damage_amount": 4,
+          "damage_bonus": 1,
+          "weapon_cooldown": 15,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 2,
+          "minimum_range": 0,
+          "maximum_range": 2,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "probe": {
+      "unitId": 64,
+      "flingyId": 42,
+      "motion": {
+        "sprite": 194,
+        "topSpeed256": 1280,
+        "acceleration": 67,
+        "haltDistance256": 12227,
+        "turn": 40,
+        "iscriptMask": 24,
+        "control": 0
+      },
+      "hoverMineExemption": true,
+      "weapons": {
+        "ground": {
+          "id": 62,
+          "damage_amount": 5,
+          "damage_bonus": 0,
+          "weapon_cooldown": 22,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 2,
+          "minimum_range": 0,
+          "maximum_range": 32,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "zealot": {
+      "unitId": 65,
+      "flingyId": 49,
+      "motion": {
+        "sprite": 201,
+        "topSpeed256": 1,
+        "acceleration": 1,
+        "haltDistance256": 1,
+        "turn": 40,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 64,
+          "damage_amount": 8,
+          "damage_bonus": 1,
+          "weapon_cooldown": 22,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 2,
+          "minimum_range": 0,
+          "maximum_range": 15,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "dragoon": {
+      "unitId": 66,
+      "flingyId": 40,
+      "motion": {
+        "sprite": 191,
+        "topSpeed256": 1,
+        "acceleration": 1,
+        "haltDistance256": 1,
+        "turn": 40,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 66,
+          "damage_amount": 20,
+          "damage_bonus": 2,
+          "weapon_cooldown": 30,
+          "weapon_type": 1,
+          "explosion_type": 1,
+          "target_flags": 3,
+          "minimum_range": 0,
+          "maximum_range": 128,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        },
+        "air": {
+          "id": 66,
+          "damage_amount": 20,
+          "damage_bonus": 2,
+          "weapon_cooldown": 30,
+          "weapon_type": 1,
+          "explosion_type": 1,
+          "target_flags": 3,
+          "minimum_range": 0,
+          "maximum_range": 128,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "htemplar": {
+      "unitId": 67,
+      "flingyId": 45,
+      "motion": {
+        "sprite": 197,
+        "topSpeed256": 853,
+        "acceleration": 27,
+        "haltDistance256": 13474,
+        "turn": 40,
+        "iscriptMask": 127,
+        "control": 1
+      },
+      "hoverMineExemption": false,
+      "weapons": {}
+    },
+    "dtemplar": {
+      "unitId": 61,
+      "flingyId": 188,
+      "motion": {
+        "sprite": 488,
+        "topSpeed256": 750,
+        "acceleration": 27,
+        "haltDistance256": 13474,
+        "turn": 40,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 111,
+          "damage_amount": 40,
+          "damage_bonus": 3,
+          "weapon_cooldown": 30,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 2,
+          "minimum_range": 0,
+          "maximum_range": 15,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "shuttle": {
+      "unitId": 69,
+      "flingyId": 44,
+      "motion": {
+        "sprite": 196,
+        "topSpeed256": 1133,
+        "acceleration": 17,
+        "haltDistance256": 37756,
+        "turn": 20,
+        "iscriptMask": 24,
+        "control": 0
+      },
+      "hoverMineExemption": false,
+      "weapons": {}
+    },
+    "observer": {
+      "unitId": 84,
+      "flingyId": 50,
+      "motion": {
+        "sprite": 202,
+        "topSpeed256": 853,
+        "acceleration": 27,
+        "haltDistance256": 13474,
+        "turn": 20,
+        "iscriptMask": 30,
+        "control": 0
+      },
+      "hoverMineExemption": false,
+      "weapons": {}
+    },
+    "scout": {
+      "unitId": 70,
+      "flingyId": 43,
+      "motion": {
+        "sprite": 195,
+        "topSpeed256": 1280,
+        "acceleration": 48,
+        "haltDistance256": 17067,
+        "turn": 30,
+        "iscriptMask": 24,
+        "control": 0
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 73,
+          "damage_amount": 8,
+          "damage_bonus": 1,
+          "weapon_cooldown": 30,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 2,
+          "minimum_range": 0,
+          "maximum_range": 128,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        },
+        "air": {
+          "id": 74,
+          "damage_amount": 14,
+          "damage_bonus": 1,
+          "weapon_cooldown": 22,
+          "weapon_type": 1,
+          "explosion_type": 1,
+          "target_flags": 1,
+          "minimum_range": 0,
+          "maximum_range": 128,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "corsair": {
+      "unitId": 60,
+      "flingyId": 191,
+      "motion": {
+        "sprite": 487,
+        "topSpeed256": 1707,
+        "acceleration": 67,
+        "haltDistance256": 17067,
+        "turn": 30,
+        "iscriptMask": 24,
+        "control": 0
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "air": {
+          "id": 100,
+          "damage_amount": 5,
+          "damage_bonus": 1,
+          "weapon_cooldown": 8,
+          "weapon_type": 1,
+          "explosion_type": 24,
+          "target_flags": 1,
+          "minimum_range": 0,
+          "maximum_range": 160,
+          "inner_splash_range": 5,
+          "medium_splash_range": 50,
+          "outer_splash_range": 100
+        }
+      }
+    },
+    "carrier": {
+      "unitId": 72,
+      "flingyId": 39,
+      "motion": {
+        "sprite": 190,
+        "topSpeed256": 853,
+        "acceleration": 27,
+        "haltDistance256": 13474,
+        "turn": 20,
+        "iscriptMask": 127,
+        "control": 0
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 79,
+          "damage_amount": 6,
+          "damage_bonus": 1,
+          "weapon_cooldown": 1,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 3,
+          "minimum_range": 0,
+          "maximum_range": 128,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        },
+        "air": {
+          "id": 79,
+          "damage_amount": 6,
+          "damage_bonus": 1,
+          "weapon_cooldown": 1,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 3,
+          "minimum_range": 0,
+          "maximum_range": 128,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "valkyrie": {
+      "unitId": 58,
+      "flingyId": 190,
+      "motion": {
+        "sprite": 491,
+        "topSpeed256": 1690,
+        "acceleration": 65,
+        "haltDistance256": 21901,
+        "turn": 30,
+        "iscriptMask": 30,
+        "control": 0
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "air": {
+          "id": 103,
+          "damage_amount": 6,
+          "damage_bonus": 1,
+          "weapon_cooldown": 64,
+          "weapon_type": 1,
+          "explosion_type": 24,
+          "target_flags": 1,
+          "minimum_range": 0,
+          "maximum_range": 192,
+          "inner_splash_range": 5,
+          "medium_splash_range": 50,
+          "outer_splash_range": 100
+        }
+      }
+    },
+    "queen": {
+      "unitId": 45,
+      "flingyId": 13,
+      "motion": {
+        "sprite": 155,
+        "topSpeed256": 1707,
+        "acceleration": 67,
+        "haltDistance256": 21745,
+        "turn": 40,
+        "iscriptMask": 30,
+        "control": 0
+      },
+      "hoverMineExemption": false,
+      "weapons": {}
+    },
+    "guardian": {
+      "unitId": 44,
+      "flingyId": 7,
+      "motion": {
+        "sprite": 144,
+        "topSpeed256": 640,
+        "acceleration": 27,
+        "haltDistance256": 7585,
+        "turn": 20,
+        "iscriptMask": 30,
+        "control": 0
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 46,
+          "damage_amount": 20,
+          "damage_bonus": 2,
+          "weapon_cooldown": 30,
+          "weapon_type": 3,
+          "explosion_type": 1,
+          "target_flags": 2,
+          "minimum_range": 0,
+          "maximum_range": 256,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "devourer": {
+      "unitId": 62,
+      "flingyId": 185,
+      "motion": {
+        "sprite": 482,
+        "topSpeed256": 1280,
+        "acceleration": 48,
+        "haltDistance256": 17067,
+        "turn": 30,
+        "iscriptMask": 30,
+        "control": 0
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "air": {
+          "id": 104,
+          "damage_amount": 25,
+          "damage_bonus": 2,
+          "weapon_cooldown": 100,
+          "weapon_type": 1,
+          "explosion_type": 18,
+          "target_flags": 1,
+          "minimum_range": 0,
+          "maximum_range": 192,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    },
+    "infested_terran": {
+      "unitId": 50,
+      "flingyId": 2,
+      "motion": {
+        "sprite": 135,
+        "topSpeed256": 1,
+        "acceleration": 1,
+        "haltDistance256": 1,
+        "turn": 40,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 54,
+          "damage_amount": 500,
+          "damage_bonus": 0,
+          "weapon_cooldown": 1,
+          "weapon_type": 1,
+          "explosion_type": 2,
+          "target_flags": 2,
+          "minimum_range": 0,
+          "maximum_range": 3,
+          "inner_splash_range": 20,
+          "medium_splash_range": 40,
+          "outer_splash_range": 60
+        }
+      }
+    },
+    "archon": {
+      "unitId": 68,
+      "flingyId": 38,
+      "motion": {
+        "sprite": 189,
+        "topSpeed256": 1280,
+        "acceleration": 160,
+        "haltDistance256": 5120,
+        "turn": 40,
+        "iscriptMask": 20,
+        "control": 0
+      },
+      "hoverMineExemption": true,
+      "weapons": {
+        "ground": {
+          "id": 70,
+          "damage_amount": 30,
+          "damage_bonus": 3,
+          "weapon_cooldown": 20,
+          "weapon_type": 3,
+          "explosion_type": 3,
+          "target_flags": 3,
+          "minimum_range": 0,
+          "maximum_range": 64,
+          "inner_splash_range": 3,
+          "medium_splash_range": 15,
+          "outer_splash_range": 30
+        },
+        "air": {
+          "id": 70,
+          "damage_amount": 30,
+          "damage_bonus": 3,
+          "weapon_cooldown": 20,
+          "weapon_type": 3,
+          "explosion_type": 3,
+          "target_flags": 3,
+          "minimum_range": 0,
+          "maximum_range": 64,
+          "inner_splash_range": 3,
+          "medium_splash_range": 15,
+          "outer_splash_range": 30
+        }
+      }
+    },
+    "dark_archon": {
+      "unitId": 63,
+      "flingyId": 187,
+      "motion": {
+        "sprite": 486,
+        "topSpeed256": 1280,
+        "acceleration": 160,
+        "haltDistance256": 5120,
+        "turn": 40,
+        "iscriptMask": 20,
+        "control": 0
+      },
+      "hoverMineExemption": true,
+      "weapons": {}
+    },
+    "reaver": {
+      "unitId": 83,
+      "flingyId": 47,
+      "motion": {
+        "sprite": 199,
+        "topSpeed256": 1,
+        "acceleration": 1,
+        "haltDistance256": 1,
+        "turn": 20,
+        "iscriptMask": 127,
+        "control": 2
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 82,
+          "damage_amount": 100,
+          "damage_bonus": 25,
+          "weapon_cooldown": 1,
+          "weapon_type": 3,
+          "explosion_type": 3,
+          "target_flags": 2,
+          "minimum_range": 0,
+          "maximum_range": 128,
+          "inner_splash_range": 20,
+          "medium_splash_range": 40,
+          "outer_splash_range": 60
+        }
+      }
+    },
+    "arbiter": {
+      "unitId": 71,
+      "flingyId": 37,
+      "motion": {
+        "sprite": 188,
+        "topSpeed256": 1280,
+        "acceleration": 33,
+        "haltDistance256": 24824,
+        "turn": 40,
+        "iscriptMask": 30,
+        "control": 0
+      },
+      "hoverMineExemption": false,
+      "weapons": {
+        "ground": {
+          "id": 77,
+          "damage_amount": 10,
+          "damage_bonus": 1,
+          "weapon_cooldown": 45,
+          "weapon_type": 1,
+          "explosion_type": 1,
+          "target_flags": 3,
+          "minimum_range": 0,
+          "maximum_range": 160,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        },
+        "air": {
+          "id": 77,
+          "damage_amount": 10,
+          "damage_bonus": 1,
+          "weapon_cooldown": 45,
+          "weapon_type": 1,
+          "explosion_type": 1,
+          "target_flags": 3,
+          "minimum_range": 0,
+          "maximum_range": 160,
+          "inner_splash_range": 0,
+          "medium_splash_range": 0,
+          "outer_splash_range": 0
+        }
+      }
+    }
+  },
+  "spellWeapons": {
+    "30": {
+      "damage_amount": 260,
+      "weapon_cooldown": 15,
+      "weapon_type": 1,
+      "inner_splash_range": 0,
+      "medium_splash_range": 0,
+      "outer_splash_range": 0
+    },
+    "31": {
+      "damage_amount": 600,
+      "weapon_cooldown": 1,
+      "weapon_type": 1,
+      "inner_splash_range": 128,
+      "medium_splash_range": 192,
+      "outer_splash_range": 256
+    },
+    "34": {
+      "damage_amount": 250,
+      "weapon_cooldown": 75,
+      "weapon_type": 4,
+      "inner_splash_range": 0,
+      "medium_splash_range": 0,
+      "outer_splash_range": 0
+    },
+    "60": {
+      "damage_amount": 300,
+      "weapon_cooldown": 1,
+      "weapon_type": 0,
+      "inner_splash_range": 0,
+      "medium_splash_range": 0,
+      "outer_splash_range": 0
+    },
+    "84": {
+      "damage_amount": 14,
+      "weapon_cooldown": 45,
+      "weapon_type": 4,
+      "inner_splash_range": 48,
+      "medium_splash_range": 48,
+      "outer_splash_range": 48
+    }
+  }
+}

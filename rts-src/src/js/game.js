@@ -105,6 +105,7 @@ function createBuilding(type, owner, tx, ty, done) {
   return e;
 }
 function occupy(e, on) {
+  PF.invalidateTerrain();
   const d = e.def;
   for (let y = e.ty0; y < e.ty0 + d.h; y++) for (let x = e.tx0; x < e.tx0 + d.w; x++) {
     if (!inMap(x, y)) continue;

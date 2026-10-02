@@ -652,6 +652,10 @@ for (const type of ['scv', 'drone', 'probe']) test(type + ' gas drill then Hold 
   assert.ok(heldMoved && waited, 'body recovery fails to mix movement and waiting');
   for (const a of units) for (const b of units) if (a.id < b.id)
     assert.ok(Math.hypot(a.x - b.x, a.y - b.y) >= (a.r + b.r) * .85 - 1e-6, 'restored drill bodies stay permanently overlapped');
+  // Correct DAT cruise speeds change the deterministic recovery path choices.
+  // A body still following MoveToLegal is not idle merely because its current position is legal.
+  for (let i = 0; i < 360 && units.some(u => u.groundRecovery); i++) w.step();
+  assert.ok(units.every(u => !u.groundRecovery), 'drill recovery does not finish within its bounded settling window');
   const end = units.map(position); for (let i = 0; i < 60; i++) w.step();
   units.forEach((u, k) => assert.deepEqual(position(u), end[k], 'legal Hold bodies keep wandering'));
 });

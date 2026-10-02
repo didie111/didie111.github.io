@@ -42,6 +42,10 @@ const UI = {
     if (this.pointerLocked()) { this.releaseMouse(); return; }
     if (!GAME.running || GAME.over || this.lockPending) return;
     if (!this.el.cv.requestPointerLock) { this.message('이 브라우저는 마우스 고정을 지원하지 않습니다.'); return; }
+    // Native selects and dragging need the ordinary pointer. Lock only the play area.
+    if (this.el.test && !this.el.test.classList.contains('hidden')) this.toggleTest(false);
+    this.el.help?.classList.add?.('hidden');
+    document.activeElement?.blur?.();
     this.lockPending = true; this.lockError = false;
     const fail = () => {
       this.lockPending = false;
@@ -51,6 +55,8 @@ const UI = {
   },
   pointerLockChanged() {
     const locked = this.pointerLocked();
+    // Also cover an asynchronous lock request finishing after F10 was opened.
+    if (locked && this.el.test && !this.el.test.classList.contains('hidden')) { this.releaseMouse(); return; }
     this.lockPending = false; this.keys = {}; this.mouse.drag = null; this.mmDrag = false; this.lockedTarget = null;
     this.mouse.inside = locked;
     if (locked) {
@@ -68,7 +74,11 @@ const UI = {
     if (!this.pointerLocked()) return false;
     const hit = document.elementFromPoint(this.mouse.x, this.mouse.y);
     if (!hit || hit === this.el.cv) return false;
+    if (hit.closest('#test,#help')) { e.preventDefault(); this.releaseMouse(); return true; }
     const target = hit.closest('button,input,select,label,.btn,.wf,.qs,#minimap') || hit;
+    if (e.button === 0 && target.id === 'hud-f10') {
+      e.preventDefault(); this.toggleTest(true); return true;
+    }
     this.lockedTarget = target; e.preventDefault();
     target.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true,
       clientX:this.mouse.x, clientY:this.mouse.y, button:e.button, buttons:e.buttons,
@@ -114,6 +124,7 @@ const UI = {
       this.mouse.inside = true;
       this.mouse.overUI = (locked ? document.elementFromPoint(this.mouse.x, this.mouse.y) : e.target) !== cv;
       if (this.mmDrag) this.minimapAt(this.pointerAt(e), true);
+      if (locked) this.updateCursor();
     });
     document.addEventListener('mouseleave', () => { if (!this.pointerLocked()) this.mouse.inside = false; });
     document.addEventListener('pointerlockchange', () => this.pointerLockChanged());
@@ -195,7 +206,7 @@ const UI = {
     if (e.key === 'Alt') { this.keys.Alt = true; e.preventDefault(); }
     const k = e.key;
     if (k === 'F10' || k === '`') { e.preventDefault(); this.toggleTest(); return; }
-    if (k === 'F1') { e.preventDefault(); this.el.help.classList.toggle('hidden'); return; }
+    if (k === 'F1') { e.preventDefault(); this.el.help.classList.toggle('hidden'); if (!this.el.help.classList.contains('hidden')) this.releaseMouse(); return; }
     if (k === 'F9' || k === 'Pause') { e.preventDefault(); GAME.paused = !GAME.paused; this.message(GAME.paused ? '일시 정지' : '게임 재개'); return; }
     if (k === 'Escape') { if (this.mode) this.cancelMode(); else if (this.menu) { this.menu = null; this.cardSig = ''; } else this.escQueue(); return; }
     if (k === ' ') { e.preventDefault(); if (this.lastAlert) RENDER.centerOn(this.lastAlert[0], this.lastAlert[1]); return; }
@@ -211,9 +222,9 @@ const UI = {
     }
   },
   groupKey(n, set, add) {
-    const own = this.selection.filter(e => e.owner === GAME.control && !e.dead);
+    const own = this.normalizeSelection(this.selection.filter(e => e.owner === GAME.control));
     if (set) { this.groups[n] = own.slice(); this.message('부대 ' + n + ' 지정'); return; }
-    if (add) { const g = (this.groups[n] || []).filter(e => !e.dead); for (const e of own) if (!g.includes(e) && g.length < MAX_SELECT) g.push(e); this.groups[n] = g; return; }
+    if (add) { this.groups[n] = this.normalizeSelection((this.groups[n] || []).concat(own)); return; }
     const g = (this.groups[n] || []).filter(e => !e.dead && e.owner === GAME.control && !e.hidden);
     if (!g.length) return;
     const now = performance.now();
@@ -222,6 +233,10 @@ const UI = {
     this.setSelection(g);
   },
   escQueue() {
+    if (this.selection.length > 1 && this.selection.every(e => e.owner === GAME.control && this.productionBuilding(e))) {
+      for (const b of this.selection) if (b.queue.length) cmdCancelQueue(b, b.queue.length - 1);
+      return;
+    }
     const b = this.selection.length === 1 && this.selection[0];
     if (!b || b.owner !== GAME.control) return;
     if (b.isBuilding && b.queue.length) cmdCancelQueue(b, b.queue.length - 1);
@@ -252,9 +267,15 @@ const UI = {
     return best;
   },
   selectable(e) { return e && !e.dead && !e.hidden && e.type !== 'spider_mine'; },
+  productionBuilding(e) { return !!(e?.isBuilding && (e.def.produces?.length || e.def.larvaHall)); },
+  normalizeSelection(arr) {
+    const unique = [...new Set(arr)].filter(e => this.selectable(e)), first = unique[0];
+    if (!first) return [];
+    if (first.owner !== GAME.control || (first.isBuilding && !this.productionBuilding(first))) return [first];
+    return unique.filter(e => e.owner === GAME.control && (first.isBuilding ? this.productionBuilding(e) : !e.isBuilding)).slice(0, MAX_SELECT);
+  },
   setSelection(arr) {
-    const own = arr.filter(e => this.selectable(e));
-    this.selection = own.slice(0, MAX_SELECT);
+    this.selection = this.normalizeSelection(arr);
     this.menu = null; this.cardSig = ''; this.infoSig = '';
   },
   clickSelect(wx, wy, shift, ctrl) {
@@ -264,16 +285,16 @@ const UI = {
     const now = performance.now();
     const dbl = this.lastClick.id === e.id && now - this.lastClick.t < 350;
     this.lastClick = { t: now, id: e.id };
-    if ((ctrl || dbl) && e.owner === p && !e.isBuilding) {
+    if ((ctrl || dbl) && e.owner === p && (!e.isBuilding || this.productionBuilding(e))) {
       const same = GAME.entities.filter(o => !o.dead && !o.hidden && o.owner === p && o.type === e.type && this.onScreen(o));
       same.sort((a, b) => dist(a.x, a.y, e.x, e.y) - dist(b.x, b.y, e.x, e.y));
       this.setSelection(shift ? this.selection.concat(same.filter(o => !this.selection.includes(o))) : same);
       SND.play('click'); return;
     }
-    if (shift && e.owner === p && !e.isBuilding && this.selection.every(s => s.owner === p && !s.isBuilding)) {
+    if (shift && e.owner === p && (!e.isBuilding || this.productionBuilding(e)) && this.selection.every(s => s.owner === p && s.isBuilding === e.isBuilding && (!s.isBuilding || this.productionBuilding(s)))) {
       const i = this.selection.indexOf(e);
       if (i >= 0) this.selection.splice(i, 1); else if (this.selection.length < MAX_SELECT) this.selection.push(e);
-      this.cardSig = ''; this.menu = null; return;
+      this.cardSig = ''; this.infoSig = ''; this.menu = null; return;
     }
     this.setSelection([e]);
     SND.play('click');
@@ -287,12 +308,12 @@ const UI = {
     const nonLarva = c.filter(e => e.type !== 'larva' && e.type !== 'egg' && e.type !== 'lurker_egg');
     if (nonLarva.length) c = nonLarva;
     if (!c.length) {
-      const b = GAME.entities.find(e => !e.dead && !e.hidden && e.owner === p && e.isBuilding && inBox(e));
-      if (b) c = [b];
+      c = GAME.entities.filter(e => this.selectable(e) && e.owner === p && this.productionBuilding(e) && inBox(e));
+      if (!c.length) { const b = GAME.entities.find(e => this.selectable(e) && e.owner === p && e.isBuilding && inBox(e)); if (b) c = [b]; }
     }
     if (!c.length) { const any = GAME.entities.find(e => !e.dead && !e.hidden && e.owner !== p && inBox(e) && isVisibleTo(e, p) && !isCloakedFor(e, p)); if (any) c = [any]; }
     if (!c.length) { if (!shift) this.setSelection([]); return; }
-    if (shift && this.selection.every(s => s.owner === p && !s.isBuilding) && !c[0].isBuilding) c = this.selection.concat(c.filter(e => !this.selection.includes(e)));
+    if (shift && this.selection.every(s => s.owner === p && s.isBuilding === c[0].isBuilding) && (!c[0].isBuilding || this.productionBuilding(c[0]))) c = this.selection.concat(c);
     this.setSelection(c);
     SND.play('click');
   },
@@ -417,6 +438,25 @@ const UI = {
         }, { cost: d.cost, disabled: !!miss, desc: miss ? '필요: ' + BUILDINGS[miss].name : (d.provides ? '인구수 +' + d.provides : '') });
       });
       card[8] = B(ART.cmdIcon('back'), 'ESCAPE', '뒤로', () => { this.menu = null; this.cardSig = ''; });
+      return card;
+    }
+    // 여러 생산 건물: 종류 탭은 생산 명령의 대상만 바꾸고 선택은 유지한다.
+    if (u0.isBuilding && us.length > 1) {
+      if (!types.has(this.producerType)) this.producerType = u0.type;
+      const producers = us.filter(b => b.type === this.producerType), d = producers[0].def;
+      let i = 0;
+      for (const t of d.produces || []) {
+        const ud = UNITS[t], miss = missingReq(p, ud.req), ready = producers.some(b => b.done && !b.lifted && !b.morph && (!ud.addon || attachedAddon(b, ud.addon)));
+        card[i++] = B(ART.icon(t, p), ud.hotkey, ud.name, () => cmdTrainSelected(producers, t),
+          { cost: ud.cost, sup: ud.supply, disabled: !!miss || !ready, desc: miss ? '필요: ' + BUILDINGS[miss].name : '클릭마다 대기열이 짧은 선택 건물에 1기 생산' });
+      }
+      if (d.larvaHall) card[0] = B(ART.icon('larva', p), 'S', '선택 건물의 라바 선택', () => {
+        const halls = new Set(producers); this.setSelection(GAME.entities.filter(e => this.selectable(e) && e.type === 'larva' && halls.has(e.hatch)));
+      });
+      card[7] = B(ART.cmdIcon('rally'), 'R', '전체 집결 지점', () => this.setMode({ kind: 'target', cmd: 'rally' }));
+      if (us.some(b => b.queue.length)) card[8] = B(ART.cmdIcon('cancel'), 'ESCAPE', '선택 건물의 마지막 생산 취소', () => {
+        for (const b of us) if (b.queue.length) cmdCancelQueue(b, b.queue.length - 1);
+      });
       return card;
     }
     // 건물
@@ -582,10 +622,20 @@ const UI = {
     const el = this.el.info;
     if (!sel.length) { if (this.infoSig !== 'none') { el.innerHTML = ''; this.infoSig = 'none'; } return; }
     if (sel.length > 1) {
-      const sig = 'm' + sel.map(e => e.id + ':' + Math.ceil(e.hp / e.maxHp * 3)).join(',');
+      const buildings = sel[0].isBuilding, types = [...new Set(sel.map(e => e.type))];
+      if (buildings && !types.includes(this.producerType)) this.producerType = sel[0].type;
+      const sig = 'm' + this.producerType + sel.map(e => e.id + ':' + Math.ceil(e.hp / e.maxHp * 100) + ':' + (e.maxSh ? Math.ceil(e.sh / e.maxSh * 100) : 0) + ':' + e.queue.length + ':' + Math.floor((e.queue[0]?.prog || 0) / (e.queue[0]?.total || 1) * 10)).join(',');
       if (sig !== this.infoSig) {
         this.infoSig = sig;
-        el.innerHTML = '<div class="multi">' + sel.map((e, i) => '<div class="wf" data-i="' + i + '"><img src="' + ART.wireframe(e.type, e.owner, e.hp / e.maxHp) + '"></div>').join('') + '</div>';
+        el.innerHTML = '<div class="multi-head"><span>' + (buildings ? '생산 건물 ' : '부대 ') + sel.length + '/' + MAX_SELECT + '</span>' +
+          (buildings ? types.map(t => '<button class="producer-tab' + (t === this.producerType ? ' active' : '') + '" data-type="' + t + '">' + BUILDINGS[t].name + ' ' + sel.filter(e => e.type === t).length + '</button>').join('') : '<small>Shift: 제외 · Ctrl: 같은 종류</small>') + '</div>' +
+          '<div class="multi">' + sel.map((e, i) => '<div class="wf" data-i="' + i + '" title="' + e.def.name + ' · ' + Math.ceil(e.hp) + '/' + e.maxHp + (buildings ? ' · 생산 대기 ' + e.queue.length : '') + '"><img src="' + ART.wireframe(e.type, e.owner, e.hp / e.maxHp) + '">' +
+          '<i class="wf-health" style="width:' + Math.round(e.hp / e.maxHp * 100) + '%;background:' + (e.hp > e.maxHp * .66 ? '#4ddb52' : e.hp > e.maxHp * .33 ? '#dfcf42' : '#e44c45') + '"></i>' +
+          (e.maxSh ? '<i class="wf-shield" style="width:' + Math.round(e.sh / e.maxSh * 100) + '%"></i>' : '') +
+          (buildings && e.queue.length ? '<span class="wf-queue">' + e.queue.length + '</span><i class="wf-progress" style="width:' + Math.floor(e.queue[0].prog / e.queue[0].total * 100) + '%"></i>' : '') + '</div>').join('') + '</div>';
+        el.querySelectorAll('.producer-tab').forEach(b => b.addEventListener('mousedown', ev => {
+          ev.stopPropagation(); this.producerType = b.dataset.type; this.cardSig = ''; this.infoSig = '';
+        }));
         el.querySelectorAll('.wf').forEach(w => w.addEventListener('mousedown', (ev) => {
           ev.stopPropagation(); const e = sel[+w.dataset.i]; if (!e) return;
           if (ev.shiftKey) { this.selection.splice(this.selection.indexOf(e), 1); this.cardSig = ''; this.infoSig = ''; }
@@ -621,7 +671,7 @@ const UI = {
     else if (!e.isBuilding || e.canAttack) {
       const w = d.gw || d.aw;
       const parts = [];
-      if (w) { const up = w.upg && w.upg !== 'none' ? upgLevel(e.owner, w.upg) : 0; parts.push('공격 ' + w.dmg + (up ? '+' + (w.inc || 1) * up : '') + (w.hits > 1 ? '×' + w.hits : '')); }
+      if (w) { const up = w.upg && w.upg !== 'none' ? upgLevel(e.owner, w.upg) : 0, hits = e.type === 'carrier' ? e.ammo || 0 : w.hits || 1; parts.push('공격 ' + (e.type === 'reaver' ? e.weaponDmg(w) : w.dmg) + (up ? '+' + (w.inc || 1) * up : '') + (hits !== 1 ? '×' + hits : '')); }
       parts.push('방어 ' + e.armor);
       if (e.maxEnergy) parts.push('<span class="e">에너지 ' + Math.floor(e.energy) + '/' + e.maxEnergy + '</span>');
       l2 = parts.join(' · ');

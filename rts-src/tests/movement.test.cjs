@@ -24,9 +24,10 @@ for(const type of ['scv','drone','probe'])test(type+' traverses a straight local
  let arrival=null;for(let i=0;i<65;i++){w.step();if(!e.orders.length){arrival=i+1;break;}}
  assert.ok(arrival!==null,'worker remained slow on a verified straight segment');assert.ok(Math.hypot(e.x-620,e.y-500)<.001);
 });
-test('all flying types retain their own speed and ignore ground overlaps',()=>{
+test('all flying types accelerate to their own cruise speed and ignore ground overlaps',()=>{
  for(const type of air){const w=world(),a=w.unit(type),b=w.unit('tank_siege');a.issue({t:'move',x:1600,y:600});
-  for(let i=0;i<40;i++){const x=a.x,y=a.y;w.step();assert.ok(Math.abs(Math.hypot(a.x-x,a.y-y)-a.speed)<1e-6,type);assert.deepEqual([b.x,b.y],[600,600]);}
+  a.orders[0].x=3000;
+  for(let i=0;i<120;i++){const x=a.x,y=a.y;w.step();const moved=Math.hypot(a.x-x,a.y-y);assert.ok(moved<=a.speed+1e-6,type);if(i===0)assert.ok(moved>0&&moved<a.speed,type+' needs its DAT acceleration');if(i>=100)assert.ok(Math.abs(moved-a.speed)<1e-6,type+' cruise');assert.deepEqual([b.x,b.y],[600,600]);}
  }
 });
 test('ground speed upgrades, stim and ensnare affect actual movement and cancel correctly',()=>{
