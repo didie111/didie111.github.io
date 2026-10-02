@@ -114,7 +114,11 @@ const UI = {
   minimapAt(e) { const [wx, wy] = this.mmWorld(e); RENDER.centerOn(wx, wy); },
 
   keyDown(e) {
-    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) {
+      if (e.key === 'Escape' && this.mode && this.mode.kind === 'spawn') { this.cancelMode(); return; }
+      if (e.key === 'F10') { e.preventDefault(); this.toggleTest(); }
+      return;
+    }
     SND.init();
     this.keys[e.key] = true;
     if (e.key === 'Shift') this.keys.Shift = true;
@@ -642,11 +646,25 @@ const UI = {
       const rad = { storm: 48, dark_swarm: 80, plague: 64, emp: 64, scan: 10 * TILE }[m.s];
       if (rad) { ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.arc(wx, wy, rad, 0, 6.283); ctx.stroke(); ctx.setLineDash([]); }
     }
-    if (m && m.kind === 'spawn') {
+    if (m && m.kind === 'spawn' && this.mouse.inside && !this.mouse.overUI) {
       const t = m.type;
-      if (UNITS[t]) { const s = ART.unit(t, m.owner, Math.PI / 2, 0); ctx.globalAlpha = 0.6; ctx.drawImage(s.c, wx - s.h, wy - s.h); ctx.globalAlpha = 1; }
-      else if (BUILDINGS[t]) { const d = BUILDINGS[t], s = ART.building(t, m.owner, ''); const tx = Math.round(wx / TILE - d.w / 2), ty = Math.round(wy / TILE - d.h / 2); ctx.globalAlpha = 0.6; ctx.drawImage(s.c, (tx + d.w / 2) * TILE - s.ox, (ty + d.h / 2) * TILE - s.oy); ctx.globalAlpha = 1; }
-      ctx.fillStyle = '#fff'; ctx.font = '8px sans-serif'; ctx.fillText('×' + m.count + ' ' + (m.owner === ENEMY ? '적군' : '아군'), wx + 10, wy - 10);
+      const layout = this.spawnLayout(wx, wy);
+      ctx.globalAlpha = 0.6;
+      if (UNITS[t]) {
+        const s = ART.unit(t, m.owner, Math.PI / 2, 0);
+        for (const p of layout) {
+          ctx.drawImage(s.c, p.x - s.h, p.y - s.h);
+          ctx.strokeStyle = p.valid ? '#30ff60' : '#ff4040'; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.ellipse(p.x, p.y, UNITS[t].r, UNITS[t].r * .6, 0, 0, Math.PI * 2); ctx.stroke();
+        }
+      } else if (BUILDINGS[t]) {
+        const d = BUILDINGS[t], s = ART.building(t, m.owner, ''), p = layout[0];
+        ctx.drawImage(s.c, p.x - s.ox, p.y - s.oy);
+        ctx.fillStyle = p.valid ? 'rgba(40,255,40,0.28)' : 'rgba(255,30,30,0.4)';
+        ctx.fillRect(p.tx * TILE, p.ty * TILE, d.w * TILE, d.h * TILE);
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#fff'; ctx.font = '8px sans-serif'; ctx.fillText('×' + layout.length + ' ' + (m.owner === ENEMY ? '적군' : '아군'), wx + 10, wy - 10);
     }
     // 드래그 박스
     const dr = this.mouse.drag;
@@ -764,7 +782,8 @@ const UI = {
         <select id="t-type"><optgroup label="테란">${opts('T')}</optgroup><optgroup label="저그">${opts('Z')}</optgroup><optgroup label="프로토스">${opts('P')}</optgroup><optgroup label="건물">${bopts}</optgroup></select></div>
       <div class="row"><label>소속</label><select id="t-owner"><option value="1">적군 (저그/빨강)</option><option value="0">아군 (테란/파랑)</option></select>
         <label>수</label><input id="t-count" type="number" min="1" max="50" value="5"></div>
-      <div class="row"><button id="t-spawn">지도 클릭으로 스폰 (우클릭 종료)</button></div>
+      <div class="row"><button id="t-spawn">스폰 프리뷰 켜기 (우클릭 종료)</button></div>
+      <div class="row small">대상 선택 → 마우스 프리뷰 → 지도 클릭으로 스폰</div>
       <div class="row"><button id="t-wave">적 공격 웨이브 즉시 출격</button><button id="t-killsel">선택 유닛 제거</button></div>
       <div class="row"><label><input type="checkbox" id="t-ai" checked> 적 AI 작동</label><label><input type="checkbox" id="t-reveal"> 전체 맵 공개</label></div>
       <div class="row"><label><input type="checkbox" id="t-sandbox"> 샌드박스 (승패 없음)</label><label><input type="checkbox" id="t-snd" checked> 효과음</label></div>
@@ -775,8 +794,10 @@ const UI = {
       <div class="row small">F10 / \` : 패널 열기 · F1 : 도움말 · F9 : 일시정지</div>`;
     const $ = (id) => document.getElementById(id);
     $('t-close').onclick = () => this.toggleTest(false);
-    $('t-spawn').onclick = () => { this.setMode({ kind: 'spawn', type: $('t-type').value, owner: +$('t-owner').value, count: Math.max(1, Math.min(50, +$('t-count').value || 1)) }); this.message('지도를 클릭해 스폰하세요 (우클릭/ESC 종료)'); };
-    $('t-type').onchange = $('t-owner').onchange = $('t-count').onchange = () => { if (this.mode && this.mode.kind === 'spawn') $('t-spawn').onclick(); };
+    const preview = () => this.setMode({ kind: 'spawn', type: $('t-type').value, owner: +$('t-owner').value, count: Math.max(1, Math.min(50, Math.floor(+$('t-count').value) || 1)) });
+    $('t-spawn').onclick = () => { preview(); this.message('마우스 프리뷰 위치에 클릭해 스폰하세요 (우클릭/ESC 종료)'); };
+    $('t-type').onpointerdown = $('t-type').onchange = preview;
+    $('t-owner').onchange = $('t-count').oninput = $('t-count').onchange = () => { if (this.mode && this.mode.kind === 'spawn') preview(); };
     $('t-wave').onclick = () => { AI.forceWave(ENEMY); this.message('적 웨이브 출격!'); };
     $('t-killsel').onclick = () => { for (const e of this.selection.slice()) killEntity(e, null); };
     $('t-ai').onchange = (e) => { GAME.aiOn[ENEMY] = e.target.checked; this.message('적 AI ' + (e.target.checked ? '켜짐' : '꺼짐')); };
@@ -797,7 +818,8 @@ const UI = {
     $('t-speed').oninput = (e) => { GAME.speed = +e.target.value; $('t-spv').textContent = GAME.speed.toFixed(2).replace(/0$/, '') + 'x'; };
   },
   toggleTest(v) { this.el.test.classList.toggle('hidden', v === undefined ? !this.el.test.classList.contains('hidden') : !v); },
-  spawnAt(wx, wy) {
+  // 미리보기와 클릭 생성이 같은 좌표/배치 검사 결과를 사용한다. 엔티티를 만들지 않는다.
+  spawnLayout(wx, wy) {
     const m = this.mode;
     const t = m.type;
     if (BUILDINGS[t]) {
@@ -805,19 +827,37 @@ const UI = {
       const tx = Math.round(wx / TILE - d.w / 2), ty = Math.round(wy / TILE - d.h / 2);
       let ok = true;
       for (let y = ty; y < ty + d.h; y++) for (let x = tx; x < tx + d.w; x++) if (!inMap(x, y) || !MAP.buildable[tIdx(x, y)] || MAP.occ[tIdx(x, y)]) ok = false;
-      if (!ok) { this.message('그곳에는 배치할 수 없습니다.'); SND.play('err'); return; }
-      const b = createBuilding(t, m.owner, tx, ty, true);
-      completeBuilding(b);
-      if (d.race === 'Z') updateCreep();
-      return;
+      return [{ tx, ty, x: (tx + d.w / 2) * TILE, y: (ty + d.h / 2) * TILE, valid: ok }];
     }
     const d = UNITS[t];
     const n = m.count;
     const cols = Math.ceil(Math.sqrt(n));
     const sp = d.r * 2 + 4;
+    const layout = [];
     for (let k = 0; k < n; k++) {
       let x = wx + ((k % cols) - (cols - 1) / 2) * sp, y = wy + (Math.floor(k / cols) - (cols - 1) / 2) * sp;
-      if (!d.air && !groundPassable(tileOf(x), tileOf(y))) { const np = PF.nearestPassable(tileOf(x), tileOf(y), 5); if (!np) continue; x = np[0] * TILE + 16; y = np[1] * TILE + 16; }
+      let valid = true;
+      if (!d.air && !groundPassable(tileOf(x), tileOf(y))) {
+        const np = PF.nearestPassable(tileOf(x), tileOf(y), 5);
+        if (np) { x = np[0] * TILE + 16; y = np[1] * TILE + 16; } else valid = false;
+      }
+      layout.push({ x, y, valid });
+    }
+    return layout;
+  },
+  spawnAt(wx, wy) {
+    const m = this.mode, t = m.type, layout = this.spawnLayout(wx, wy);
+    if (BUILDINGS[t]) {
+      const p = layout[0], d = BUILDINGS[t];
+      if (!p.valid) { this.message('그곳에는 배치할 수 없습니다.'); SND.play('err'); return; }
+      const b = createBuilding(t, m.owner, p.tx, p.ty, true);
+      completeBuilding(b);
+      if (d.race === 'Z') updateCreep();
+      return;
+    }
+    const d = UNITS[t];
+    for (const { x, y, valid } of layout) {
+      if (!valid) continue;
       const u = createUnit(t, m.owner, x, y);
       if (d.mines) u.mines = 3;
       fx('warp', x, y, { life: 12, w: d.r, h: d.r });

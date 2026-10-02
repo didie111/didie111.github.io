@@ -388,16 +388,20 @@ function recoverGround(e, blockers) {
   let state = e.groundRecovery;
   if (!state && !overlaps.length) return false;
   if (!state) state = e.groundRecovery = { phase: 'check' };
-  const requestedAngle = e.moving ? Math.atan2(e.vy, e.vx) : e.dir || 0;
+  const requestedAngle = state.heading ?? (e.moving ? Math.atan2(e.vy, e.vx) : e.dir || 0);
   e.vx = 0; e.vy = 0;
   const rr = Math.max(3, e.r * 0.75);
-  const newlyBlocked = (x, y) => !PF.unitsClear(e.x, e.y, x, y, e.r, blockers.filter(o => !overlaps.includes(o)));
+  // MoveToLegal에서 기존 겹침 상대와 이동 명령을 수행 중인 몸체 때문에
+  // 짧은 경로를 매 틱 다시 고르지 않는다. 새 대기 몸체는 계속 장애물이다.
+  const movingBody = o => !collisionFixed(o) && collisionMover(o);
+  const newlyBlocked = (x, y) => !PF.unitsClear(e.x, e.y, x, y, e.r,
+    blockers.filter(o => !overlaps.includes(o) && !movingBody(o)));
   if (state.phase === 'move') {
     const dx = state.x - e.x, dy = state.y - e.y, distance = Math.hypot(dx, dy);
     if (distance > 1e-6) {
       const step = Math.min(speed, distance), x = e.x + dx / distance * step, y = e.y + dy / distance * step;
       if (PF.lineClear(e.x, e.y, x, y, rr, 0) && !newlyBlocked(x, y)) {
-        e.vx = x - e.x; e.vy = y - e.y; e.dir = Math.atan2(dy, dx); return true;
+        e.vx = x - e.x; e.vy = y - e.y; state.heading = e.dir = Math.atan2(dy, dx); return true;
       }
     }
     state.phase = 'check'; // 도착 또는 새 장애물: 다음 검사에서 탈출 지점을 다시 선택한다.
@@ -423,23 +427,26 @@ function recoverGround(e, blockers) {
     }
   }
   if (!target) {
-    const penetration = (x, y) => overlaps.reduce((sum, o) => sum + Math.max(0, (e.r + o.r) * .85 - Math.hypot(x - o.x, y - o.y)) ** 2, 0);
-    let bestScore = penetration(e.x, e.y);
     const base = requestedAngle + recoveryRand(-3, 3) * Math.PI / 8, length = recoveryRand(2, 4) * 4;
-    // CheckIllegal의 짧은 대체 지점을 선택한다. 막힌 후보는 현재 지형·몸체로 검사한다.
-    for (let i = 0; i < 16; i++) {
-      const angle = base + i * Math.PI / 8, x = e.x + Math.cos(angle) * length, y = e.y + Math.sin(angle) * length;
-      if (!PF.lineClear(e.x, e.y, x, y, rr, 0) || newlyBlocked(x, y)) continue;
-      const score = penetration(x, y);
-      if (score < bestScore - 1e-8) { bestScore = score; target = [x, y]; }
-    }
-    // 원형 몸체·새 겹침 금지 때문에 8..16px 후보가 모두 막힐 때도 작은 틈으로
-    // 접근할 수 있다. 이 후보도 지점을 선택한 뒤 다음 이동 단계에서 실행한다.
-    if (!target) for (let i = 0; i < 16; i++) for (const step of [speed, speed / 2, speed / 4]) {
-      const angle = base + i * Math.PI / 8, x = e.x + Math.cos(angle) * step, y = e.y + Math.sin(angle) * step;
-      if (!PF.lineClear(e.x, e.y, x, y, rr, 0) || newlyBlocked(x, y)) continue;
-      const score = penetration(x, y);
-      if (score < bestScore - 1e-8) { bestScore = score; target = [x, y]; }
+    let x = e.x + Math.cos(base) * length, y = e.y + Math.sin(base) * length;
+    // OpenBW는 한 후보를 검사한 뒤 대체 후보로 넘어간다. 16방향 중 겹침이
+    // 가장 빨리 줄어드는 방향을 고르면 군집이 즉시 바깥으로 퍼져 버린다.
+    if (legal(x, y)) target = [x, y];
+    else {
+      const order = e.orders[0], goalX = order && Number.isFinite(order.x) ? order.x : e.x,
+        goalY = order && Number.isFinite(order.y) ? order.y : e.y;
+      if (Math.hypot(goalX - e.x, goalY - e.y) <= 32 || recoveryRand(0, 31) >= 24) {
+        x = e.x + 16 * recoveryRand(-2, 2); y = e.y + 16 * recoveryRand(-2, 2);
+      } else {
+        const angle = Math.atan2(goalY - e.y, goalX - e.x) + recoveryRand(-1, 1) * Math.PI / 8,
+          distance = 8 + recoveryRand(0, 2) * 4;
+        x = e.x + Math.cos(angle) * distance; y = e.y + Math.sin(angle) * distance;
+      }
+      // 움직일 수 있는 기존 겹침 상대가 남은 지점도 짧은 이동 후 다시 검사한다.
+      // 지형·고정 몸체·겹치지 않은 새 몸체를 뚫는 이동은 허용하지 않는다.
+      const fixedBlocked = blockers.some(o => collisionFixed(o) && Math.hypot(x - o.x, y - o.y) < (e.r + o.r) * .85);
+      if (Math.hypot(x - e.x, y - e.y) > 1e-6 && PF.positionClear(x, y, rr, 0) &&
+          PF.lineClear(e.x, e.y, x, y, rr, 0) && !fixedBlocked && !newlyBlocked(x, y)) target = [x, y];
     }
   }
   if (target) { state.phase = 'move'; [state.x, state.y] = target; }

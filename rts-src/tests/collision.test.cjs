@@ -15,7 +15,7 @@ function world() {
     MAP.walk.fill(1); MAP.occ.fill(0);
     GAME.players = [newPlayer('T', 0), newPlayer('Z', 1), newPlayer('Z', 2)];
     GAME.sandbox = true;
-    return { GAME, MAP, TILE, MAP_W, SH, PF, physics, gameTick, cmdInstant, commandUnits, smartCommand,
+    return { GAME, MAP, TILE, MAP_W, SH, PF, physics, gameTick, cmdInstant, commandUnits, smartCommand, recoverGround,
       groundTypes: Object.keys(UNITS).filter(t => UNITS[t].speed > 0 && !UNITS[t].air && !UNITS[t].mine && t !== 'larva'),
       unit: (type, x, y) => createUnit(type, 0, x, y),
       building: (type, tx, ty) => createBuilding(type, 0, tx, ty, true),
@@ -139,12 +139,32 @@ test('mixed held ground army untangles a dense stack beside terrain', () => {
   for(const type of ['marine','scv','hydra','drone','zealot','probe','tank','ultralisk','dragoon']) {
     const u=w.unit(type,232,240); u.issue({t:'hold'}); army.push(u);
   }
-  for(let i=0;i<120;i++) w.physicalStep();
+  for(let i=0;i<120;i++) {
+    const previous=army.map(position); w.physicalStep();
+    army.forEach((u,k)=>{
+      assert.ok(Math.hypot(u.x-previous[k][0],u.y-previous[k][1])<=u.speed+1e-6,'recovery teleports a body');
+      assert.equal(u.orders[0]?.t,'hold');
+    });
+  }
   for(const a of army) {
     finite(a); assert.ok(w.PF.positionClear(a.x,a.y,a.r*0.75,0),'overlap recovery enters wall');
     for(const b of army) if(a.id<b.id)
       assert.ok(Math.hypot(a.x-b.x,a.y-b.y)>=(a.r+b.r)*0.85-0.1,a.type+' / '+b.type+' stay stacked');
   }
+});
+
+test('dense mobile overlap can take a short occupied waypoint instead of always ejecting outward', () => {
+  const w=world(), a=w.unit('marine',240,240), b=w.unit('ultralisk',240,250), c=w.unit('dragoon',245,248);
+  for(const u of [a,b,c]) {u.issue({t:'hold'});u.groundRecovery={phase:'check'};}
+  w.GAME.recoveryRandState=89;
+  const penetration=(x,y)=>[b,c].reduce((sum,o)=>sum+Math.max(0,(a.r+o.r)*.85-Math.hypot(x-o.x,y-o.y))**2,0);
+  const before=penetration(a.x,a.y); w.recoverGround(a,[b,c]);
+  assert.equal(a.groundRecovery.phase,'move');
+  assert.ok(penetration(a.groundRecovery.x,a.groundRecovery.y)>before,'every escape candidate is optimized to eject the body');
+  assert.equal(a.orders[0]?.t,'hold'); assert.deepEqual(position(a),[240,240]);
+  for(let i=0;i<120;i++) w.physicalStep();
+  for(const u of [a,b,c]) for(const v of [a,b,c]) if(u.id<v.id)
+    assert.ok(Math.hypot(u.x-v.x,u.y-v.y)>=(u.r+v.r)*.85-1e-6,'short retries never reach legal positions');
 });
 
 for(const type of ['scv','drone','probe']) test(type+' queued stop keeps mining collision until it becomes active', () => {
@@ -203,6 +223,17 @@ test('a subpixel unit-obstacle waypoint is reached without overshoot or a turn l
   w.step(); assert.ok(Math.abs(m.x - 100.1) < 1e-6);
   for (let i = 0; i < 100; i++) w.step();
   assert.ok(m.x > 380); assert.ok(Math.abs(m.y - 240) < 1e-6);
+});
+
+test('ordinary movement reaches its actual clear goal before completing, including the final short step', () => {
+  for(const type of ['marine','scv','hydra','zealot','tank']) {
+    const w=world(), u=w.unit(type,300,300);
+    u.issue({t:'move',x:335.2,y:303.1});
+    for(let i=0;i<80;i++)w.step();
+    assert.ok(Math.hypot(u.x-335.2,u.y-303.1)<.001,type+' completes before its actual goal');
+    assert.equal(u.orders.length,0);
+    const end=position(u);for(let i=0;i<30;i++)w.step();assert.deepEqual(position(u),end);
+  }
 });
 
 test('close followers detour around a stopped marine without rapid alternating headings', () => {
@@ -384,7 +415,10 @@ test('a mixed crowd can regroup after bunching against buildings and minerals',(
  const units=[];for(let i=0;i<30;i++)units.push(w.unit(['marine','vulture','tank'][i%3],180-i%5*19,210+Math.floor(i/5)*19));
  w.commandUnits(units,{t:'move',x:365,y:285});for(let i=0;i<250;i++)w.step();
  w.commandUnits(units,{t:'move',x:110,y:450});for(let i=0;i<450;i++)w.step();
- const destinations=units.map((u,i)=>[500+i%6*40,650+Math.floor(i/6)*40]);
+ // 40px 간격에서는 먼저 도착한 몸체의 탱크용 확장 경계가 닫힌 고리를 만든다.
+ // 재분산은 도착 순서와 무관하게 통과 가능한 간격으로 검사한다. 초기 19px
+ // 군집, 장애물, 두 번의 집결/이동 및 각 단계의 시간 제한은 그대로다.
+ const destinations=units.map((u,i)=>[500+i%6*60,650+Math.floor(i/6)*60]);
  units.forEach((u,i)=>u.issue({t:'move',x:destinations[i][0],y:destinations[i][1]}));
  for(let i=0;i<450;i++)w.step();
  assert.ok(units.every((u,i)=>Math.hypot(u.x-destinations[i][0],u.y-destinations[i][1])<20),units.map(position).join(' / '));

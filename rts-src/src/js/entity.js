@@ -362,7 +362,7 @@ class Entity {
 
   // ---------- 이동 ----------
   moveGroup(o) {
-    const arr = o.arrive || 8;
+    const arr = o.arrive ?? .001;
     // UM_FixCollision state 2: 충돌한 몸체가 실제 목표를 점유하면 접촉에서
     // 멈춘다. 전속력·반·사분의 일 접근 뒤 남는 거리만 허용하므로 먼 동료에게
     // 도착 처리를 전파하지 않는다. 이미 겹친 몸체는 먼저 탈출해야 한다.
@@ -438,7 +438,7 @@ class Entity {
       if (this.path.goalBlocker && this.pi === this.path.length - 1 && dist(this.x, this.y, wx, wy) < 0.001) {
         this.path = null; this.vx = 0; this.vy = 0; return true;
       }
-      if (!this.path.goalBlocker && this.pi === this.path.length - 1 && dist(this.x, this.y, wx, wy) < Math.max(4, sp)) {
+      if (!this.pathExact && !this.path.goalBlocker && this.pi === this.path.length - 1 && dist(this.x, this.y, wx, wy) < Math.max(4, sp)) {
         // 목적지가 막혀 있어 더 못 가는 경우
         if (d > arrive) {
           this.path = null;
