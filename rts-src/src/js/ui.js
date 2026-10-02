@@ -148,19 +148,41 @@ const UI = {
     const arrow = (col) => (g) => { g.fillStyle = col; g.strokeStyle = '#000'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(2, 2); g.lineTo(2, 20); g.lineTo(7, 15); g.lineTo(11, 23); g.lineTo(14, 21); g.lineTo(10, 14); g.lineTo(17, 14); g.closePath(); g.fill(); g.stroke(); };
     const cross = (col) => (g) => { g.strokeStyle = '#000'; g.lineWidth = 4; g.beginPath(); g.arc(16, 16, 9, 0, 6.283); g.moveTo(16, 2); g.lineTo(16, 10); g.moveTo(16, 22); g.lineTo(16, 30); g.moveTo(2, 16); g.lineTo(10, 16); g.moveTo(22, 16); g.lineTo(30, 16); g.stroke(); g.strokeStyle = col; g.lineWidth = 2; g.stroke(); };
     const mag = (col) => (g) => { g.strokeStyle = '#000'; g.lineWidth = 4; g.beginPath(); g.arc(13, 13, 8, 0, 6.283); g.moveTo(19, 19); g.lineTo(28, 28); g.stroke(); g.strokeStyle = col; g.lineWidth = 2; g.stroke(); };
+    const move = (g) => {
+      g.strokeStyle = '#000'; g.lineWidth = 5; g.beginPath();
+      g.moveTo(16, 3); g.lineTo(16, 29); g.moveTo(3, 16); g.lineTo(29, 16);
+      for (const [x, y, ax, ay, bx, by] of [[16,3,11,8,21,8],[16,29,11,24,21,24],[3,16,8,11,8,21],[29,16,24,11,24,21]]) {
+        g.moveTo(ax, ay); g.lineTo(x, y); g.lineTo(bx, by);
+      }
+      g.stroke(); g.strokeStyle = '#a0c8ff'; g.lineWidth = 2; g.stroke();
+    };
+    const grabbing = (g) => {
+      g.fillStyle = '#a0c8ff'; g.strokeStyle = '#000'; g.lineWidth = 2; g.beginPath();
+      for (const [i, p] of [[9,22],[5,17],[5,13],[9,13],[11,16],[11,9],[15,9],[15,7],[19,7],[19,8],[23,8],[23,10],[27,10],[27,22],[23,28],[13,28]].entries()) {
+        if (i) g.lineTo(...p); else g.moveTo(...p);
+      }
+      g.closePath(); g.fill(); g.stroke();
+      g.beginPath(); g.moveTo(15,11); g.lineTo(15,16); g.moveTo(19,11); g.lineTo(19,16); g.moveTo(23,12); g.lineTo(23,17); g.stroke();
+    };
     this.cur = { normal: mkc(arrow('#30e030'), 2, 2), tg: mkc(cross('#30e030'), 16, 16), ty: mkc(cross('#e0e030'), 16, 16), tr: mkc(cross('#e03030'), 16, 16),
-      mg: mkc(mag('#30e030'), 13, 13), my: mkc(mag('#e0e030'), 13, 13), mr: mkc(mag('#e03030'), 13, 13) };
+      mg: mkc(mag('#30e030'), 13, 13), my: mkc(mag('#e0e030'), 13, 13), mr: mkc(mag('#e03030'), 13, 13),
+      move: mkc(move, 16, 16), grabbing: mkc(grabbing, 16, 16) };
     document.body.style.cursor = this.cur.normal;
   },
   updateCursor() {
     if (!this.cur) return;
     let c = this.cur.normal;
     const h = this.hover;
+    const locked = this.pointerLocked(), hit = locked ? document.elementFromPoint(this.mouse.x, this.mouse.y) : null;
+    const overUI = locked ? hit !== this.el.cv : this.mouse.overUI;
     const col = (e) => !e ? 'g' : e.owner === GAME.control ? 'g' : e.owner === NEUTRAL ? 'y' : 'r';
-    if (this.mode && this.mode.kind === 'target') c = this.cur['t' + col(h)];
-    else if (!this.mouse.overUI && h) c = this.cur['m' + col(h)];
+    // Pointer lock hides the native CSS cursor; mirror title hover/capture with our image.
+    if (locked && this.testDrag?.locked) c = this.cur.grabbing;
+    else if (hit?.closest('#t-drag') && !hit.closest('button')) c = this.cur.move;
+    else if (!overUI && this.mode && this.mode.kind === 'target') c = this.cur['t' + col(h)];
+    else if (!overUI && h) c = this.cur['m' + col(h)];
     if (this._cur !== c) { this._cur = c; this.el.cv.style.cursor = c; }
-    if (this.pointerLocked() && this.el.pointerCursor) {
+    if (locked && this.el.pointerCursor) {
       const icon = this.cursorImages.get(c), image = this.el.pointerCursor;
       if (image.src !== icon.src) image.src = icon.src;
       image.style.left = (this.mouse.x - icon.hx) + 'px'; image.style.top = (this.mouse.y - icon.hy) + 'px';
@@ -1151,6 +1173,7 @@ const UI = {
     this.closeMenuSelect(); this.positionTestPanel(); this.mouse.drag = null; this.mmDrag = false;
     this.testDrag = {id, header, x, y, left:this.testPosition.x, top:this.testPosition.y, locked};
     this.el.test.classList.add('dragging'); if (!locked) header.setPointerCapture(id);
+    this.updateCursor();
   },
   moveTestDrag(x, y) {
     const d = this.testDrag; if (d) this.positionTestPanel(d.left + x - d.x, d.top + y - d.y);
@@ -1160,6 +1183,7 @@ const UI = {
     if (!d) return;
     this.testDrag = null; this.el.test.classList.remove('dragging');
     if (!d.locked && d.header.hasPointerCapture(d.id)) d.header.releasePointerCapture(d.id);
+    this.updateCursor();
   },
   toggleTest(v) {
     const show = v === undefined ? this.el.test.classList.contains('hidden') : v;
@@ -1168,6 +1192,7 @@ const UI = {
     this.el.test.classList.toggle('hidden', !show);
     this.updateMouseLockButton();
     if (show) this.positionTestPanel();
+    this.updateCursor();
   },
   toggleHelp(v) {
     const show = v === undefined ? this.el.help.classList.contains('hidden') : v;

@@ -68,6 +68,24 @@ function camera() {
   };
 }
 function near(a, b) { assert.ok(Math.abs(a - b) < 1e-6, `${a} != ${b}`); }
+function cursorCamera() {
+  const c = camera(), create = c.document.createElement;
+  let image = 0;
+  c.document.createElement = tag => {
+    const node = create(tag);
+    if (tag === 'canvas') {
+      node.getContext = () => ({beginPath(){},moveTo(){},lineTo(){},closePath(){},fill(){},stroke(){},arc(){}});
+      node.toDataURL = () => 'data:image/mock,' + image++;
+    }
+    return node;
+  };
+  c.UI.makeCursors(); c.UI.bindInput(); c.UI.toggleMouseLock(); c.UI.toggleTest(true);
+  c.setGame('RENDER.resize=()=>{}');
+  c.UI.el.test.style = {};
+  c.UI.el.test.getBoundingClientRect = () => ({width:300,height:150});
+  c.UI.testPosition = {x:12,y:160};
+  return c;
+}
 
 test('camera responds inside all four edges without touching the browser border', () => {
   for (const [x, y, axis, sign] of [[20,400,'x',-1],[980,400,'x',1],[500,20,'y',-1],[500,795,'y',1]]) {
@@ -267,6 +285,38 @@ test('locked title dragging moves and clamps the same F10 panel without pointer 
  c.windowEvents.mousemove({movementX:2000,movementY:2000,target:c.canvas});assert.equal(c.UI.testPosition.x,688);assert.equal(c.UI.testPosition.y,466);
  c.windowEvents.mouseup({button:0,isTrusted:true});assert.equal(c.UI.testDrag,null);assert.equal(c.UI.mouse.drag,null);
  assert.equal(c.document.pointerLockElement,c.canvas);
+});
+test('locked F10 title hover changes the visible cursor, including nested text and active targeting',()=>{
+ const c=cursorCamera(),header=c.node('div'),text=c.node('small');header.id='t-drag';header.appendChild(text);
+ c.hit(c.canvas);c.UI.updateCursor();const normal=c.UI.el.pointerCursor.src;
+ c.UI.mode={kind:'target'};c.hit(text);c.windowEvents.mousemove({movementX:10,movementY:0,target:c.canvas});
+ const move=c.UI.el.pointerCursor.src;assert.notEqual(move,normal);assert.equal(move,c.UI.cursorImages.get(c.UI.cur.move).src);
+ assert.equal(c.UI.el.pointerCursor.style.left,(c.UI.mouse.x-16)+'px');assert.equal(c.UI.el.pointerCursor.style.top,(c.UI.mouse.y-16)+'px');
+ const close=c.node('button');header.appendChild(close);c.hit(close);c.windowEvents.mousemove({movementX:0,movementY:0,target:c.canvas});
+ assert.equal(c.UI.el.pointerCursor.src,normal,'the close button is not the draggable title');
+ assert.equal(c.document.pointerLockElement,c.canvas);
+});
+test('locked F10 drag shows grabbing immediately, keeps it outside the title and restores on release',()=>{
+ const c=cursorCamera(),header=c.node('div');header.id='t-drag';c.hit(header);c.UI.updateCursor();const move=c.UI.el.pointerCursor.src;
+ c.canvasEvents.mousedown({button:0,preventDefault(){}});const grabbing=c.UI.el.pointerCursor.src;
+ assert.notEqual(grabbing,move);assert.equal(grabbing,c.UI.cursorImages.get(c.UI.cur.grabbing).src);
+ c.hit(c.canvas);c.windowEvents.mousemove({movementX:100,movementY:80,target:c.canvas});assert.equal(c.UI.el.pointerCursor.src,grabbing);
+ c.windowEvents.mouseup({button:0,isTrusted:true});assert.equal(c.UI.el.pointerCursor.src,c.UI.cursorImages.get(c.UI.cur.normal).src);
+ c.hit(header);c.UI.updateCursor();c.canvasEvents.mousedown({button:0,preventDefault(){}});c.windowEvents.mouseup({button:0,isTrusted:true});
+ assert.equal(c.UI.el.pointerCursor.src,move,'release over the title restores its move cursor');
+ assert.equal(c.document.pointerLockElement,c.canvas);assert.equal(c.UI.mouse.drag,null);
+});
+test('closing or cancelling a locked F10 drag clears the grabbing cursor without a relock',()=>{
+ for(const action of ['close','resize','unlock']){
+  const c=cursorCamera(),header=c.node('div');header.id='t-drag';c.hit(header);c.UI.updateCursor();
+  c.canvasEvents.mousedown({button:0,preventDefault(){}});c.hit(c.canvas);
+  if(action==='close')c.UI.toggleTest(false);
+  else if(action==='resize')c.windowEvents.resize();
+  else c.UI.releaseMouse();
+  assert.equal(c.UI.testDrag,null,action);assert.equal(c.UI.el.pointerCursor.src,c.UI.cursorImages.get(c.UI.cur.normal).src,action);
+  assert.equal(c.document.pointerLockElement,action==='unlock'?null:c.canvas,action);
+  if(action==='unlock')assert.equal(c.UI.el.pointerCursor.classList.contains('hidden'),true);
+ }
 });
 function picker(c){
  const row=c.node('div'),select=c.node('select');select.id='t-type';select.value='scv';row.appendChild(select);
