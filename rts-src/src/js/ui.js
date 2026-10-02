@@ -8,7 +8,7 @@ const UI = {
   groups: [], lastGroup: { k: -1, t: 0 }, clicks: [], pings: [], lastAlert: null, alertT: -9999,
   mouse: { x: 0, y: 0, wx: 0, wy: 0, inside: false, drag: null, overUI: false },
   cardSig: '', infoSig: '', card: [], lastClick: { t: 0, id: 0 },
-  lockWanted: false, lockPending: false, lockActive: false, lockMenuExit: false, lockRequestId: 0,
+  lockWanted: false, lockPending: false, lockActive: false, lockRequestId: 0,
   el: {},
 
   init() {
@@ -43,61 +43,51 @@ const UI = {
     const button = this.el.mouseLock;
     if (!button) return;
     const enabled = this.lockWanted || this.pointerLocked();
-    button.textContent = !enabled ? '마우스 고정' : this.pointerMenuOpen() ? '마우스 고정 (메뉴 중)' : this.pointerLocked() ? '마우스 해제 (Esc)' : '마우스 고정 (복귀 대기)';
+    button.textContent = !enabled ? '마우스 고정' : this.pointerLocked() ? '마우스 해제 (Esc)' : '마우스 고정 (연결 중)';
     button.classList.toggle('on', enabled); button.setAttribute('aria-pressed', String(enabled));
   },
   releaseMouse() {
-    this.lockWanted = false; this.lockMenuExit = false;
+    this.lockWanted = false;
+    this.closeMenuSelect(); this.finishTestDrag(); this.lockedInputDrag = null;
     if (this.pointerLocked()) document.exitPointerLock?.();
     this.updateMouseLockButton();
   },
   toggleMouseLock() {
     if (this.lockWanted || this.pointerLocked()) { this.releaseMouse(); return; }
     if (!GAME.running || GAME.over || this.lockPending) return;
-    // Native selects and dragging need the ordinary pointer. Lock only the play area.
-    if (this.el.test && !this.el.test.classList.contains('hidden')) this.toggleTest(false);
-    if (this.el.help && !this.el.help.classList.contains('hidden')) this.toggleHelp(false);
-    this.requestMouseLock(false);
+    this.requestMouseLock();
   },
-  requestMouseLock(resume) {
-    if (!GAME.running || GAME.over || document.hidden || document.hasFocus?.() === false || this.pointerMenuOpen() || this.pointerLocked() || this.lockPending) return;
+  requestMouseLock() {
+    if (!GAME.running || GAME.over || document.hidden || document.hasFocus?.() === false || this.pointerLocked() || this.lockPending) return;
     if (!this.el.cv.requestPointerLock) { this.message('이 브라우저는 마우스 고정을 지원하지 않습니다.'); return; }
     document.activeElement?.blur?.();
-    this.lockWanted = true; this.lockPending = true; this.lockError = false; this.lockResumeRequest = resume;
+    this.lockWanted = true; this.lockPending = true; this.lockError = false;
     const id = ++this.lockRequestId;
     const fail = () => { if (id === this.lockRequestId && this.lockPending) this.pointerLockFailed(); };
     this.updateMouseLockButton();
     try { const request = this.el.cv.requestPointerLock(); request?.catch(fail); } catch { fail(); }
   },
   pointerLockFailed() {
-    this.lockPending = false;
-    if (!this.lockResumeRequest) this.lockWanted = false;
+    const wanted = this.lockWanted;
+    this.lockPending = false; this.lockWanted = false;
     this.updateMouseLockButton();
-    if (!this.lockError) {
+    if (wanted && !this.lockError) {
       this.lockError = true;
-      this.message(this.lockWanted ? '마우스 고정 복귀를 기다립니다. 게임 화면을 클릭하면 다시 고정됩니다.' : '마우스 고정을 시작하지 못했습니다. 버튼을 다시 눌러주세요.');
+      this.message('마우스 고정을 시작하지 못했습니다. 버튼을 다시 눌러주세요.');
     }
-  },
-  syncMenuPointer() {
-    if (this.pointerMenuOpen()) {
-      if (this.pointerLocked()) { this.lockMenuExit = true; document.exitPointerLock?.(); }
-    } else if (this.lockWanted) this.requestMouseLock(true);
-    this.updateMouseLockButton();
   },
   pointerLockChanged() {
     const locked = this.pointerLocked();
-    const wasActive = this.lockActive, menuExit = this.lockMenuExit;
+    const wasActive = this.lockActive;
     this.lockActive = locked;
     if (locked) {
       this.lockPending = false; this.lockError = false;
-      // A late request must not trap a menu or undo an explicit Esc/blur release.
-      if (!this.lockWanted || this.pointerMenuOpen()) {
-        this.lockMenuExit = this.lockWanted && this.pointerMenuOpen();
-        document.exitPointerLock?.(); return;
-      }
+      // Keep F10/help inside pointer lock; only honor an explicit release of a late request.
+      if (!this.lockWanted) { document.exitPointerLock?.(); return; }
     } else {
-      this.lockMenuExit = false;
-      if (wasActive) { this.lockPending = false; if (!menuExit) this.lockWanted = false; }
+      if (wasActive) { this.lockPending = false; this.lockWanted = false; }
+      this.closeMenuSelect(); this.finishTestDrag(); this.lockedInputDrag = null;
+      this.updateLockedHover(null);
     }
     this.keys = {}; this.mouse.drag = null; this.mmDrag = false; this.lockedTarget = null;
     this.mouse.inside = locked;
@@ -108,22 +98,47 @@ const UI = {
     this.el.pointerCursor?.classList.toggle('hidden', !locked);
     this.updateMouseLockButton();
     this.updateCursor();
-    if (!locked && menuExit && this.lockWanted && !this.pointerMenuOpen()) this.requestMouseLock(true);
   },
   routeLockedDown(e) {
     if (!this.pointerLocked()) return false;
     const hit = document.elementFromPoint(this.mouse.x, this.mouse.y);
-    if (!hit || hit === this.el.cv) return false;
-    if (hit.closest('#test,#help')) { e.preventDefault(); this.syncMenuPointer(); return true; }
-    const target = hit.closest('button,input,select,label,.btn,.wf,.qs,#minimap') || hit;
-    if (e.button === 0 && target.id === 'hud-f10') {
-      e.preventDefault(); this.toggleTest(true); return true;
+    if (this.menuSelect && !this.menuSelect.popup.contains(hit) && !this.menuSelect.trigger.contains(hit)) {
+      this.closeMenuSelect(); e.preventDefault(); return true;
     }
-    this.lockedTarget = target; e.preventDefault();
+    if (!hit || hit === this.el.cv) { document.activeElement?.blur?.(); return false; }
+    const target = hit.closest('button,input,select,label,.btn,.wf,.qs,#minimap') || hit;
+    e.preventDefault();
+    if (e.button === 0) {
+      const header = hit.closest('#t-drag');
+      if (header && !hit.closest('button')) { this.beginTestDrag(header, this.mouse.x, this.mouse.y, null, true); return true; }
+      if (target.tagName === 'INPUT' && target.type === 'range') {
+        this.lockedInputDrag = target; target.focus?.({preventScroll:true}); this.rangeAtPointer(target); return true;
+      }
+      if (target.tagName === 'INPUT' && target.type === 'number') {
+        target.focus?.({preventScroll:true}); try { target.select?.(); } catch {} return true;
+      }
+    }
+    if (e.button !== 0 && hit.closest('#test,#help,#menu-select-popup')) return true;
+    this.lockedTarget = target;
+    target.focus?.({preventScroll:true});
     target.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true,
       clientX:this.mouse.x, clientY:this.mouse.y, button:e.button, buttons:e.buttons,
       shiftKey:e.shiftKey, ctrlKey:e.ctrlKey, altKey:e.altKey, metaKey:e.metaKey}));
     return true;
+  },
+  rangeAtPointer(input) {
+    const r = input.getBoundingClientRect(), min = +(input.min || 0), max = +(input.max || 100), step = +(input.step || 1);
+    const raw = min + Math.max(0, Math.min(1, (this.mouse.x - r.left) / Math.max(1, r.width))) * (max - min);
+    input.value = String(Math.max(min, Math.min(max, min + Math.round((raw - min) / step) * step)));
+    input.dispatchEvent(new Event('input', {bubbles:true}));
+  },
+  updateLockedHover(hit) {
+    const target = hit?.closest('button,input,label,.btn,.wf,.qs') || null;
+    if (target === this.lockedHover) return;
+    this.lockedHover?.classList?.remove('locked-hover');
+    this.lockedHover?.dispatchEvent?.(new MouseEvent('mouseleave'));
+    this.lockedHover = target;
+    target?.classList?.add('locked-hover'); target?.dispatchEvent?.(new MouseEvent('mouseenter'));
   },
 
   // ---------------- 커서 ----------------
@@ -164,7 +179,11 @@ const UI = {
       this.mouse.inside = true;
       this.mouse.overUI = (locked ? document.elementFromPoint(this.mouse.x, this.mouse.y) : e.target) !== cv;
       if (this.mmDrag) this.minimapAt(this.pointerAt(e), true);
-      if (locked) this.updateCursor();
+      if (locked) {
+        if (this.testDrag?.locked) this.moveTestDrag(this.mouse.x, this.mouse.y);
+        if (this.lockedInputDrag) this.rangeAtPointer(this.lockedInputDrag);
+        this.updateLockedHover(document.elementFromPoint(this.mouse.x, this.mouse.y)); this.updateCursor();
+      }
     });
     document.addEventListener('mouseleave', () => { if (!this.pointerLocked()) this.mouse.inside = false; });
     document.addEventListener('pointerlockchange', () => this.pointerLockChanged());
@@ -172,7 +191,7 @@ const UI = {
     cv.addEventListener('mousedown', (e) => {
       SND.init();
       if (this.lockWanted && !this.pointerLocked() && !this.pointerMenuOpen() && e.isTrusted !== false) {
-        this.requestMouseLock(true); e.preventDefault(); return;
+        this.requestMouseLock(); e.preventDefault(); return;
       }
       if (this.routeLockedDown(e)) return;
       const p = this.pointerAt(e), [wx, wy] = RENDER.toWorld(p.clientX, p.clientY);
@@ -186,6 +205,11 @@ const UI = {
     });
     window.addEventListener('mouseup', (e) => {
       if (this.pointerLocked() && e.isTrusted === false) return;
+      if (this.pointerLocked() && this.testDrag?.locked) { this.finishTestDrag(); return; }
+      if (this.pointerLocked() && this.lockedInputDrag) {
+        const input = this.lockedInputDrag; this.lockedInputDrag = null;
+        input.dispatchEvent(new Event('change', {bubbles:true})); return;
+      }
       if (this.pointerLocked() && this.lockedTarget) {
         const target = this.lockedTarget; this.lockedTarget = null;
         const hit = document.elementFromPoint(this.mouse.x, this.mouse.y);
@@ -203,7 +227,11 @@ const UI = {
     });
     cv.addEventListener('wheel', (e) => {
       e.preventDefault();
-      if (this.mouse.overUI && this.pointerLocked()) return;
+      if (this.pointerLocked()) {
+        const panel = document.elementFromPoint(this.mouse.x, this.mouse.y)?.closest('#menu-select-popup,#test,#help');
+        if (panel) { panel.scrollTop += e.deltaY; return; }
+        if (this.mouse.overUI) return;
+      }
       const steps = [1, 1.25, 1.5, 2, 2.5, 3];
       let i = steps.indexOf(VIEW.scale); if (i < 0) i = 3;
       i = Math.max(0, Math.min(steps.length - 1, i + (e.deltaY > 0 ? -1 : 1)));
@@ -221,6 +249,9 @@ const UI = {
       } else if (e.button === 2) { const [wx, wy] = this.mmWorld(e); if (this.mode) { this.cancelMode(); return; } this.rightClick(wx, wy, null, e.shiftKey); }
     });
     window.addEventListener('keydown', (e) => this.keyDown(e));
+    document.addEventListener('mousedown', (e) => {
+      if (!this.pointerLocked() && this.menuSelect && !this.menuSelect.popup.contains(e.target) && !this.menuSelect.trigger.contains(e.target)) this.closeMenuSelect();
+    });
     window.addEventListener('keyup', (e) => { this.keys[e.key] = false; if (e.key === 'Shift') this.keys.Shift = false; if (e.key === 'Alt') this.keys.Alt = false; });
     const loseFocus = () => { this.releaseMouse(); this.finishTestDrag(); this.keys = {}; this.mouse.inside = false; this.mouse.drag = null; this.mmDrag = false; this.lockedTarget = null; };
     window.addEventListener('blur', loseFocus);
@@ -237,9 +268,11 @@ const UI = {
     if (e.key === 'Escape' && (this.pointerLocked() || this.lockWanted)) {
       const locked = this.pointerLocked(); this.releaseMouse(); if (locked) return;
     }
+    if (this.menuSelect && this.menuSelectKey(e)) return;
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) {
       if (e.key === 'Escape' && this.mode && this.mode.kind === 'spawn') { this.cancelMode(); return; }
       if (e.key === 'F10') { e.preventDefault(); this.toggleTest(); }
+      if (e.key === 'F1') { e.preventDefault(); this.toggleHelp(); }
       return;
     }
     SND.init();
@@ -250,6 +283,7 @@ const UI = {
     if (k === 'F10' || k === '`') { e.preventDefault(); this.toggleTest(); return; }
     if (k === 'F1') { e.preventDefault(); this.toggleHelp(); return; }
     if (k === 'F9' || k === 'Pause') { e.preventDefault(); GAME.paused = !GAME.paused; this.message(GAME.paused ? '일시 정지' : '게임 재개'); return; }
+    if (e.target?.closest?.('#test,#help,#menu-select-popup') && k !== 'Escape') return;
     if (k === 'Escape') { if (this.mode) this.cancelMode(); else if (this.menu) { this.menu = null; this.cardSig = ''; } else this.escQueue(); return; }
     if (k === ' ') { e.preventDefault(); if (this.lastAlert) RENDER.centerOn(this.lastAlert[0], this.lastAlert[1]); return; }
     if (k === 'Tab') { e.preventDefault(); return; }
@@ -893,7 +927,7 @@ const UI = {
     if (m.inside && m.x >= 0 && m.y >= 0 && m.x < width && m.y < height) {
       const hit = document.elementFromPoint(m.x, m.y);
       // 메뉴/미니맵/명령 버튼을 조작하는 동안 가장자리 이동이 끼어들지 않는다.
-      const control = hit?.closest('#test,#help,#title,#end,#minimap,button,input,select,textarea,.btn,.wf,.qs');
+      const control = hit?.closest('#test,#help,#menu-select-popup,#title,#end,#minimap,button,input,select,textarea,.btn,.wf,.qs');
       if (!control) {
         if (m.x < edge) dx = -1; else if (m.x >= width - edge) dx = 1;
         if (m.y < edge) dy = -1;
@@ -935,6 +969,85 @@ const UI = {
     }
   },
 
+  // Browser-native option popups cannot follow a locked cursor. Keep choices in the game DOM.
+  installMenuSelect(select, label) {
+    if (!select.parentNode || !document.createElement) return;
+    const trigger = document.createElement('button');
+    trigger.type = 'button'; trigger.id = select.id + '-menu'; trigger.className = 'menu-select';
+    trigger.setAttribute('role', 'combobox'); trigger.setAttribute('aria-label', label);
+    trigger.setAttribute('aria-haspopup', 'listbox'); trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-controls', 'menu-select-popup');
+    const refresh = () => { trigger.textContent = (select.selectedOptions[0]?.textContent || '') + ' ▾'; };
+    select.parentNode.insertBefore(trigger, select.nextSibling); select.classList.add('hidden'); select.tabIndex = -1;
+    select.setAttribute('aria-hidden', 'true'); select.addEventListener('change', refresh); refresh();
+    trigger.onclick = () => this.openMenuSelect(select, trigger);
+    trigger.onkeydown = (e) => {
+      if (!['ArrowDown','ArrowUp','Enter',' '].includes(e.key)) return;
+      e.preventDefault(); e.stopPropagation(); this.openMenuSelect(select, trigger);
+    };
+  },
+  openMenuSelect(select, trigger) {
+    if (this.menuSelect?.select === select) { this.closeMenuSelect(); return; }
+    this.closeMenuSelect(); select.onpointerdown?.({target:select});
+    const popup = document.createElement('div'), options = [];
+    popup.id = 'menu-select-popup'; popup.className = 'menu-select-popup'; popup.setAttribute('role', 'listbox');
+    popup.setAttribute('aria-label', trigger.getAttribute('aria-label'));
+    let group = null;
+    for (const option of select.options) {
+      const heading = option.parentElement?.tagName === 'OPTGROUP' ? option.parentElement.label : '';
+      if (heading && heading !== group) {
+        const title = document.createElement('div'); title.className = 'menu-select-group'; title.textContent = heading; popup.appendChild(title);
+      }
+      group = heading;
+      const button = document.createElement('button');
+      button.type = 'button'; button.textContent = option.textContent; button.value = option.value;
+      button.setAttribute('role', 'option'); button.setAttribute('aria-selected', String(option.selected));
+      button.disabled = option.disabled || option.parentElement?.disabled || false;
+      button.onclick = () => this.chooseMenuSelect(button.value); popup.appendChild(button); options.push(button);
+    }
+    const r = trigger.getBoundingClientRect(), height = Math.min(300, window.innerHeight - 24);
+    const below = window.innerHeight - r.bottom - 14, top = below < 120 && r.top > below ? Math.max(12, r.top - height - 2) : r.bottom + 2;
+    const width = Math.min(window.innerWidth - 24, Math.max(150, r.width));
+    popup.style.left = Math.max(12, Math.min(r.left, window.innerWidth - width - 12)) + 'px'; popup.style.top = top + 'px';
+    popup.style.width = width + 'px'; popup.style.maxHeight = Math.max(48, Math.min(height, window.innerHeight - top - 12)) + 'px';
+    this.menuSelect = {select, trigger, popup, options, index:Math.max(0, options.findIndex(button => button.value === select.value))};
+    document.body.appendChild(popup); trigger.setAttribute('aria-expanded', 'true');
+    this.highlightMenuSelect(this.menuSelect.index);
+  },
+  highlightMenuSelect(index) {
+    const menu = this.menuSelect; if (!menu) return;
+    menu.index = Math.max(0, Math.min(menu.options.length - 1, index));
+    menu.options.forEach((button, i) => button.classList.toggle('active', i === menu.index));
+    const button = menu.options[menu.index]; button?.focus({preventScroll:true}); button?.scrollIntoView({block:'nearest'});
+  },
+  chooseMenuSelect(value) {
+    const menu = this.menuSelect; if (!menu) return;
+    menu.select.value = value;
+    menu.select.dispatchEvent(new Event('input', {bubbles:true})); menu.select.dispatchEvent(new Event('change', {bubbles:true}));
+    this.closeMenuSelect(true);
+  },
+  closeMenuSelect(focus = false) {
+    const menu = this.menuSelect; if (!menu) return;
+    this.menuSelect = null; menu.popup.remove(); menu.trigger.setAttribute('aria-expanded', 'false');
+    if (focus) menu.trigger.focus({preventScroll:true});
+  },
+  menuSelectKey(e) {
+    const menu = this.menuSelect;
+    const step = {ArrowUp:-1, ArrowDown:1, PageUp:-8, PageDown:8}[e.key];
+    if (step !== undefined) this.highlightMenuSelect(menu.index + step);
+    else if (e.key === 'Home') this.highlightMenuSelect(0);
+    else if (e.key === 'End') this.highlightMenuSelect(menu.options.length - 1);
+    else if (e.key === 'Enter' || e.key === ' ') this.chooseMenuSelect(menu.options[menu.index].value);
+    else if (e.key === 'Escape') this.closeMenuSelect(true);
+    else if (['F10','F1','F9','`'].includes(e.key)) return false;
+    else if (e.key === 'Tab') this.closeMenuSelect(true);
+    e.preventDefault(); return true;
+  },
+  stepMenuNumber(input, delta) {
+    input.value = String(Math.max(+(input.min || 0), Math.min(+(input.max || Infinity), (+input.value || 0) + delta * +(input.step || 1))));
+    input.dispatchEvent(new Event('input', {bubbles:true})); input.dispatchEvent(new Event('change', {bubbles:true}));
+  },
+
   // ---------------- 테스트 패널 ----------------
   buildTestPanel() {
     const t = this.el.test;
@@ -949,7 +1062,7 @@ const UI = {
       <div class="row"><label>스폰 대상</label>
         <select id="t-type"><optgroup label="테란">${opts('T')}</optgroup><optgroup label="저그">${opts('Z')}</optgroup><optgroup label="프로토스">${opts('P')}</optgroup><optgroup label="건물">${bopts}</optgroup></select></div>
       <div class="row"><label>소속</label><select id="t-owner"><option value="1">적군 (저그/빨강)</option><option value="0">아군 (테란/파랑)</option></select>
-        <label>수</label><input id="t-count" type="number" min="1" max="50" value="5"></div>
+        <label>수</label><span class="count-control"><button id="t-count-minus" type="button" aria-label="스폰 수량 줄이기">−</button><input id="t-count" type="number" min="1" max="50" value="5" aria-label="스폰 수량"><button id="t-count-plus" type="button" aria-label="스폰 수량 늘리기">+</button></span></div>
       <div class="row"><button id="t-spawn">스폰 프리뷰 켜기 (우클릭 종료)</button></div>
       <div class="row small">대상 선택 → 마우스 프리뷰 → 지도 클릭으로 스폰</div>
       <div class="row"><button id="t-wave">적 공격 웨이브 즉시 출격</button><button id="t-killsel">선택 유닛 제거</button></div>
@@ -989,6 +1102,9 @@ const UI = {
     $('t-tech').onclick = () => { const pl = P(GAME.control); for (const [k, d] of Object.entries(TECH)) { if (d.lv) pl.upg[k] = d.lv; else pl.tech[k] = true; } this.cardSig = ''; this.message('조작 진영 연구 완료 · F10에서 3종족 유닛을 스폰할 수 있습니다.'); };
     $('t-fast').onclick = () => { GAME.buildSpeed = GAME.buildSpeed >= 8 ? 1 : GAME.buildSpeed * 2; $('t-bs').textContent = GAME.buildSpeed; };
     $('t-speed').oninput = (e) => { GAME.speed = +e.target.value; $('t-spv').textContent = GAME.speed.toFixed(2).replace(/0$/, '') + 'x'; };
+    $('t-count-minus').onclick = () => this.stepMenuNumber($('t-count'), -1);
+    $('t-count-plus').onclick = () => this.stepMenuNumber($('t-count'), 1);
+    this.installMenuSelect($('t-type'), '스폰 대상'); this.installMenuSelect($('t-owner'), '소속');
   },
   positionTestPanel(x, y) {
     const panel = this.el.test;
@@ -1006,36 +1122,44 @@ const UI = {
   bindTestDrag(header) {
     header.onpointerdown = (e) => {
       if (e.button !== 0 || e.target.closest('button')) return;
-      e.preventDefault(); this.positionTestPanel();
-      this.mouse.drag = null; this.mmDrag = false;
-      this.testDrag = {id: e.pointerId, header, x: e.clientX, y: e.clientY, left: this.testPosition.x, top: this.testPosition.y};
-      this.el.test.classList.add('dragging'); header.setPointerCapture(e.pointerId);
+      e.preventDefault(); this.beginTestDrag(header, e.clientX, e.clientY, e.pointerId, false);
     };
     header.onpointermove = (e) => {
       const d = this.testDrag;
       if (!d || d.id !== e.pointerId) return;
-      this.positionTestPanel(d.left + e.clientX - d.x, d.top + e.clientY - d.y);
+      this.moveTestDrag(e.clientX, e.clientY);
     };
     const finish = (e) => { if (this.testDrag?.id === e.pointerId) this.finishTestDrag(); };
     header.onpointerup = header.onpointercancel = header.onlostpointercapture = finish;
+  },
+  beginTestDrag(header, x, y, id, locked) {
+    this.closeMenuSelect(); this.positionTestPanel(); this.mouse.drag = null; this.mmDrag = false;
+    this.testDrag = {id, header, x, y, left:this.testPosition.x, top:this.testPosition.y, locked};
+    this.el.test.classList.add('dragging'); if (!locked) header.setPointerCapture(id);
+  },
+  moveTestDrag(x, y) {
+    const d = this.testDrag; if (d) this.positionTestPanel(d.left + x - d.x, d.top + y - d.y);
   },
   finishTestDrag() {
     const d = this.testDrag;
     if (!d) return;
     this.testDrag = null; this.el.test.classList.remove('dragging');
-    if (d.header.hasPointerCapture(d.id)) d.header.releasePointerCapture(d.id);
+    if (!d.locked && d.header.hasPointerCapture(d.id)) d.header.releasePointerCapture(d.id);
   },
   toggleTest(v) {
     const show = v === undefined ? this.el.test.classList.contains('hidden') : v;
-    if (!show) this.finishTestDrag();
+    this.closeMenuSelect(); this.finishTestDrag(); this.mouse.drag = null; this.mmDrag = false; this.lockedTarget = null; this.keys = {};
+    if (!show && this.el.test.contains?.(document.activeElement)) document.activeElement?.blur?.();
     this.el.test.classList.toggle('hidden', !show);
-    this.syncMenuPointer();
+    this.updateMouseLockButton();
     if (show) this.positionTestPanel();
   },
   toggleHelp(v) {
     const show = v === undefined ? this.el.help.classList.contains('hidden') : v;
+    this.closeMenuSelect(); this.mouse.drag = null; this.mmDrag = false; this.lockedTarget = null; this.keys = {};
+    if (!show && this.el.help.contains?.(document.activeElement)) document.activeElement?.blur?.();
     this.el.help.classList.toggle('hidden', !show);
-    this.syncMenuPointer();
+    this.updateMouseLockButton();
   },
   // 미리보기와 클릭 생성이 같은 좌표/배치 검사 결과를 사용한다. 엔티티를 만들지 않는다.
   spawnLayout(wx, wy) {

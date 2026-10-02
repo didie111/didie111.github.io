@@ -5,13 +5,39 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
 
+class InputEvent {
+  constructor(type, props = {}) { Object.assign(this, props, {type, isTrusted:false}); }
+}
+function element(tag = 'div', doc) {
+  const names = new Set(), listeners = {};
+  const el = {tagName:tag.toUpperCase(), id:'', style:{}, children:[], parentElement:null, scrollTop:0,
+    classList:{add:k=>names.add(k),remove:k=>names.delete(k),contains:k=>names.has(k),toggle(k,on){if(on===undefined)on=!names.has(k);if(on)names.add(k);else names.delete(k);}},
+    setAttribute(k,v){this[k]=String(v);},getAttribute(k){return this[k]??null;},
+    appendChild(child){child.remove?.();child.parentElement=this;this.children.push(child);return child;},
+    insertBefore(child,next){child.parentElement=this;const i=this.children.indexOf(next);this.children.splice(i<0?this.children.length:i,0,child);},
+    remove(){if(this.parentElement){const a=this.parentElement.children;a.splice(a.indexOf(this),1);this.parentElement=null;}},
+    contains(child){for(let p=child;p;p=p.parentElement)if(p===this)return true;return false;},
+    matches(s){return s.split(',').some(k=>{k=k.trim();return k[0]==='#'?this.id===k.slice(1):k[0]==='.'?names.has(k.slice(1)):this.tagName===k.toUpperCase();});},
+    closest(s){for(let p=this;p;p=p.parentElement)if(p.matches?.(s))return p;return null;},
+    addEventListener(k,fn){(listeners[k]??=[]).push(fn);},
+    dispatchEvent(e){e.target=this;this['on'+e.type]?.(e);for(const fn of listeners[e.type]||[])fn(e);return true;},
+    click(){if(this.tagName==='INPUT'&&this.type==='checkbox'){this.checked=!this.checked;this.dispatchEvent(new InputEvent('change'));}this.onclick?.(new InputEvent('click'));},
+    focus(){if(doc)doc.activeElement=this;},blur(){if(doc)doc.activeElement=doc.body;},select(){this.textSelected=true;},
+    scrollIntoView(){this.scrolled=true;},
+    getBoundingClientRect(){return this.rect||{left:100,top:100,bottom:120,width:200,height:20};},
+  };
+  Object.defineProperties(el,{parentNode:{get(){return this.parentElement;}},nextSibling:{get(){return this.parentElement?.children[this.parentElement.children.indexOf(this)+1]||null;}},
+    className:{get(){return [...names].join(' ');},set(v){names.clear();for(const k of v.split(/\s+/))if(k)names.add(k);}}});
+  return el;
+}
+
 function camera() {
   const windowEvents = {}, documentEvents = {}, canvasEvents = {};
   const canvas = { style:{}, closest:()=>null, addEventListener(name,fn) {canvasEvents[name]=fn;},
     requestPointerLock() {document.pointerLockElement=canvas;documentEvents.pointerlockchange?.();} };
   let onControl = false, editing = false, hit = null;
   const control = {closest:()=>control,contains:()=>true};
-  const classes = () => {const values=new Set(['hidden']);return {contains:k=>values.has(k),toggle(k,on){if(on===undefined)on=!values.has(k);if(on)values.add(k);else values.delete(k);}};};
+  const classes = () => {const values=new Set(['hidden']);return {add:k=>values.add(k),remove:k=>values.delete(k),contains:k=>values.has(k),toggle(k,on){if(on===undefined)on=!values.has(k);if(on)values.add(k);else values.delete(k);}};};
   const document = {
     hidden: false,
     activeElement: { matches: () => editing },
@@ -20,10 +46,11 @@ function camera() {
     elementFromPoint: () => hit || (onControl ? control : canvas),
     addEventListener: (name, fn) => { documentEvents[name] = fn; },
   };
+  document.body=element('body',document);document.createElement=tag=>element(tag,document);
   const ctx = vm.createContext({
     window: { innerWidth: 1000, innerHeight: 800, addEventListener: (name, fn) => { windowEvents[name] = fn; } },
     document, GAME: { running: true, over: false, paused: false }, MAP_W: 128, MAP_H: 128, TILE: 32,
-    SND:{init(){},play(){}}, MouseEvent:class {constructor(type,props){Object.assign(this,props,{type,isTrusted:false});}},
+    SND:{init(){},play(){}}, MouseEvent:InputEvent, Event:InputEvent,
   });
   for (const file of ['render', 'ui']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/js', file + '.js'), 'utf8'), ctx);
   const { UI, VIEW } = vm.runInContext('({UI, VIEW})', ctx);
@@ -33,7 +60,7 @@ function camera() {
   UI.message=()=>{};
   VIEW.w = 800; VIEW.h = 640; VIEW.scale = 1.25; VIEW.x = 1800; VIEW.y = 1800;
   UI.mouse.inside = true; UI.mouse.x = 500; UI.mouse.y = 400;
-  return { UI, VIEW, document, windowEvents, documentEvents, canvas,canvasEvents,
+  return { UI, VIEW, document, windowEvents, documentEvents, canvas,canvasEvents,node:tag=>element(tag,document),
     move(x, y, dt = 1000 / 60) { UI.mouse.x = x; UI.mouse.y = y; UI.scrollCamera(dt); },
     control(value) { onControl = value; }, editing(value) { editing = value; },
     hit(value) {hit=value;},
@@ -98,12 +125,13 @@ test('pointer lock clamps a virtual cursor to every game edge and still scrolls'
  assert.equal(c.UI.mouse.x,999);assert.equal(c.UI.mouse.y,0);
  c.documentEvents.mouseleave();assert.equal(c.UI.mouse.inside,true);
 });
-test('Escape and F10 release pointer lock and clear stale drag/edge input',()=>{
+test('Escape releases pointer lock; F10 clears stale drag/edge input while retaining the lock',()=>{
  const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.keys.Shift=true;c.UI.mouse.drag={};c.UI.mmDrag=true;
  c.UI.keyDown({key:'Escape'});assert.equal(c.document.pointerLockElement,null);assert.equal(c.UI.mouse.inside,false);
  assert.equal(c.UI.mouse.drag,null);assert.equal(c.UI.mmDrag,false);assert.equal(c.UI.keys.Shift,undefined);
- c.UI.toggleMouseLock();c.UI.toggleTest(true);assert.equal(c.document.pointerLockElement,null);
+ c.UI.toggleMouseLock();c.UI.keys.ArrowRight=true;c.UI.mouse.drag={};c.UI.toggleTest(true);assert.equal(c.document.pointerLockElement,c.canvas);
  assert.equal(c.UI.el.test.classList.contains('hidden'),false);
+ assert.equal(c.UI.mouse.drag,null);assert.equal(c.UI.keys.ArrowRight,undefined);
 });
 test('locked right clicks and drag selections use the virtual cursor coordinates',()=>{
  const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.mouse.x=120;c.UI.mouse.y=140;
@@ -129,106 +157,149 @@ test('failed pointer lock leaves ordinary input available and reports a single f
  assert.equal(c.UI.lockPending,false);assert.equal(c.document.pointerLockElement,null);
  c.windowEvents.mousemove({clientX:200,clientY:250,target:c.canvas});assert.equal(c.UI.mouse.x,200);assert.equal(c.UI.mouse.inside,true);
 });
-test('locking with F10 already visible closes it; clicking F10 unlocks before opening native controls',()=>{
+test('locking with F10 already visible keeps the panel open',()=>{
  const c=camera();c.UI.bindInput();c.UI.toggleTest(true);c.UI.toggleMouseLock();
- assert.ok(c.UI.el.test.classList.contains('hidden'));assert.equal(c.document.pointerLockElement,c.canvas);
- const button={id:'hud-f10',closest:s=>s==='#test,#help'?null:button};c.hit(button);
- c.canvasEvents.mousedown({button:0,preventDefault(){}});
- assert.equal(c.document.pointerLockElement,null);assert.equal(c.UI.el.test.classList.contains('hidden'),false);
- assert.equal(c.UI.mouse.drag,null);assert.equal(c.UI.lockedTarget,null);
+ assert.equal(c.UI.el.test.classList.contains('hidden'),false);assert.equal(c.document.pointerLockElement,c.canvas);
 });
-test('a delayed pointer lock completion cannot trap an already opened F10 menu',()=>{
- const c=camera();c.UI.bindInput();c.canvas.requestPointerLock=()=>{};c.UI.toggleMouseLock();
- c.UI.toggleTest(true);c.document.pointerLockElement=c.canvas;c.documentEvents.pointerlockchange();
- assert.equal(c.document.pointerLockElement,null);assert.equal(c.UI.el.test.classList.contains('hidden'),false);
- assert.equal(c.UI.lockWanted,true);c.UI.toggleTest(false);assert.equal(c.UI.lockPending,true);
+test('clicking the HUD F10 button opens and closes F10 without any unlock or extra request',()=>{
+ const c=camera();c.UI.bindInput();let exits=0,requests=0;
+ c.document.exitPointerLock=()=>{exits++;};
+ c.canvas.requestPointerLock=()=>{requests++;c.document.pointerLockElement=c.canvas;c.documentEvents.pointerlockchange();};
+ c.UI.toggleMouseLock();const button=c.node('button');button.id='hud-f10';button.onclick=()=>c.UI.toggleTest();c.hit(button);
+ for(let i=0;i<4;i++){
+  c.canvasEvents.mousedown({button:0,preventDefault(){}});c.windowEvents.mouseup({button:0,isTrusted:true});
+  assert.equal(c.document.pointerLockElement,c.canvas);assert.equal(c.UI.el.test.classList.contains('hidden'),i%2===1);
+ }
+ assert.equal(exits,0);assert.equal(requests,1);
 });
-
-test('F10 pauses pointer lock without disabling it and closes back into locked gameplay',()=>{
+test('F10 key and focused-input F10 both retain the actual pointer lock',()=>{
  const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();
  c.UI.keyDown({key:'F10',preventDefault(){}});
- assert.equal(c.document.pointerLockElement,null);assert.equal(c.UI.lockWanted,true);
- assert.equal(c.UI.el.mouseLock['aria-pressed'],'true');assert.match(c.UI.el.mouseLock.textContent,/메뉴 중/);
- assert.equal(c.UI.el.pointerCursor.classList.contains('hidden'),true);
- c.UI.keyDown({key:'F10',target:{tagName:'SELECT'},preventDefault(){}});
- assert.equal(c.document.pointerLockElement,c.canvas);assert.equal(c.UI.lockWanted,true);
+ assert.equal(c.document.pointerLockElement,c.canvas);assert.equal(c.UI.el.mouseLock['aria-pressed'],'true');
  assert.equal(c.UI.el.pointerCursor.classList.contains('hidden'),false);
+ c.UI.keyDown({key:'F10',target:{tagName:'INPUT'},preventDefault(){}});
+ assert.equal(c.document.pointerLockElement,c.canvas);assert.equal(c.UI.el.test.classList.contains('hidden'),true);
 });
-test('closing an unlocked F10 menu never enables pointer lock',()=>{
- const c=camera();c.UI.bindInput();c.UI.toggleTest(true);c.UI.toggleTest(false);
- assert.equal(c.document.pointerLockElement,null);assert.equal(c.UI.lockWanted,false);
- assert.equal(c.UI.el.mouseLock['aria-pressed'],'false');
-});
-test('F10 and help restore pointer lock only after the final open panel closes',()=>{
+test('help and F10 can coexist and close without releasing an active lock',()=>{
  const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);c.UI.toggleHelp(true);
- c.UI.toggleTest(false);assert.equal(c.document.pointerLockElement,null);assert.equal(c.UI.lockWanted,true);
+ c.UI.toggleTest(false);assert.equal(c.document.pointerLockElement,c.canvas);
  c.UI.toggleHelp(false);assert.equal(c.document.pointerLockElement,c.canvas);
- c.UI.keyDown({key:'F1',preventDefault(){}});assert.equal(c.document.pointerLockElement,null);
  c.UI.keyDown({key:'F1',preventDefault(){}});assert.equal(c.document.pointerLockElement,c.canvas);
+ c.UI.keyDown({key:'F1',preventDefault(){}});assert.equal(c.document.pointerLockElement,c.canvas);
+ c.UI.keyDown({key:'F1',target:{tagName:'INPUT'},preventDefault(){}});assert.equal(c.UI.el.help.classList.contains('hidden'),false);
+ assert.equal(c.document.pointerLockElement,c.canvas);
 });
-test('turning off the paused lock button cancels restoration without closing the menu',()=>{
- const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);c.UI.toggleMouseLock();
- assert.equal(c.UI.lockWanted,false);assert.equal(c.UI.el.test.classList.contains('hidden'),false);
- c.UI.toggleTest(false);assert.equal(c.document.pointerLockElement,null);
+test('menus never enable pointer lock when the setting is off',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleTest(true);c.UI.toggleHelp(true);c.UI.toggleTest(false);c.UI.toggleHelp(false);
+ assert.equal(c.document.pointerLockElement,null);assert.equal(c.UI.lockWanted,false);
 });
-test('Escape during a menu cancels restoration and still cancels the spawn preview',()=>{
- const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);
- c.UI.mode={kind:'spawn'};c.UI.cancelMode=()=>{c.UI.mode=null;};
- c.UI.keyDown({key:'Escape',target:{tagName:'SELECT'}});
- assert.equal(c.UI.lockWanted,false);assert.equal(c.UI.mode,null);
- c.UI.toggleTest(false);assert.equal(c.document.pointerLockElement,null);
+test('a delayed initial lock can finish while F10 is open and remains locked',()=>{
+ const c=camera();c.UI.bindInput();let requests=0;c.canvas.requestPointerLock=()=>{requests++;};c.UI.toggleMouseLock();
+ c.UI.toggleTest(true);c.document.pointerLockElement=c.canvas;c.documentEvents.pointerlockchange();
+ assert.equal(c.document.pointerLockElement,c.canvas);assert.equal(c.UI.el.test.classList.contains('hidden'),false);
+ c.UI.toggleTest(false);assert.equal(requests,1);
 });
-test('focus loss or game end cancels restoration while a menu has paused the lock',()=>{
- for(const end of ['blur','hidden','game end']){
+test('Escape, explicit disable, focus loss, hidden tab and game end still release an open-menu lock',()=>{
+ for(const action of ['Escape','disable','blur','hidden','game end']){
   const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);
-  if(end==='blur')c.windowEvents.blur();
-  else if(end==='hidden'){c.document.hidden=true;c.documentEvents.visibilitychange();c.document.hidden=false;}
+  if(action==='Escape')c.UI.keyDown({key:'Escape'});
+  else if(action==='disable')c.UI.toggleMouseLock();
+  else if(action==='blur')c.windowEvents.blur();
+  else if(action==='hidden'){c.document.hidden=true;c.documentEvents.visibilitychange();c.document.hidden=false;}
   else{c.setGame('GAME.over=true');c.UI.releaseMouse();}
-  c.UI.toggleTest(false);assert.equal(c.UI.lockWanted,false,end);assert.equal(c.document.pointerLockElement,null,end);
+  assert.equal(c.document.pointerLockElement,null,action);assert.equal(c.UI.lockWanted,false,action);
+  c.UI.toggleTest(false);assert.equal(c.document.pointerLockElement,null,action);
  }
 });
-test('a browser unlock gesture clears the setting and does not trigger automatic relocking',()=>{
- const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();
+test('a browser escape gesture clears the setting without automatic relocking',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);
  c.document.pointerLockElement=null;c.documentEvents.pointerlockchange();
  assert.equal(c.UI.lockWanted,false);assert.equal(c.UI.el.mouseLock['aria-pressed'],'false');
- c.UI.toggleTest(true);c.UI.toggleTest(false);assert.equal(c.document.pointerLockElement,null);
+ c.UI.toggleTest(false);assert.equal(c.document.pointerLockElement,null);
 });
-test('closing F10 before its asynchronous unlock finishes restores after the unlock event',()=>{
- const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();let exits=0;
- c.document.exitPointerLock=()=>{exits++;};
- c.UI.toggleTest(true);c.UI.toggleTest(false);
- assert.equal(exits,1);assert.equal(c.UI.lockWanted,true);
- c.document.pointerLockElement=null;c.documentEvents.pointerlockchange();
- assert.equal(c.document.pointerLockElement,c.canvas);assert.equal(c.UI.lockPending,false);
-});
-test('opening and closing F10 during a pending initial request never duplicates that request',()=>{
- const c=camera();c.UI.bindInput();let requests=0;c.canvas.requestPointerLock=()=>{requests++;};
- c.UI.toggleMouseLock();c.UI.toggleTest(true);c.UI.toggleTest(false);assert.equal(requests,1);
- c.document.pointerLockElement=c.canvas;c.documentEvents.pointerlockchange();
- assert.equal(c.document.pointerLockElement,c.canvas);assert.equal(c.UI.lockWanted,true);
-});
-test('Escape cancels an initial pending request even if that request completes later',()=>{
- const c=camera();c.UI.bindInput();c.canvas.requestPointerLock=()=>{};c.UI.toggleMouseLock();
- c.UI.keyDown({key:'Escape',target:{tagName:'SELECT'}});assert.equal(c.UI.lockWanted,false);
+test('Escape cancels a pending initial request even if it completes after F10 opens',()=>{
+ const c=camera();c.UI.bindInput();c.canvas.requestPointerLock=()=>{};c.UI.toggleMouseLock();c.UI.toggleTest(true);
+ c.UI.keyDown({key:'Escape',target:{tagName:'INPUT'}});assert.equal(c.UI.lockWanted,false);
  c.document.pointerLockElement=c.canvas;c.documentEvents.pointerlockchange();
  assert.equal(c.document.pointerLockElement,null);assert.equal(c.UI.lockWanted,false);
 });
-test('a denied restoration keeps the setting and a map click retries without issuing a command',()=>{
- const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);
- const messages=[];c.UI.message=m=>messages.push(m);c.canvas.requestPointerLock=()=>{throw Error('gesture required');};
- c.UI.toggleTest(false);c.documentEvents.pointerlockerror();
- assert.equal(c.UI.lockWanted,true);assert.equal(c.UI.lockPending,false);assert.equal(messages.length,1);
- assert.match(c.UI.el.mouseLock.textContent,/복귀 대기/);
- c.canvas.requestPointerLock=()=>{c.document.pointerLockElement=c.canvas;c.documentEvents.pointerlockchange();};
- let commands=0;c.UI.rightClick=()=>commands++;let prevented=false;
- c.canvasEvents.mousedown({button:2,isTrusted:true,preventDefault(){prevented=true;}});
- assert.equal(c.document.pointerLockElement,c.canvas);assert.equal(commands,0);assert.equal(prevented,true);
-});
-test('late promise rejection from an old successful request cannot cancel a new restoration',()=>{
+test('late promise rejection from a released request cannot cancel a later lock request',()=>{
  const c=camera();c.UI.bindInput();let oldFail,requests=0;
  c.canvas.requestPointerLock=()=>{requests++;return{catch(fn){if(requests===1)oldFail=fn;}};};
- c.UI.toggleMouseLock();c.document.pointerLockElement=c.canvas;c.documentEvents.pointerlockchange();
- c.UI.toggleTest(true);c.UI.toggleTest(false);assert.equal(requests,2);
+ c.UI.toggleMouseLock();c.document.pointerLockElement=c.canvas;c.documentEvents.pointerlockchange();c.UI.releaseMouse();c.UI.toggleMouseLock();
  oldFail();assert.equal(c.UI.lockPending,true);assert.equal(c.UI.lockWanted,true);
  c.document.pointerLockElement=c.canvas;c.documentEvents.pointerlockchange();assert.equal(c.UI.lockPending,false);
+});
+test('a locked checkbox click toggles the menu setting once without reaching the map',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);
+ const input=c.node('input');input.type='checkbox';input.checked=true;let changes=0;input.onchange=()=>changes++;
+ c.hit(input);let commands=0;c.UI.rightClick=()=>commands++;
+ c.canvasEvents.mousedown({button:0,preventDefault(){}});c.windowEvents.mouseup({button:0,isTrusted:true});
+ assert.equal(input.checked,false);assert.equal(changes,1);assert.equal(commands,0);assert.equal(c.document.pointerLockElement,c.canvas);
+});
+test('locked numeric input receives keyboard focus and count buttons enforce bounds',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);
+ const input=c.node('input');input.type='number';input.min='1';input.max='50';input.value='5';let changes=0;input.oninput=()=>changes++;
+ c.hit(input);c.canvasEvents.mousedown({button:0,preventDefault(){}});
+ assert.equal(c.document.activeElement,input);assert.equal(input.textSelected,true);assert.equal(c.UI.mouse.drag,null);
+ const button=c.node('button');button.onclick=()=>c.UI.stepMenuNumber(input,1);c.hit(button);
+ c.canvasEvents.mousedown({button:0,preventDefault(){}});c.windowEvents.mouseup({button:0,isTrusted:true});assert.equal(input.value,'6');
+ input.value='50';c.UI.stepMenuNumber(input,1);assert.equal(input.value,'50');
+ input.value='1';c.UI.stepMenuNumber(input,-1);assert.equal(input.value,'1');assert.equal(changes,3);
+ assert.equal(c.document.pointerLockElement,c.canvas);
+});
+test('a locked range drag updates quantized values across the entire track and never zooms the map',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);
+ const input=c.node('input');input.type='range';input.min='.5';input.max='3';input.step='.25';input.rect={left:100,width:200};
+ let updates=0,commits=0;input.oninput=()=>updates++;input.onchange=()=>commits++;
+ c.hit(input);c.UI.mouse.x=100;c.canvasEvents.mousedown({button:0,preventDefault(){}});assert.equal(input.value,'0.5');
+ c.windowEvents.mousemove({movementX:100,movementY:0,target:c.canvas});assert.equal(input.value,'1.75');
+ c.windowEvents.mousemove({movementX:1000,movementY:0,target:c.canvas});assert.equal(input.value,'3');
+ c.windowEvents.mouseup({button:0,isTrusted:true});assert.equal(commits,1);assert.equal(updates,3);
+ assert.equal(c.UI.lockedInputDrag,null);assert.equal(c.UI.mouse.drag,null);assert.equal(c.document.pointerLockElement,c.canvas);
+});
+test('locked title dragging moves and clamps the same F10 panel without pointer capture or unlock',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);
+ c.UI.el.test.style={};c.UI.el.test.getBoundingClientRect=()=>({width:300,height:150});c.UI.testPosition={x:12,y:160};
+ const header=c.node('div');header.id='t-drag';const text=c.node('span');header.appendChild(text);c.hit(text);
+ c.UI.mouse.x=100;c.UI.mouse.y=170;c.canvasEvents.mousedown({button:0,preventDefault(){}});
+ c.windowEvents.mousemove({movementX:200,movementY:80,target:c.canvas});assert.equal(c.UI.el.test.style.left,'212px');assert.equal(c.UI.el.test.style.top,'240px');
+ c.windowEvents.mousemove({movementX:2000,movementY:2000,target:c.canvas});assert.equal(c.UI.testPosition.x,688);assert.equal(c.UI.testPosition.y,466);
+ c.windowEvents.mouseup({button:0,isTrusted:true});assert.equal(c.UI.testDrag,null);assert.equal(c.UI.mouse.drag,null);
+ assert.equal(c.document.pointerLockElement,c.canvas);
+});
+function picker(c){
+ const row=c.node('div'),select=c.node('select');select.id='t-type';select.value='scv';row.appendChild(select);
+ select.options=['SCV','다크 템플러','배럭'].map((text,i)=>{const o=c.node('option');o.textContent=text;o.value=['scv','darktemplar','barracks'][i];o.selected=i===0;return o;});
+ Object.defineProperty(select,'selectedOptions',{get(){return select.options.filter(o=>o.value===select.value);}});
+ c.UI.installMenuSelect(select,'스폰 대상');return{select,trigger:row.children.find(n=>n.tagName==='BUTTON')};
+}
+test('the locked dropdown opens in the game, selects a unit and fires the backing select change once',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);
+ const {select,trigger}=picker(c);let previews=0,changes=0;select.onpointerdown=()=>previews++;select.onchange=()=>changes++;
+ c.hit(trigger);c.canvasEvents.mousedown({button:0,preventDefault(){}});c.windowEvents.mouseup({button:0,isTrusted:true});
+ assert.equal(c.UI.menuSelect.popup.parentNode,c.document.body);assert.equal(previews,1);assert.equal(trigger['aria-expanded'],'true');
+ c.hit(c.UI.menuSelect.options[1]);c.canvasEvents.mousedown({button:0,preventDefault(){}});c.windowEvents.mouseup({button:0,isTrusted:true});
+ assert.equal(select.value,'darktemplar');assert.equal(changes,1);assert.equal(trigger.textContent,'다크 템플러 ▾');assert.equal(c.UI.menuSelect,null);
+ assert.equal(c.document.pointerLockElement,c.canvas);
+});
+test('dropdown keyboard navigation and wheel scroll stay inside the game while locked',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);const {select,trigger}=picker(c);trigger.click();
+ const popup=c.UI.menuSelect.popup;c.hit(popup);const scale=c.VIEW.scale;
+ c.canvasEvents.wheel({deltaY:100,preventDefault(){}});assert.equal(popup.scrollTop,100);assert.equal(c.VIEW.scale,scale);
+ let prevented=0;c.UI.keyDown({key:'ArrowDown',preventDefault(){prevented++;}});c.UI.keyDown({key:'Enter',preventDefault(){prevented++;}});
+ assert.equal(select.value,'darktemplar');assert.equal(prevented,2);assert.equal(c.document.pointerLockElement,c.canvas);
+});
+test('a click outside the dropdown only dismisses it; F10 closes its popup while retaining lock',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();c.UI.toggleTest(true);const {trigger}=picker(c);trigger.click();
+ c.hit(c.canvas);let commands=0;c.UI.rightClick=()=>commands++;c.canvasEvents.mousedown({button:2,preventDefault(){}});
+ assert.equal(c.UI.menuSelect,null);assert.equal(commands,0);assert.equal(c.document.pointerLockElement,c.canvas);
+ trigger.click();c.UI.keyDown({key:'F10',preventDefault(){}});assert.equal(c.UI.menuSelect,null);assert.equal(c.UI.el.test.classList.contains('hidden'),true);
+ assert.equal(c.document.pointerLockElement,c.canvas);
+});
+test('hover feedback follows the locked cursor over menu controls without unlocking',()=>{
+ const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();const button=c.node('button');c.hit(button);
+ c.windowEvents.mousemove({movementX:10,movementY:0,target:c.canvas});assert.equal(button.classList.contains('locked-hover'),true);
+ c.hit(c.canvas);c.windowEvents.mousemove({movementX:10,movementY:0,target:c.canvas});assert.equal(button.classList.contains('locked-hover'),false);
+ assert.equal(c.document.pointerLockElement,c.canvas);
 });

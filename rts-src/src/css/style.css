@@ -3,7 +3,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #000; color:
 #game { position: absolute; left: 0; top: 0; image-rendering: pixelated; }
 .hidden { display: none !important; }
 button { font: inherit; background: linear-gradient(#3a4a3a, #1c261c); color: #cfe8c0; border: 1px solid #6a8a5a; padding: 3px 8px; cursor: pointer; }
-button:hover { background: linear-gradient(#4c624c, #263326); }
+button:hover, button.locked-hover { background: linear-gradient(#4c624c, #263326); }
 button.on { background: linear-gradient(#2c5a8c, #183050); border-color: #7ab0ff; color: #fff; }
 
 #topbar { position: absolute; top: 0; right: 0; display: flex; gap: 14px; align-items: center; padding: 4px 10px; background: rgba(0,0,0,0.55); border-bottom-left-radius: 6px; z-index: 5; }
@@ -90,6 +90,16 @@ button.on { background: linear-gradient(#2c5a8c, #183050); border-color: #7ab0ff
 #test .row label { color: #c8d0e0; }
 #test select, #test input[type=number] { background: #0a0f18; color: #fff; border: 1px solid #4a5a7a; font: inherit; }
 #test select { flex: 1; min-width: 0; } #test input[type=number] { width: 52px; }
+#test .menu-select { flex: 1; min-width: 70px; text-align: left; background: #0a0f18; border-color: #4a5a7a; color: #fff; }
+#test .count-control { display: inline-flex; align-items: stretch; }
+#test .count-control button { padding: 1px 5px; min-width: 22px; }
+#test .count-control input { text-align: center; appearance: textfield; -moz-appearance: textfield; }
+#test .count-control input::-webkit-inner-spin-button, #test .count-control input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.menu-select-popup { position: fixed; z-index: 80; overflow-y: auto; padding: 4px; background: #0a0f18; border: 1px solid #7ab0ff; box-shadow: 0 4px 16px #000a; }
+.menu-select-popup button { display: block; width: 100%; padding: 5px 8px; text-align: left; border: 0; background: transparent; color: #eee; }
+.menu-select-popup button:hover, .menu-select-popup button.locked-hover, .menu-select-popup button.active { background: #284764; color: #fff; }
+.menu-select-popup button[aria-selected=true] { color: #a0d0ff; }
+.menu-select-group { padding: 7px 8px 3px; color: #8898b0; font-size: 11px; }
 #test .small { color: #8898b0; font-size: 11px; }
 @media (max-width: 640px) {
   #test .test-columns { grid-template-columns: minmax(0, 1fr); }
