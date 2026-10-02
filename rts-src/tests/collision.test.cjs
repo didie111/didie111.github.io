@@ -184,6 +184,7 @@ test('ground units walk straight through friendly and enemy larvae in a corridor
       return l;
     });
     const m = w.unit(type, 100, 240); m.issue({ t: 'move', x: 450, y: 240 });
+    m.dir = m.velocityDirection = 0; // Start facing down the corridor; this checks larva collision, not turning.
     let crossed = false;
     for (let i = 0; i < 180; i++) {
       w.step(); assert.ok(Math.abs(m.y - 240) < 1e-6, `${type} sidestepped a larva`);
@@ -217,6 +218,7 @@ test('close same-speed followers keep a straight heading on an unobstructed rout
 
 test('a subpixel unit-obstacle waypoint is reached without overshoot or a turn loop', () => {
   const w = world(), m = w.unit('marine', 100, 240);
+  m.dir = m.velocityDirection = 0;
   m.path = [[100.1, 240], [400, 240]]; m.pi = 0; m.pgx = 400; m.pgy = 240;
   m.pathDynamic = true; m.pathExact = true; m.repathAt = 999; m.unitPathUntil = 999;
   m.issue({ t: 'move', x: 400, y: 240 }, true);
@@ -452,7 +454,9 @@ test('28 Protoss units gather at a reachable destination and obey a fresh disper
   assert.ok(distances.reduce((a, b) => a + b, 0) / army.length < 55, 'arrival stops an unnecessarily spread-out army');
   assert.ok(Math.max(...distances) < 100, 'a far-away body was falsely marked arrived');
   assert.ok(army.every(u => !u.orders.length), 'gathering never settles');
-  const targets = army.map((u, i) => [1200 + i % 7 * 40, 1000 + Math.floor(i / 7) * 40]);
+  // 40px final spacing can close a ring of inflated bodies around late Archons.
+  // Keep the dense starting layout and deadlines; give every final goal a route.
+  const targets = army.map((u, i) => [1200 + i % 7 * 60, 1000 + Math.floor(i / 7) * 60]);
   army.forEach((u, i) => u.issue({ t: 'move', x: targets[i][0], y: targets[i][1] }));
   for (let i = 0; i < 450; i++) w.step();
   assert.ok(army.every((u, i) => Math.hypot(u.x - targets[i][0], u.y - targets[i][1]) < 20), 'new command retains a previous adjusted destination');
@@ -486,6 +490,7 @@ test('an adjusted destination is discarded when the occupying body disappears', 
 
 test('a clear short forward step is used before turning beside a ground body', () => {
   const w = world(), fixed = w.unit('tank_siege', 240, 240), mover = w.unit('marine', 219, 240);
+  mover.dir = mover.velocityDirection = 0;
   mover.issue({ t: 'move', x: 400, y: 240 }); w.step();
   assert.deepEqual(position(fixed), [240, 240]);
   assert.ok(Math.abs(mover.y - 240) < 1e-6, 'full-speed sidestep replaced a legal short approach');
@@ -576,4 +581,77 @@ test('a stopped body occupying the destination completes an approach without aut
   assert.ok(Math.hypot(mover.x - stopped.x, mover.y - stopped.y) < 24);
   const end = position(mover); for (let i = 0; i < 120; i++) w.step();
   assert.deepEqual(position(mover), end, 'settled destination spreads without a new command');
+});
+
+for (const type of ['scv', 'drone', 'probe']) test(type + ' accelerates and turns through its actual movement path', () => {
+  const w = world(), worker = w.unit(type, 300, 300);
+  worker.issue({ t: 'move', x: 800, y: 300 });
+  let lastSpeed = 0, previous = position(worker), previousHeading = worker.dir, previousVelocity = worker.velocityDirection;
+  for (let i = 0; i < 30; i++) {
+    w.step();
+    const speed = Math.hypot(worker.x - previous[0], worker.y - previous[1]);
+    assert.ok(speed > 0 && speed <= worker.speed + 1e-6);
+    assert.ok(speed - lastSpeed <= 67 / 256 + 1e-6, 'worker jumps directly to full speed');
+    const turn = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+    assert.ok(turn(worker.dir, previousHeading) <= 40 * Math.PI * 2 / 256 + 1e-6);
+    assert.ok(turn(worker.velocityDirection, previousVelocity) <= 20 * Math.PI * 2 / 256 + 1e-6);
+    lastSpeed = speed; previous = position(worker); previousHeading = worker.dir; previousVelocity = worker.velocityDirection;
+  }
+  assert.ok(lastSpeed > 4.8 && worker.x > 390, 'turning or acceleration stalls an open route');
+});
+
+test('a tank waits to face a reversed move and retains the command through its turn', () => {
+  const w = world(), tank = w.unit('tank', 500, 500);
+  tank.dir = tank.velocityDirection = 0;
+  const move = { t: 'move', x: 250, y: 500 }; tank.issue(move);
+  for (let i = 0; i < 7; i++) {
+    const heading = tank.dir; w.step();
+    assert.deepEqual(position(tank), [500, 500], 'tank slides backwards before turning');
+    assert.ok(Math.abs(Math.atan2(Math.sin(tank.dir - heading), Math.cos(tank.dir - heading))) <= 13 * Math.PI * 2 / 256 + 1e-6);
+    assert.equal(tank.orders[0], move);
+  }
+  for (let i = 0; i < 90; i++) w.step();
+  assert.ok(Math.hypot(tank.x - 250, tank.y - 500) < 1e-6 && !tank.orders.length);
+});
+
+test('a body already occupying a shared goal can finish another mover before its own order ends', () => {
+  const w = world(), occupying = w.unit('marine', 350, 340), mover = w.unit('marine', 300, 340);
+  w.commandUnits([occupying, mover], { t: 'move', x: 350, y: 340 });
+  assert.equal(w.PF.goalBlocker(350, 340, mover.r, [occupying], mover.orders[0].group, 0), occupying);
+  for (let i = 0; i < 100; i++) w.step();
+  assert.ok(!mover.orders.length && !occupying.orders.length);
+  assert.ok(Math.hypot(mover.x - occupying.x, mover.y - occupying.y) >= (mover.r + occupying.r) * .85 - 1e-6);
+});
+
+for (const type of ['scv', 'drone', 'probe']) test(type + ' gas drill then Hold mixes and untangles the already overlapping held army', () => {
+  const w = world(), gas = w.building('geyser', 18, 18), army = [], workers = [];
+  gas.owner = 2;
+  for (let i = 0; i < 12; i++) {
+    const u = w.unit('marine', 530 + i % 3 * 17, 560 + Math.floor(i / 3) * 17); u.issue({ t: 'hold' }); army.push(u);
+  }
+  for (let i = 0; i < 11; i++) workers.push(w.unit(type, 535 + i % 3 * 4, 425 + Math.floor(i / 3) * 4));
+  const starts = army.map(position); w.smartCommand(workers, gas.x, gas.y, gas);
+  let crossed = false;
+  for (let i = 0; i < 90; i++) {
+    w.step(); army.forEach((u, k) => assert.deepEqual(position(u), starts[k], 'harvesting alone yields the held army'));
+    if (workers.some(a => army.some(b => Math.hypot(a.x - b.x, a.y - b.y) < (a.r + b.r) * .85))) { crossed = true; break; }
+  }
+  assert.ok(crossed); workers.forEach(u => u.issue({ t: 'hold' }));
+  const units = [...army, ...workers]; let heldMoved = false, waited = false;
+  for (let i = 0; i < 240; i++) {
+    const positions = units.map(position), headings = units.map(u => u.dir); w.step();
+    units.forEach((u, k) => {
+      const step = Math.hypot(u.x - positions[k][0], u.y - positions[k][1]);
+      assert.ok(step <= u.speed + 1e-6);
+      assert.ok(Math.abs(Math.atan2(Math.sin(u.dir - headings[k]), Math.cos(u.dir - headings[k]))) <= 40 * Math.PI * 2 / 256 + 1e-6, 'drill recovery snaps its facing');
+      assert.equal(u.orders[0]?.t, 'hold');
+      if (army.includes(u) && step > 1e-6) heldMoved = true;
+      if (u.recovering && step === 0) waited = true;
+    });
+  }
+  assert.ok(heldMoved && waited, 'body recovery fails to mix movement and waiting');
+  for (const a of units) for (const b of units) if (a.id < b.id)
+    assert.ok(Math.hypot(a.x - b.x, a.y - b.y) >= (a.r + b.r) * .85 - 1e-6, 'restored drill bodies stay permanently overlapped');
+  const end = units.map(position); for (let i = 0; i < 60; i++) w.step();
+  units.forEach((u, k) => assert.deepEqual(position(u), end[k], 'legal Hold bodies keep wandering'));
 });

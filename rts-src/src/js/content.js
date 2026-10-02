@@ -1,7 +1,35 @@
 'use strict';
 // 확장 데이터: Blizzard StarCraft Compendium 수치/역할을 참고한 웹게임 구현.
 // 원작 MPQ/엔진을 포함하지 않으며 투사체/애니메이션/길찾기는 자체 구현이다.
-const RTS_VERSION = '2026.10.02-sc1.14';
+const RTS_VERSION = '2026.10.02-sc1.15';
+// BWAPI UnitType.cpp d727fed: acceleration (1 = iscript), turn N/256 circle,
+// halt distance N/256 px. Keep the project's top speeds; animation strides are separate.
+const GROUND_MOTION = {
+  marine: [1, 40, 1],
+  ghost: [1, 40, 1],
+  vulture: [100, 40, 14569],
+  goliath: [1, 17, 1],
+  tank: [1, 13, 1],
+  scv: [67, 40, 12227],
+  firebat: [1, 40, 1],
+  medic: [1, 40, 1],
+  zergling: [1, 27, 1],
+  hydra: [1, 27, 1],
+  ultralisk: [1, 40, 1],
+  broodling: [1, 27, 1],
+  drone: [67, 40, 12227],
+  defiler: [1, 27, 1],
+  infested_terran: [1, 40, 1],
+  dtemplar: [27, 40, 13474],
+  dark_archon: [160, 40, 5120],
+  probe: [67, 40, 12227],
+  zealot: [1, 40, 1],
+  dragoon: [1, 40, 1],
+  htemplar: [27, 40, 13474],
+  archon: [160, 40, 5120],
+  reaver: [1, 20, 1],
+  lurker: [1, 40, 1],
+};
 Object.assign(UNITS, {
   valkyrie: { name: '발키리', race: 'T', hp: 200, armor: 2, size: 'large', air: true, speed: 6.6, sight: 8, r: 16,
     cost: [250, 125], supply: 3, time: 750, mech: true, from: 'starport', hotkey: 'V', req: ['armory'], addon: 'control_tower',

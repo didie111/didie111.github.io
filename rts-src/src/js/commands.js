@@ -287,6 +287,39 @@ function collisionMover(e) {
   return !collisionFixed(e) && !(order && (order.t === 'hold' || order.t === 'stop')) && e.moving;
 }
 
+function directionDifference(to, from) {
+  return Math.atan2(Math.sin(to - from), Math.cos(to - from));
+}
+
+// OpenBW update_unit_movement_values: bounded velocity turn, speed progression,
+// then heading. The same integrator drives ordinary paths and MoveToLegal.
+function groundMovement(e, x, y, limit = e.speed) {
+  const dx = x - e.x, dy = y - e.y, distance = Math.hypot(dx, dy);
+  const profile = GROUND_MOTION[e.type];
+  if (!profile || !distance) { e.vx = 0; e.vy = 0; e.currentSpeed = 0; return; }
+  const [acceleration, turn, halt] = profile, scripted = acceleration === 1;
+  const desired = Math.atan2(dy, dx), headingTurn = turn * Math.PI * 2 / 256,
+    velocityTurn = scripted ? headingTurn : headingTurn / 2;
+  const delta = directionDifference(desired, e.velocityDirection);
+  e.velocityDirection += Math.max(-velocityTurn, Math.min(velocityTurn, delta));
+  const headingError = directionDifference(desired, e.dir);
+  if (scripted) {
+    // Iscript's large-turn gate; animation strides still use the project's average speed.
+    e.currentSpeed = Math.abs(headingError) >= Math.PI / 4 ? 0 : e.speed;
+  } else {
+    const a = acceleration / 256, remainingTurn = Math.abs(directionDifference(desired, e.velocityDirection));
+    let accelerate = remainingTurn < 1e-6 || distance >= 32 ||
+      Math.ceil(remainingTurn * 2 / headingTurn) * e.currentSpeed * 1.5 <= distance;
+    const haltDistance = Math.abs(e.currentSpeed - e.def.speed) < 1e-6 ? halt / 256 : e.currentSpeed ** 2 / (2 * a);
+    if (haltDistance >= distance) accelerate = false;
+    e.currentSpeed = Math.max(0, Math.min(e.speed, e.currentSpeed + (accelerate ? a : -a)));
+  }
+  e.dir += Math.max(-headingTurn, Math.min(headingTurn, headingError));
+  const step = Math.min(limit, e.currentSpeed, distance);
+  if (step >= distance && step > 0) { e.vx = dx; e.vy = dy; }
+  else { e.vx = Math.cos(e.velocityDirection) * step; e.vy = Math.sin(e.velocityDirection) * step; }
+}
+
 // 이동하는 쪽에서만 회피한다. 짧은 직선 후보를 검사하여 옆 공간을 찾고,
 // 통과할 수 없는 길에서는 대기한다 (moveTo의 기존 stuck/재탐색 처리 유지).
 function steerGround(e) {
@@ -336,7 +369,7 @@ function steerGround(e) {
     for (const fraction of [0.5, 0.25]) {
       const length = speed * fraction;
       if (!clear(angle, length)) continue;
-      e.vx = ux * length; e.vy = uy * length; e.dir = angle;
+      e.vx = ux * length; e.vy = uy * length;
       e.collisionWait = 0; return;
     }
     const movingAhead = blockers.some(o => {
@@ -361,7 +394,7 @@ function steerGround(e) {
       const a = angle + turn * Math.PI / 8;
       if (!clear(a, length)) continue;
       e.vx = Math.cos(a) * speed; e.vy = Math.sin(a) * speed;
-      e.dir = a;
+      if (turn) e.moveWaypoint = [e.x + Math.cos(a) * length, e.y + Math.sin(a) * length];
       if (turn) e.avoidSide = Math.sign(turn);
       e.blockedTicks = turn ? (e.blockedTicks || 0) + 1 : 0;
       return;
@@ -380,7 +413,7 @@ function recoveryRand(from, to) {
 }
 
 // CheckIllegal에서 기다리거나 탈출 지점을 정하고, MoveToLegal에서 그 지점으로
-// 걸어간 다음 다시 검사한다. 명령 큐는 유지하며 겹침이 없는 대기 몸체는 건드리지 않는다.
+// 걸어간 다음 다시 검사한다. 명령 큐를 유지하고 정상 접근에서 대기 몸체에 양보를 요청하지 않는다.
 function recoverGround(e, blockers) {
   const speed = e.speed;
   if (collisionFixed(e) || speed <= 0) { e.groundRecovery = null; return false; }
@@ -388,21 +421,25 @@ function recoverGround(e, blockers) {
   let state = e.groundRecovery;
   if (!state && !overlaps.length) return false;
   if (!state) state = e.groundRecovery = { phase: 'check' };
-  const requestedAngle = state.heading ?? (e.moving ? Math.atan2(e.vy, e.vx) : e.dir || 0);
+  const requestedAngle = e.velocityDirection;
   e.vx = 0; e.vy = 0;
   const rr = Math.max(3, e.r * 0.75);
-  // MoveToLegal에서 기존 겹침 상대와 이동 명령을 수행 중인 몸체 때문에
-  // 짧은 경로를 매 틱 다시 고르지 않는다. 새 대기 몸체는 계속 장애물이다.
-  const movingBody = o => !collisionFixed(o) && collisionMover(o);
+  // MoveToLegal follows its chosen short path without ordinary unit collision.
+  // Only already-illegal bodies enter this state; ordinary approaches still
+  // collide with Hold/Stop. Terrain and physically fixed bodies remain barriers.
   const newlyBlocked = (x, y) => !PF.unitsClear(e.x, e.y, x, y, e.r,
-    blockers.filter(o => !overlaps.includes(o) && !movingBody(o)));
+    blockers.filter(o => !overlaps.includes(o) && collisionFixed(o)));
   if (state.phase === 'move') {
     const dx = state.x - e.x, dy = state.y - e.y, distance = Math.hypot(dx, dy);
     if (distance > 1e-6) {
-      const step = Math.min(speed, distance), x = e.x + dx / distance * step, y = e.y + dy / distance * step;
+      groundMovement(e, state.x, state.y);
+      const x = e.x + e.vx, y = e.y + e.vy;
       if (PF.lineClear(e.x, e.y, x, y, rr, 0) && !newlyBlocked(x, y)) {
-        e.vx = x - e.x; e.vy = y - e.y; state.heading = e.dir = Math.atan2(dy, dx); return true;
+        return true;
       }
+      e.vx = 0; e.vy = 0; e.currentSpeed = 0;
+      // Keep the chosen path while turning past a temporary sideways obstruction.
+      if (PF.lineClear(e.x, e.y, state.x, state.y, rr, 0) && !newlyBlocked(state.x, state.y)) return true;
     }
     state.phase = 'check'; // 도착 또는 새 장애물: 다음 검사에서 탈출 지점을 다시 선택한다.
     return true;
@@ -442,8 +479,8 @@ function recoverGround(e, blockers) {
           distance = 8 + recoveryRand(0, 2) * 4;
         x = e.x + Math.cos(angle) * distance; y = e.y + Math.sin(angle) * distance;
       }
-      // 움직일 수 있는 기존 겹침 상대가 남은 지점도 짧은 이동 후 다시 검사한다.
-      // 지형·고정 몸체·겹치지 않은 새 몸체를 뚫는 이동은 허용하지 않는다.
+      // 이동 가능한 몸체가 남은 대체 지점도 짧은 이동 후 다시 검사한다.
+      // 복구 경로에서도 지형과 고정 몸체는 보호한다.
       const fixedBlocked = blockers.some(o => collisionFixed(o) && Math.hypot(x - o.x, y - o.y) < (e.r + o.r) * .85);
       if (Math.hypot(x - e.x, y - e.y) > 1e-6 && PF.positionClear(x, y, rr, 0) &&
           PF.lineClear(e.x, e.y, x, y, rr, 0) && !fixedBlocked && !newlyBlocked(x, y)) target = [x, y];
@@ -464,29 +501,44 @@ function physics() {
   for (const e of ents) {
     e.collisionMoving = collisionMover(e);
     e.recovering = false;
-    if (groundCollider(e) && e.collisionMoving) steerGround(e);
+    if (groundCollider(e) && e.collisionMoving && !e.groundRecovery) steerGround(e);
   }
   // 순차 충돌 검사: 먼저 움직인 상대의 현재 위치를 사용하며 새 겹침은 대기한다.
   // 공간 해시는 틱 시작 위치이므로 최대 이동량만큼 검색 여유를 확보한다.
   for (const e of ents) {
-    if (e.dead || e.hidden) continue;
-    if (collisionFixed(e)) { e.vx = 0; e.vy = 0; continue; }
+    if (e.dead || e.hidden) { e.currentSpeed = 0; continue; }
+    if (collisionFixed(e)) { e.vx = 0; e.vy = 0; e.currentSpeed = 0; continue; }
     if (groundCollider(e)) {
       const blockers = SH.query(e.x, e.y, e.r + 48).filter(o => o !== e && groundCollider(o));
       e.recovering = recoverGround(e, blockers);
       if (!e.recovering) {
-        if (!e.collisionMoving) continue;
+        if (!e.collisionMoving || !e.moving) { e.currentSpeed = 0; continue; }
+        const length = Math.hypot(e.vx, e.vy), waypoint = e.moveWaypoint || [e.x + e.vx, e.y + e.vy];
+        groundMovement(e, waypoint[0], waypoint[1], length);
         // 회피에서 놓친 접촉도 좌표를 밀지 않고 이번 틱의 이동을 기다린다.
-        if (blockers.some(o => {
+        const movementClear = (vx, vy) => PF.lineClear(e.x, e.y, e.x + vx, e.y + vy, Math.max(3, e.r * .75), 0) && !blockers.some(o => {
           const ox = o.x - e.x, oy = o.y - e.y;
           // OpenBW의 실제 이동 충돌처럼 현재 몸체를 검사한다. 아직 적용되지
           // 않은 상대 속도를 미리 빼면 상대가 감속/재탐색할 때 새 겹침이 생긴다.
-          const rx = e.vx, ry = e.vy;
+          const rx = vx, ry = vy;
           const rr = rx * rx + ry * ry;
           const t = rr ? Math.max(0, Math.min(1, (ox * rx + oy * ry) / rr)) : 0;
           return Math.hypot(ox - rx * t, oy - ry * t) < (e.r + o.r) * 0.85 - 1e-6;
-        })) { e.vx = 0; e.vy = 0; e.blockedTicks = (e.blockedTicks || 0) + 1; }
+        });
+        if (!movementClear(e.vx, e.vy)) {
+          // UM_SlideFree checks 1px steps along the selected free direction
+          // when momentum still points into the body. Facing keeps turning.
+          const dx = waypoint[0] - e.x, dy = waypoint[1] - e.y, d = Math.hypot(dx, dy),
+            step = Math.min(1, length, e.currentSpeed, d), vx = dx / (d || 1) * step, vy = dy / (d || 1) * step;
+          if (step > 0 && movementClear(vx, vy)) { e.vx = vx; e.vy = vy; }
+          else { e.vx = 0; e.vy = 0; e.currentSpeed = 0; e.blockedTicks = (e.blockedTicks || 0) + 1; }
+        }
       }
+    } else if (!e.air && !e.lifted && !e.isBuilding && GROUND_MOTION[e.type]) {
+      if (e.moving) {
+        const length = Math.hypot(e.vx, e.vy), waypoint = e.moveWaypoint || [e.x + e.vx, e.y + e.vy];
+        groundMovement(e, waypoint[0], waypoint[1], length);
+      } else e.currentSpeed = 0;
     }
     e.x += e.vx; e.y += e.vy;
   }

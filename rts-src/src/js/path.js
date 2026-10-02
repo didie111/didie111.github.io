@@ -134,9 +134,15 @@ const PF = (() => {
   }
 
   function goalBlocker(x, y, r, units, group, owner) {
-    return units.find(u => groundCollider(u) && !collisionMover(u) && !u.groundRecovery &&
-      (!u.orders.length || ['hold', 'stop'].includes(u.orders[0].t) || collisionFixed(u)) &&
-      Math.hypot(u.x - x, u.y - y) < (r + u.r) * 0.85 + 0.1) || null;
+    // UM_FixCollision state 2 checks the actual body AND its move target against
+    // our destination. A shared-goal mover can occupy it before its order ends.
+    return units.find(u => {
+      if (!groundCollider(u) || u.groundRecovery || Math.hypot(u.x - x, u.y - y) >= (r + u.r) * .85 + .1) return false;
+      const o = u.orders[0];
+      if (!collisionMover(u) && (!o || ['hold', 'stop'].includes(o.t) || collisionFixed(u))) return true;
+      return o && ['move', 'amove', 'patrol'].includes(o.t) &&
+        Number.isFinite(o.x) && Number.isFinite(o.y) && Math.hypot(o.x - x, o.y - y) < (r + u.r) * .85;
+    }) || null;
   }
 
   function unitPath(x0, y0, x1, y1, r, obstacles, group, owner) {

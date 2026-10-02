@@ -18,6 +18,7 @@ class Entity {
     this.maxSh = d.sh || 0; this.sh = this.maxSh;
     this.maxEnergy = d.energy || 0; this.energy = d.energy ? 50 : 0;
     this.dir = Math.PI / 2;
+    this.velocityDirection = this.dir; this.currentSpeed = 0;
     this.orders = [];
     this.cooldown = 0; this.vx = 0; this.vy = 0;
     this.path = null; this.pi = 0;
@@ -384,6 +385,7 @@ class Entity {
   }
 
   moveTo(x, y, arrive, tgtEnt, group) {
+    this.moveWaypoint = null;
     const dx = x - this.x, dy = y - this.y, d = Math.hypot(dx, dy);
     const edge = tgtEnt ? edgeDist(this, tgtEnt) : d;
     if (edge <= arrive) { this.path = null; this.vx = 0; this.vy = 0; return true; }
@@ -454,7 +456,8 @@ class Entity {
     // 0.5px보다 가까운 점을 매 틱 넘어서며 회전/좌우 왕복을 반복한다.
     const s = Math.min(sp, wd);
     this.vx = wdx / wd * s; this.vy = wdy / wd * s;
-    this.dir = Math.atan2(wdy, wdx);
+    this.moveWaypoint = [wx, wy];
+    if (!GROUND_MOTION[this.type]) this.dir = Math.atan2(wdy, wdx);
     // 막힘 감지
     if (this.lastD !== undefined && d > this.lastD - 0.05 * sp) this.stuck = (this.stuck || 0) + 1;
     else this.stuck = Math.max(0, (this.stuck || 0) - 2);
