@@ -5,7 +5,7 @@
 > **가장 중요한 사용자 요구: 전 세계에 공개된 스타크래프트 1 / 브루드워의 엔진 재현·관련 구현 소스를 가능한 넓게 계속 찾아 직접 분석하고, 원작 동작 및 우리 프로젝트 코드와 비교해서 거의 동일하게 구현해야 한다. 추측, 임의 좌표 밀기, 단순히 비슷한 연출로 끝내지 않는다.**
 
 인수인계 갱신: **2026-10-03 KST**. 게임 기준 버전: **`2026.10.03-sc1.22`**.
-SC1.22는 SC1.21 위에 고정 상태 F10 드래그 커서 표시를 수정한 버전이다. SC1.21 게임 코드 커밋은 [`113afe4b160fa51699019ab8a41a0b6156bea640`](https://github.com/didie111/didie111.github.io/commit/113afe4b160fa51699019ab8a41a0b6156bea640), SC1.22 시작 커밋은 `ca796daa3470a432a74db4ef9b6d8e9c7bbbd316`이다. 비교 시작 커밋은 `c856034a095e90dcbbb8fd30da5ff3cbfca400d0`, SC1.20 게임 코드는 `ea63d555110f1968bf8927c5a8b169ffdd8938dc`다. 이후 작업자는 최신 `main`과 `RTS_VERSION`을 다시 확인하고 이 기준을 갱신한다.
+SC1.22 게임 코드 커밋: [`7c3b06bcf7f9126d18d003bdf6ba6d61920286b0`](https://github.com/didie111/didie111.github.io/commit/7c3b06bcf7f9126d18d003bdf6ba6d61920286b0). SC1.21 위에 고정 상태 F10 드래그 커서 표시를 수정했다. SC1.21 게임 코드 커밋은 [`113afe4b160fa51699019ab8a41a0b6156bea640`](https://github.com/didie111/didie111.github.io/commit/113afe4b160fa51699019ab8a41a0b6156bea640), SC1.22 시작 커밋은 `ca796daa3470a432a74db4ef9b6d8e9c7bbbd316`이다. 비교 시작 커밋은 `c856034a095e90dcbbb8fd30da5ff3cbfca400d0`, SC1.20 게임 코드는 `ea63d555110f1968bf8927c5a8b169ffdd8938dc`다. 이후 작업자는 최신 `main`과 `RTS_VERSION`을 다시 확인하고 이 기준을 갱신한다.
 
 ## 1. 프로젝트와 첫 읽기 순서
 
@@ -87,7 +87,9 @@ SC1.22는 SC1.21 위에 고정 상태 F10 드래그 커서 표시를 수정한 �
 
 네이티브 CSS `cursor:move/grabbing`만 바뀌고 Pointer Lock에서 표시하는 별도 이미지 커서는 기본 화살표였던 원인을 수정했다. `UI.makeCursors`에서 이동 네 방향 화살표와 잡은 손 이미지를 한 번 생성한다. `UI.updateCursor`가 현재 DOM 제목줄(중첩 텍스트 포함)과 `testDrag.locked`를 검사해 표시하고, 드래그 중에는 제목줄 밖에서도 잡은 손을 유지한다. 닫기 버튼은 이동 커서에서 제외하며 표적 선택 모드가 제목줄 커서를 덮지 않는다. `beginTestDrag`/`finishTestDrag`/`toggleTest`에서 즉시 갱신해 다음 렌더 프레임을 기다리지 않는다.
 
-`node --test rts-src/tests/camera.test.cjs rts-src/tests/spawn.test.cjs`: **47개 통과, 0개 실패**. 새 3개 검사는 실제 `ui.js`의 hover/mousedown/move/mouseup/닫기/리사이즈/해제 흐름을 실행해 이미지·중심 좌표·고정 유지·명령 분리를 확인한다. DOM/Canvas 대역의 입력 검사이며 OS Pointer Lock 실행 증명은 아니다. SC1.21의 415개 전체 엔진 검사는 이번 커서 수정에서 다시 실행한 결과로 인용하지 않는다. 생성물 빌드와 문법/공백을 확인한 뒤 같은 GitHub Pages 경로에 반영한다.
+`node --test rts-src/tests/camera.test.cjs rts-src/tests/spawn.test.cjs`: **47개 통과, 0개 실패**. 새 3개 검사는 실제 `ui.js`의 hover/mousedown/move/mouseup/닫기/리사이즈/해제 흐름을 실행해 이미지·중심 좌표·고정 유지·명령 분리를 확인한다. DOM/Canvas 대역의 입력 검사이며 OS Pointer Lock 실행 증명은 아니다. SC1.21의 415개 전체 엔진 검사는 이번 커서 수정에서 다시 실행한 결과로 인용하지 않는다. 생성물 빌드·14개 인라인 스크립트 문법·공백 검사를 통과했다.
+
+GitHub Pages 실행 `37050237889` 성공 및 공개 `https://didie111.github.io/rts/`의 SC1.22를 확인했다. 공개 F10 제목줄의 일반 CSS 커서는 `move`, 드래그 후 창 위치는 `(12,212)→(142,257)`, 닫고 다시 열면 `(142,257)`을 유지했다. 이 버전에서도 원격 Chrome의 실제 고정 요청은 거부됐고 `pointerLockElement=null`이었다. 따라서 고정 상태의 이동/잡은 손 이미지 확인은 자동 검사 범위로만 기록하며 일반 로컬 브라우저의 수동 검증 과제를 남긴다. 게임 소스와 생성물은 위 코드 커밋, 이 공개 결과는 후속 문서 커밋에 기록한다.
 
 ### SC1.21 공격 접근과 UI
 
