@@ -102,12 +102,15 @@ class Entity {
       this.vx = 0; this.vy = 0; this.lastD = undefined; this.giveUp = 0; this.avoidSide = 0; this.blockedTicks = 0;
       this.unitPathUntil = 0; this.pathRetryAt = 0; this.pathDynamic = false;
       this.collisionWait = 0; this.repathMoversUntil = 0;
+      this.collisionContact = null;
     } else this.orders.push(o);
     this.syncHarvestCollision();
   }
   syncHarvestCollision() {
     const o = this.orders[0];
-    this.noCollide = !!this.burrowed || !!(this.isWorker && o && (o.t === 'gather' || o.t === 'ret'));
+    // OpenBW gathering is a mover-side exception, not global no_collide.
+    this.gathering = !!(this.isWorker && o && (o.t === 'gather' || o.t === 'ret'));
+    this.noCollide = !!this.burrowed;
   }
   releaseMining() {
     const o = this.orders[0];
@@ -125,6 +128,7 @@ class Entity {
     this.clearAttackApproach();
     this.orders.shift(); this.path = null; this.tgt = null; this.stuck = 0;
     this.collisionWait = 0; this.repathMoversUntil = 0;
+    this.collisionContact = null;
     this.syncHarvestCollision();
   }
   stopAll() { this.issue({ t: 'stop' }); this.orders = []; }
@@ -218,9 +222,22 @@ class Entity {
       case 'stop': this.nextOrder(); break;
       case 'amove': case 'patrol': {
         if (this.combatScan(true)) break;
-        if (this.moveGroup(o)) {
-          if (o.t === 'patrol') { const ox = o.ox, oy = o.oy; o.ox = o.x; o.oy = o.y; o.x = ox; o.y = oy; this.path = null; o.group = 0; }
-          else this.nextOrder();
+        const arrived = this.moveGroup(o);
+        if (o.t === 'patrol') {
+          // order_Patrol checks completion on its 15-frame order timer. Illegal
+          // recovery passing an endpoint does not complete the patrol leg.
+          if (GAME.tick >= (o.patrolCheckAt || 0)) {
+            o.patrolCheckAt = GAME.tick + 15;
+            if (arrived && !this.groundRecovery) {
+              const ox = o.ox, oy = o.oy;
+              o.ox = this.moveArrivalBlocked ? o.x : this.x;
+              o.oy = this.moveArrivalBlocked ? o.y : this.y;
+              o.x = ox; o.y = oy; this.path = null; o.group = 0;
+              this.collisionContact = null;
+            }
+          }
+        } else if (arrived) {
+          this.nextOrder();
         }
         break;
       }
@@ -491,16 +508,19 @@ class Entity {
   // ---------- 이동 ----------
   moveGroup(o) {
     const arr = o.arrive ?? .001;
+    this.moveArrivalBlocked = false;
+    if (this.groundRecovery) return false;
     // UM_FixCollision state 2: 충돌한 몸체가 실제 목표를 점유하면 접촉에서
     // 멈춘다. 전속력·반·사분의 일 접근 뒤 남는 거리만 허용하므로 먼 동료에게
     // 도착 처리를 전파하지 않는다. 이미 겹친 몸체는 먼저 탈출해야 한다.
     if (groundCollider(this)) {
-      const blocker = PF.goalBlocker(o.x, o.y, this.r, SH.query(o.x, o.y, this.r + 48), o.group, this.owner);
+      const blocker = PF.goalBlocker(o.x, o.y, this.r, SH.query(o.x, o.y, this.r + 48), o.group, this.owner, this);
       if (blocker) {
         const gap = (this.r + blocker.r) * 0.85, d = dist(this.x, this.y, blocker.x, blocker.y);
         const length = this.speed / 4, dx = o.x - this.x, dy = o.y - this.y, targetDistance = Math.hypot(dx, dy) || 1;
         if (d >= gap - 1e-6 && d <= gap + length + 0.1 &&
             !PF.unitsClear(this.x, this.y, this.x + dx / targetDistance * length, this.y + dy / targetDistance * length, this.r, [blocker])) {
+          this.moveArrivalBlocked = true;
           this.arrivedGroup = o.group; this.path = null; this.vx = 0; this.vy = 0; return true;
         }
       }
@@ -526,7 +546,7 @@ class Entity {
     }
     // 목표를 막던 몸체가 움직이면 이전의 조정된 도착점은 더 이상 유효하지 않다.
     if (this.path && this.path.goalBlocker &&
-        !PF.goalBlocker(x, y, this.r, [this.path.goalBlocker], group, this.owner)) {
+        !PF.goalBlocker(x, y, this.r, [this.path.goalBlocker], group, this.owner, this)) {
       this.path = null; this.pathRetryAt = 0; this.unitPathUntil = 0;
     }
     // OpenBW UM_RetryPath / UM_WaitFree는 대기 중에도 충돌 카운터를 진행한다.
@@ -565,6 +585,7 @@ class Entity {
       while (this.pi < this.path.length - 1 && dist(this.x, this.y, this.path[this.pi][0], this.path[this.pi][1]) < (this.pathDynamic ? 0.001 : Math.max(10, sp * 1.5))) this.pi++;
       [wx, wy] = this.path[this.pi];
       if (this.path.goalBlocker && this.pi === this.path.length - 1 && dist(this.x, this.y, wx, wy) < 0.001) {
+        this.moveArrivalBlocked = true;
         this.path = null; this.vx = 0; this.vy = 0; return true;
       }
       if (!this.pathExact && !this.path.goalBlocker && this.pi === this.path.length - 1 && dist(this.x, this.y, wx, wy) < Math.max(4, sp)) {
@@ -628,7 +649,7 @@ class Entity {
   }
   returnDepot(o) {
     // Select the nearest owned, active depot with an actually reachable body edge.
-    this.noCollide = true;
+    this.gathering = true;
     let th = o.depot, a = o.depotApproach;
     if (th && (!activeResourceDepot(th, this.owner) || a &&
         (a.target !== th || !PF.positionClear(a.x, a.y, this.r, 0) || this.stuck >= 20))) {
@@ -697,7 +718,7 @@ class Entity {
       res = o.tgt = res.refinery; this.lastRes = res; this.path = null;
     }
     o.lx = res.x; o.ly = res.y;
-    this.noCollide = true;
+    this.gathering = true;
     if (res.type === 'mineral') {
       if (o.phase === 'mine') {
         this.dir = Math.atan2(res.y - this.y, res.x - this.x);
@@ -741,7 +762,9 @@ class Entity {
         return;
       }
       if (this.moveTo(res.x, res.y, 3, res)) {
+        o.gasWaiting = true;
         if (!res.gasUser || res.gasUser.dead || res.gasUser.orders[0]?.tgt !== res) {
+          o.gasWaiting = false;
           res.gasUser = this; o.phase = 'in'; this.gasT = 37; this.hidden = true;
         }
       }

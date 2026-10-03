@@ -43,7 +43,7 @@ for(const [type,hall]of [['scv','cc'],['drone','hatchery'],['probe','nexus']])fo
  test(type+' credits gas only and restores the correct collision for '+order,()=>world(`
   const b=createBuilding('${hall}',0,20,20,true),w=loaded('${type}',b,180,0,'gas','${order}');
   const before=P(0).min;assert.ok(deposit(w,'gas'));assert.equal(P(0).min,before);
-  if('${order}'==='gather'){assert.equal(w.orders[0].t,'gather');assert.equal(w.orders[0].phase,'go');assert.equal(w.noCollide,true);}
+  if('${order}'==='gather'){assert.equal(w.orders[0].t,'gather');assert.equal(w.orders[0].phase,'go');assert.equal(w.gathering,true);assert.equal(w.noCollide,false);}
   else assert.equal(!!w.noCollide,false);
  `));
 for(const type of ['scv','drone','probe'])for(const order of ['ret','gather'])

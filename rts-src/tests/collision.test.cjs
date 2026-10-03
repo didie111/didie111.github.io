@@ -170,7 +170,7 @@ test('dense mobile overlap can take a short occupied waypoint instead of always 
 for(const type of ['scv','drone','probe']) test(type+' queued stop keeps mining collision until it becomes active', () => {
   const w=world(), worker=w.unit(type,240,240);
   worker.orders=[{t:'gather',phase:'go'}]; worker.noCollide=true;
-  worker.issue({t:'stop'},true); assert.equal(worker.noCollide,true);
+  worker.issue({t:'stop'},true); assert.equal(worker.gathering,true); assert.equal(worker.noCollide,false);
   worker.nextOrder(); assert.equal(worker.noCollide,false); assert.equal(worker.orders[0].t,'stop');
 });
 
@@ -541,11 +541,11 @@ for (const type of ['scv', 'drone', 'probe']) test(type + ' uses harvest collisi
     w.step();
     assert.deepEqual(position(blocker), [450, gas.y], 'gas approach displaces a non-overlapping hold body');
     for (const a of workers) {
-      if (a.orders.length) assert.equal(a.noCollide, true, 'gas approach restores collision before arrival');
+      if (a.orders.length) assert.equal(a.gathering, true, 'gas approach restores mover collision before arrival');
       else assert.equal(a.noCollide, false, 'raw gas arrival leaves harvest collision permanently disabled');
       assert.equal(a.carry, 0, 'a geyser without a refinery produces cargo');
-      if (a.noCollide && Math.hypot(a.x - blocker.x, a.y - blocker.y) < (a.r + blocker.r) * .85) crossed = true;
-      if (a.noCollide && workers.some(b => b !== a && b.noCollide && Math.hypot(a.x - b.x, a.y - b.y) < (a.r + b.r) * .85)) stacked = true;
+      if (a.gathering && Math.hypot(a.x - blocker.x, a.y - blocker.y) < (a.r + blocker.r) * .85) crossed = true;
+      if (a.gathering && workers.some(b => b !== a && b.gathering && Math.hypot(a.x - b.x, a.y - b.y) < (a.r + b.r) * .85)) stacked = true;
     }
   }
   assert.ok(crossed && stacked, 'gas workers did not pass through ground bodies and each other');

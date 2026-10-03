@@ -1,7 +1,7 @@
 'use strict';
 // 확장 데이터: Blizzard StarCraft Compendium 수치/역할을 참고한 웹게임 구현.
 // 원작 MPQ/엔진을 포함하지 않으며 투사체/애니메이션/길찾기는 자체 구현이다.
-const RTS_VERSION = '2026.10.03-sc1.28';
+const RTS_VERSION = '2026.10.04-sc1.29';
 // flingy.dat: [acceleration, turn N/256 circle, halt N/256 px, movement control].
 // Control 0: acceleration + braking; 1: acceleration without braking; 2: iscript.
 // The acceleration field alone does not identify walking units (notably templars).

@@ -1,0 +1,313 @@
+{
+  "scope": "Sequential Node VM simulation, no rendering; same host, seed and benchmark",
+  "before": [
+    {
+      "version": "2026.10.03-sc1.28",
+      "mode": "idle",
+      "count": 100,
+      "ticks": 96,
+      "meanMs": 1,
+      "p95Ms": 1.65,
+      "maxMs": 9.27,
+      "perTick": {
+        "queries": 113,
+        "candidates": 1680,
+        "obstacleBuilds": 0,
+        "lineChecks": 0
+      },
+      "moving": 0,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.03-sc1.28",
+      "mode": "idle",
+      "count": 400,
+      "ticks": 96,
+      "meanMs": 3.44,
+      "p95Ms": 4.98,
+      "maxMs": 10.22,
+      "perTick": {
+        "queries": 453,
+        "candidates": 7540,
+        "obstacleBuilds": 0,
+        "lineChecks": 0
+      },
+      "moving": 0,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.03-sc1.28",
+      "mode": "idle",
+      "count": 800,
+      "ticks": 96,
+      "meanMs": 5.85,
+      "p95Ms": 7.52,
+      "maxMs": 15.14,
+      "perTick": {
+        "queries": 907,
+        "candidates": 15574,
+        "obstacleBuilds": 0,
+        "lineChecks": 0
+      },
+      "moving": 0,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.03-sc1.28",
+      "mode": "move",
+      "count": 100,
+      "ticks": 96,
+      "meanMs": 4.83,
+      "p95Ms": 6.36,
+      "maxMs": 47.23,
+      "perTick": {
+        "queries": 200,
+        "candidates": 1437,
+        "obstacleBuilds": 0,
+        "lineChecks": 305
+      },
+      "moving": 99,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.03-sc1.28",
+      "mode": "move",
+      "count": 400,
+      "ticks": 96,
+      "meanMs": 21.15,
+      "p95Ms": 24.77,
+      "maxMs": 253.37,
+      "perTick": {
+        "queries": 800,
+        "candidates": 11585,
+        "obstacleBuilds": 1,
+        "lineChecks": 1508
+      },
+      "moving": 395,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.03-sc1.28",
+      "mode": "move",
+      "count": 800,
+      "ticks": 96,
+      "meanMs": 44.32,
+      "p95Ms": 57.05,
+      "maxMs": 95.45,
+      "perTick": {
+        "queries": 1600,
+        "candidates": 42235,
+        "obstacleBuilds": 1,
+        "lineChecks": 3507
+      },
+      "moving": 778,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.03-sc1.28",
+      "mode": "overlap",
+      "count": 100,
+      "ticks": 32,
+      "meanMs": 2.62,
+      "p95Ms": 3.76,
+      "maxMs": 8.68,
+      "perTick": {
+        "queries": 113,
+        "candidates": 6297,
+        "obstacleBuilds": 0,
+        "lineChecks": 80
+      },
+      "moving": 62,
+      "recovering": 90
+    },
+    {
+      "version": "2026.10.03-sc1.28",
+      "mode": "overlap",
+      "count": 400,
+      "ticks": 32,
+      "meanMs": 14.45,
+      "p95Ms": 17.2,
+      "maxMs": 29.48,
+      "perTick": {
+        "queries": 453,
+        "candidates": 66821,
+        "obstacleBuilds": 0,
+        "lineChecks": 317
+      },
+      "moving": 213,
+      "recovering": 393
+    },
+    {
+      "version": "2026.10.03-sc1.28",
+      "mode": "overlap",
+      "count": 800,
+      "ticks": 32,
+      "meanMs": 34.97,
+      "p95Ms": 40.24,
+      "maxMs": 57.66,
+      "perTick": {
+        "queries": 907,
+        "candidates": 176475,
+        "obstacleBuilds": 0,
+        "lineChecks": 638
+      },
+      "moving": 470,
+      "recovering": 791
+    }
+  ],
+  "after": [
+    {
+      "version": "2026.10.04-sc1.29",
+      "mode": "idle",
+      "count": 100,
+      "ticks": 96,
+      "meanMs": 0.98,
+      "p95Ms": 2.19,
+      "maxMs": 11.13,
+      "perTick": {
+        "queries": 113,
+        "candidates": 1680,
+        "obstacleBuilds": 0,
+        "lineChecks": 0
+      },
+      "moving": 0,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.04-sc1.29",
+      "mode": "idle",
+      "count": 400,
+      "ticks": 96,
+      "meanMs": 3.17,
+      "p95Ms": 4.1,
+      "maxMs": 14.21,
+      "perTick": {
+        "queries": 453,
+        "candidates": 7540,
+        "obstacleBuilds": 0,
+        "lineChecks": 0
+      },
+      "moving": 0,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.04-sc1.29",
+      "mode": "idle",
+      "count": 800,
+      "ticks": 96,
+      "meanMs": 6.14,
+      "p95Ms": 8.86,
+      "maxMs": 20.28,
+      "perTick": {
+        "queries": 907,
+        "candidates": 15574,
+        "obstacleBuilds": 0,
+        "lineChecks": 0
+      },
+      "moving": 0,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.04-sc1.29",
+      "mode": "move",
+      "count": 100,
+      "ticks": 96,
+      "meanMs": 2.86,
+      "p95Ms": 4.62,
+      "maxMs": 17.04,
+      "perTick": {
+        "queries": 200,
+        "candidates": 1598,
+        "obstacleBuilds": 0,
+        "lineChecks": 215
+      },
+      "moving": 100,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.04-sc1.29",
+      "mode": "move",
+      "count": 400,
+      "ticks": 96,
+      "meanMs": 13.18,
+      "p95Ms": 18.23,
+      "maxMs": 22.72,
+      "perTick": {
+        "queries": 800,
+        "candidates": 12324,
+        "obstacleBuilds": 0,
+        "lineChecks": 868
+      },
+      "moving": 400,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.04-sc1.29",
+      "mode": "move",
+      "count": 800,
+      "ticks": 96,
+      "meanMs": 37.21,
+      "p95Ms": 57.11,
+      "maxMs": 61.29,
+      "perTick": {
+        "queries": 1600,
+        "candidates": 45228,
+        "obstacleBuilds": 0,
+        "lineChecks": 1743
+      },
+      "moving": 800,
+      "recovering": 0
+    },
+    {
+      "version": "2026.10.04-sc1.29",
+      "mode": "overlap",
+      "count": 100,
+      "ticks": 32,
+      "meanMs": 3.32,
+      "p95Ms": 5.81,
+      "maxMs": 13.84,
+      "perTick": {
+        "queries": 113,
+        "candidates": 6297,
+        "obstacleBuilds": 0,
+        "lineChecks": 80
+      },
+      "moving": 62,
+      "recovering": 90
+    },
+    {
+      "version": "2026.10.04-sc1.29",
+      "mode": "overlap",
+      "count": 400,
+      "ticks": 32,
+      "meanMs": 15.37,
+      "p95Ms": 20.43,
+      "maxMs": 45.26,
+      "perTick": {
+        "queries": 453,
+        "candidates": 66821,
+        "obstacleBuilds": 0,
+        "lineChecks": 317
+      },
+      "moving": 213,
+      "recovering": 393
+    },
+    {
+      "version": "2026.10.04-sc1.29",
+      "mode": "overlap",
+      "count": 800,
+      "ticks": 32,
+      "meanMs": 37.55,
+      "p95Ms": 48.87,
+      "maxMs": 68.98,
+      "perTick": {
+        "queries": 907,
+        "candidates": 176475,
+        "obstacleBuilds": 0,
+        "lineChecks": 638
+      },
+      "moving": 470,
+      "recovering": 791
+    }
+  ]
+}

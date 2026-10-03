@@ -169,10 +169,11 @@ const PF = (() => {
     return out;
   }
 
-  function goalBlocker(x, y, r, units, group, owner) {
+  function goalBlocker(x, y, r, units, group, owner, mover = null) {
     // UM_FixCollision state 2 checks the actual body AND its move target against
     // our destination. A shared-goal mover can occupy it before its order ends.
     return units.find(u => {
+      if (u === mover || mover && !canGroundCollide(mover, u)) return false;
       if (!groundCollider(u) || u.groundRecovery || Math.hypot(u.x - x, u.y - y) >= (r + u.r) * .85 + .1) return false;
       const o = u.orders[0];
       if (!collisionMover(u) && (!o || ['hold', 'stop'].includes(o.t) || collisionFixed(u))) return true;
@@ -328,10 +329,11 @@ const PF = (() => {
     return out.length ? compactPath(out) : null;
   }
 
-  function unitsClear(x0, y0, x1, y1, r, units) {
+  function unitsClear(x0, y0, x1, y1, r, units, mover = null) {
     const dx = x1 - x0, dy = y1 - y0, len2 = dx * dx + dy * dy;
     const blocked = u => {
       if (u.dead || u.hidden || u.burrowed || u.noCollide || u.type === 'larva') return false;
+      if (mover && !canGroundCollide(mover, u)) return false;
       const ox = u.x - x0, oy = u.y - y0, min = (r + u.r) * 0.85 + 0.1;
       if (len2 > 0 && ox * ox + oy * oy < min * min && ox * dx + oy * dy <= 0) return false;
       const t = len2 ? Math.max(0, Math.min(1, (ox * dx + oy * dy) / len2)) : 0;
@@ -361,7 +363,7 @@ const PF = (() => {
     units.spatialIndex = {cells, maxR}; return units;
   }
   function unitObstacles(mover, includeMoving) {
-    const units = GAME.entities.filter(u => u !== mover && groundCollider(u) && (includeMoving || !collisionMover(u)));
+    const units = GAME.entities.filter(u => canGroundCollide(mover, u) && (includeMoving || !collisionMover(u)));
     const cells = new Set();
     for (const u of units) {
       const radius = (u.r + mover.r) * 0.85 + 2;

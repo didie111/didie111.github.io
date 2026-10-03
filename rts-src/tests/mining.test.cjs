@@ -30,7 +30,7 @@ test(type+' mines the approached side of a connected mineral line from '+side,()
  assert.ok(result,'must begin mining from the available near side');
  assert.equal(result.target,m);assert.ok((result.x-m.x)*dx+(result.y-m.y)*dy>0,'must not go around the mineral line to its far side');
  assert.ok(result.traveled<175,'near-side approach must not circle the line; traveled '+result.traveled);
- assert.ok(edgeDist(w,m)<=3);assert.equal(m.miner,w);assert.equal(w.noCollide,true);
+ assert.ok(edgeDist(w,m)<=3);assert.equal(m.miner,w);assert.equal(w.gathering,true);assert.equal(w.noCollide,false);
 `));
 test('an unreachable near-side pocket cannot win over a reachable resource edge',()=>world(`
  const m=mineral(20,20);

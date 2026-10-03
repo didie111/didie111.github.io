@@ -294,6 +294,18 @@ function groundCollider(e) {
   return !e.dead && !e.hidden && !e.air && !e.lifted && !e.isBuilding &&
     !e.noCollide && !e.burrowed && !e.def.mine && e.type !== 'larva';
 }
+// OpenBW unit_can_collide_with is directional: normal movers still see a
+// gathering worker, while that worker can pass through mobile bodies.
+function canGroundCollide(mover, target) {
+  if (mover === target || !groundCollider(target)) return false;
+  if (!mover || !mover.isWorkerGathering()) return true;
+  if (!target.isWorkerGathering()) return false;
+  const o = mover.orders[0], t = target.orders[0];
+  if ((o.t === 'ret' || o.phase === 'ret') && mover.carryKind === 'gas') return false;
+  // This engine combines MoveToGas/WaitForGas in phase go. The explicit
+  // waiting flag starts only when the worker reaches an occupied refinery.
+  return !!t.gasWaiting;
+}
 function collisionMover(e) {
   const order = e.orders[0];
   return !collisionFixed(e) && !(order && (order.t === 'hold' || order.t === 'stop')) && e.moving;
@@ -339,7 +351,7 @@ function groundMovement(e, x, y, limit = e.speed) {
 function steerGround(e) {
   const speed = Math.hypot(e.vx, e.vy);
   if (!speed) return;
-  const blockers = e.collisionNeighbors || SH.queryGround(e.x, e.y, e.r + speed * 6 + 24).filter(o => o !== e && groundCollider(o));
+  const blockers = e.collisionNeighbors || SH.queryGround(e.x, e.y, e.r + speed * 6 + 24).filter(o => canGroundCollide(e, o));
   const angle = Math.atan2(e.vy, e.vx), side = e.avoidSide || 1;
   const vectorSpeed = o => {
     if (o.speedVX !== o.vx || o.speedVY !== o.vy) {
@@ -374,6 +386,11 @@ function steerGround(e) {
     }
     return true;
   }
+  // FollowPath first tries its actual next step. A distant occupied lookahead
+  // does not justify turning away from an otherwise legal approach.
+  if (clear(angle, speed)) {
+    e.blockedTicks = 0; e.collisionWait = 0; e.collisionContact = null; return;
+  }
   // 같은 속도로 앞에서 진행하는 병력만 먼저 따라간다. 고정 장애물 우회는 기존 경로를 유지한다.
   const look = Math.max(speed, e.r + speed * 6), ux = Math.cos(angle), uy = Math.sin(angle);
   const parallel = o => collisionMover(o) && Math.abs(vectorSpeed(o) - speed) < 0.001 && (ux * o.vx + uy * o.vy) / speed > 0.97;
@@ -393,23 +410,31 @@ function steerGround(e) {
       e.vx = ux * length; e.vy = uy * length;
       e.collisionWait = 0; return;
     }
-    const movingAhead = blockers.some(o => {
-      if (!collisionMover(o) || e.vx * o.vx + e.vy * o.vy <= 0) return false;
+    const movingAhead = blockers.find(o => {
+      if (!collisionMover(o)) return false;
       const ox = o.x - e.x, oy = o.y - e.y;
       const t = Math.max(0, Math.min(speed, ox * ux + oy * uy));
       return ox * ux + oy * uy > 0 && Math.hypot(ox - ux * t, oy - uy * t) < (e.r + o.r) * 0.85 + 0.1;
     });
     // UM_WaitFree의 이동 중 몸체 대기와 25회 접촉 뒤 UM_RepathMovers 전환.
     if (movingAhead) {
+      if (e.collisionContact !== movingAhead) { e.collisionWait = 0; e.collisionContact = movingAhead; }
       e.vx = 0; e.vy = 0; e.collisionWait = (e.collisionWait || 0) + 1;
       if (e.collisionWait >= 25) {
         e.collisionWait = 0; e.path = null; e.pathRetryAt = 0;
-        e.unitPathUntil = GAME.tick + 120; e.repathMoversUntil = GAME.tick + 120;
+        // WaitFree chooses either a fresh ordinary start or RepathMovers.
+        // ForceMoveFree does not disable body collision.
+        const repath = recoveryRand(0, 32767) >= 16383;
+        e.unitPathUntil = repath ? GAME.tick + 120 : 0;
+        e.repathMoversUntil = repath ? GAME.tick + 120 : 0;
       }
       return;
     }
   }
   e.collisionWait = 0;
+  // Only after actual contact may the local route look around the body.
+  // Keep the established escape routes for dense groups and new move orders.
+  // The sequential movement phase retains SlideFree's 1px contact check.
   for (const length of e.pathDynamic ? [speed] : [look, speed]) {
     for (const turn of [0, side, -side, 2 * side, -2 * side, 3 * side, -3 * side, 4 * side, -4 * side]) {
       const a = angle + turn * Math.PI / 8;
@@ -521,9 +546,13 @@ function physics() {
     e.collisionNeighbors = null;
     if (!groundCollider(e)) { e.groundRecovery = null; continue; }
     const radius = e.r + Math.max(48, Math.hypot(e.vx, e.vy) * 6 + 24);
-    e.collisionNeighbors = SH.queryGround(e.x, e.y, radius).filter(o => o !== e);
+    const harvesting = e.isWorkerGathering();
+    // prepareGround already checked target body flags once for this tick.
+    // Ordinary movers need only exclude themselves; harvesters use the pair rule.
+    e.collisionNeighbors = SH.queryGround(e.x, e.y, radius).filter(o => o !== e && (!harvesting || canGroundCollide(e, o)));
     if (collisionFixed(e)) { e.groundRecovery = null; continue; }
     if (!e.groundRecovery && e.collisionNeighbors.some(o =>
+        (!o.isWorkerGathering() || collisionMover(e)) &&
         (e.x - o.x) ** 2 + (e.y - o.y) ** 2 < ((e.r + o.r) * .85 - 1e-6) ** 2)) e.groundRecovery = { phase: 'check' };
   }
   for (const e of ents) {
@@ -628,7 +657,7 @@ function gameTick() {
   if (GAME.tick % 4 === 1) updateVision();
   if (GAME.tick % 12 === 0) updateCreep();
   for (let i = 0; i < ents.length; i++) ents[i].update();
-  for (const e of GAME.entities) if (!e.isWorkerGathering()) e.noCollide = e.burrowed;
+  for (const e of GAME.entities) e.syncHarvestCollision();
   physics();
   updateProjectiles();
   updateAreas();
@@ -643,7 +672,7 @@ function gameTick() {
 Entity.prototype.isWorkerGathering = function () {
   if (!this.def.worker) return false;
   const o = this.orders[0];
-  return !!(o && (o.t === 'gather' || o.t === 'ret') && this.noCollide);
+  return !!(o && (o.t === 'gather' || o.t === 'ret'));
 };
 
 function checkVictory() {
