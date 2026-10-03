@@ -218,6 +218,21 @@ test('locked right clicks and drag selections use the virtual cursor coordinates
  c.windowEvents.mouseup({button:0,clientX:500,clientY:400,isTrusted:true});
  near(box[0],1896);near(box[1],1912);near(box[2],1976);near(box[3],1976);
 });
+for(const locked of [false,true])test((locked?'locked':'ordinary')+' mouse-up preserves an empty drag selection unless its option is enabled',()=>{
+ const c=camera();c.setGame(`const MAX_SELECT=24;GAME.control=0;
+  GAME.entities=[{id:1,type:'marine',owner:0,x:1800,y:1800,r:8,isBuilding:false,def:{}}];UI.setSelection(GAME.entities);`);
+ c.UI.bindInput();if(locked)c.UI.toggleMouseLock();
+ const drag=()=>{
+  c.UI.mouse.x=120;c.UI.mouse.y=140;
+  c.canvasEvents.mousedown({button:0,clientX:120,clientY:140,isTrusted:true});
+  c.windowEvents.mousemove({clientX:220,clientY:220,movementX:100,movementY:80,target:c.canvas});
+  c.windowEvents.mouseup({button:0,clientX:220,clientY:220,isTrusted:true});
+ };
+ const previous=c.UI.selection;drag();assert.equal(c.UI.selection,previous);assert.equal(c.UI.selection.length,1);
+ assert.equal(c.UI.mouse.drag,null);if(locked)assert.equal(c.document.pointerLockElement,c.canvas);
+ c.UI.clearSelectionOnEmpty=true;drag();assert.equal(c.UI.selection.length,0);
+ if(locked)assert.equal(c.document.pointerLockElement,c.canvas);
+});
 test('locked HUD clicks route to the visible control and never issue a map command',()=>{
  const c=camera();c.UI.bindInput();c.UI.toggleMouseLock();const events=[];let clicks=0,commands=0;
  const button={closest:s=>s==='#test,#help'?null:button,contains:()=>true,dispatchEvent:e=>events.push(e),click:()=>clicks++};

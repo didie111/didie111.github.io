@@ -5,6 +5,7 @@
 // ===================================================================
 const UI = {
   selection: [], hover: null, keys: {}, mode: null, menu: null,
+  clearSelectionOnEmpty: false,
   groups: [], lastGroup: { k: -1, t: 0 }, clicks: [], pings: [], lastAlert: null, alertT: -9999,
   cameraLocations: [],
   mouse: { x: 0, y: 0, wx: 0, wy: 0, inside: false, drag: null, overUI: false },
@@ -399,7 +400,7 @@ const UI = {
   clickSelect(wx, wy, shift, ctrl) {
     const e = this.pick(wx, wy);
     const p = GAME.control;
-    if (!e) { if (!shift) this.setSelection([]); return; }
+    if (!e) { if (!shift && this.clearSelectionOnEmpty) this.setSelection([]); return; }
     const now = performance.now();
     const dbl = this.lastClick.id === e.id && now - this.lastClick.t < 350;
     this.lastClick = { t: now, id: e.id };
@@ -430,7 +431,7 @@ const UI = {
       if (!c.length) { const b = GAME.entities.find(e => this.selectable(e) && e.owner === p && e.isBuilding && inBox(e)); if (b) c = [b]; }
     }
     if (!c.length) { const any = GAME.entities.find(e => !e.dead && !e.hidden && e.owner !== p && inBox(e) && isVisibleTo(e, p) && !isCloakedFor(e, p)); if (any) c = [any]; }
-    if (!c.length) { if (!shift) this.setSelection([]); return; }
+    if (!c.length) { if (!shift && this.clearSelectionOnEmpty) this.setSelection([]); return; }
     if (shift && this.selection.every(s => s.owner === p && s.isBuilding === c[0].isBuilding) && (!c[0].isBuilding || this.productionBuilding(c[0]))) c = this.selection.concat(c);
     this.setSelection(c);
     SND.play('click');
@@ -1128,6 +1129,7 @@ const UI = {
       <section class="test-column" aria-label="게임 설정"><h3>게임 / 테스트 설정</h3>
       <div class="row"><label><input type="checkbox" id="t-ai" checked> 적 AI 작동</label><label><input type="checkbox" id="t-reveal"> 전체 맵 공개</label></div>
       <div class="row"><label><input type="checkbox" id="t-sandbox"> 샌드박스 (승패 없음)</label><label><input type="checkbox" id="t-snd" checked> 효과음</label></div>
+      <div class="row"><label><input type="checkbox" id="t-clear-empty"${this.clearSelectionOnEmpty ? ' checked' : ''}> 빈 땅 클릭/드래그 시 선택 해제</label></div>
       <div class="row"><button id="t-res">자원 +5000</button><button id="t-fast">빌드 속도 x<span id="t-bs">1</span></button></div>
       <div class="row"><button id="t-tech">전 종족 연구 완료 (테스트)</button></div>
       <div class="row"><label>게임 속도</label><input id="t-speed" type="range" min="0.5" max="3" step="0.25" value="1"><span id="t-spv">1.0x</span></div>
@@ -1147,6 +1149,7 @@ const UI = {
     $('t-reveal').onchange = (e) => { GAME.revealAll = e.target.checked; };
     $('t-sandbox').onchange = (e) => { GAME.sandbox = e.target.checked; };
     $('t-snd').onchange = (e) => { SND.enabled = e.target.checked; };
+    $('t-clear-empty').onchange = (e) => { this.clearSelectionOnEmpty = e.target.checked; };
     const ctrl = (o) => {
       GAME.control = o; this.setSelection([]); this.groups = []; this.cancelMode();
       $('t-ctrl0').classList.toggle('on', o === 0); $('t-ctrl1').classList.toggle('on', o === 1);

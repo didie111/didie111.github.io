@@ -61,6 +61,35 @@ check('24-unit box, shift, Ctrl, control-group storage and recall enforce the sa
  UI.setSelection([army[0]]);UI.clickSelect(0,0,false,true);assert.equal(UI.selection.length,24);
  UI.setSelection(army.concat(army));assert.equal(new Set(UI.selection).size,24);
 `);
+check('empty ground clicks and boxes retain selected units, buildings, resources and their command panel by default',`
+ const selected=[unit('marine'),unit('drone'),unit('probe'),building('cc'),building('depot',25,20),
+  building('mineral',30,20,NEUTRAL),building('geyser',33,20,NEUTRAL),building('hatchery',38,20,1)];
+ assert.equal(UI.clearSelectionOnEmpty,false);
+ for(const e of selected){
+  UI.setSelection([e]);UI.menu='build';UI.cardSig='commands';UI.infoSig='details';const previous=UI.selection;
+  UI.clickSelect(40,40,false,false);UI.boxSelect(20,20,80,80,false);UI.boxSelect(80,80,20,20,false);
+  assert.equal(UI.selection,previous);assert.equal(UI.selection[0],e);
+  assert.equal(UI.menu,'build');assert.equal(UI.cardSig,'commands');assert.equal(UI.infoSig,'details');
+ }
+ const army=Array.from({length:24},(_,i)=>unit('marine',500+i*20,550));UI.setSelection(army);
+ UI.boxSelect(20,20,80,80,false);assert.deepEqual(UI.selection,army);
+`);
+check('the empty-ground clear option clears only when enabled and still respects Shift',`
+ const selected=[unit('marine'),building('cc'),building('mineral',30,20,NEUTRAL)];
+ for(const e of selected){
+  UI.clearSelectionOnEmpty=true;UI.setSelection([e]);UI.boxSelect(20,20,80,80,false);assert.equal(UI.selection.length,0);
+  UI.setSelection([e]);UI.clickSelect(40,40,false,false);assert.equal(UI.selection.length,0);
+  UI.setSelection([e]);UI.boxSelect(20,20,80,80,true);UI.clickSelect(40,40,true,false);assert.deepEqual(UI.selection,[e]);
+  UI.clearSelectionOnEmpty=false;UI.boxSelect(20,20,80,80,false);assert.deepEqual(UI.selection,[e]);
+ }
+`);
+check('nonempty selection replaces or adds normally and explicit selection clearing remains available',`
+ const a=unit('marine',500,500),b=unit('marine',700,500),m=building('mineral',30,20,NEUTRAL);
+ UI.setSelection([a]);UI.boxSelect(680,480,720,520,false);assert.deepEqual(UI.selection,[b]);
+ UI.boxSelect(480,480,520,520,true);assert.deepEqual(UI.selection,[b,a]);
+ UI.clickSelect(m.x,m.y,false,false);assert.deepEqual(UI.selection,[m]);
+ UI.setSelection([]);assert.equal(UI.selection.length,0);
+`);
 check('only production buildings can be selected in a group of 24; units and enemy buildings stay separate',`
  const bs=Array.from({length:30},(_,i)=>building('barracks',5+i*3,10)),s=building('depot',7,15);
  UI.boxSelect(0,300,3500,480,false);assert.equal(UI.selection.length,24);assert.ok(UI.selection.every(e=>e.type==='barracks'));
