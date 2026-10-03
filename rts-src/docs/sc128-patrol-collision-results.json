@@ -1,0 +1,1638 @@
+{
+  "version": "2026.10.03-sc1.28",
+  "purpose": "Project diagnosis only; no OpenBW runtime or original frame equivalence",
+  "stepOnlyControl": "VM-only steerGround look = speed; not a deployed fix",
+  "definitions": {
+    "overlaps": "centre distance < .85 * summed radii - 1e-6",
+    "widthHeight": "bounding box of unit centres, not sprite dimensions",
+    "drillTicks": 240,
+    "simulationTicksPerSecond": 24,
+    "sideStepRequests": "steerGround changes desired direction; cross product tolerance 1e-7",
+    "recoveryMovementFrames": "unit-frames flagged recovering with displacement > 1e-6",
+    "recoveryWaitFrames": "unit-frames flagged recovering with no displacement",
+    "patrolTurns": "army order endpoint x changes, not sprite heading turns"
+  },
+  "harvestPairs": [
+    {
+      "type": "scv",
+      "order": "gather",
+      "workerNoCollide": true,
+      "workerInGroundRoster": false,
+      "patrolStepBlocked": false,
+      "harvestMoverChecksBodies": false,
+      "patrolMoverChecksBodies": true
+    },
+    {
+      "type": "scv",
+      "order": "ret",
+      "workerNoCollide": true,
+      "workerInGroundRoster": false,
+      "patrolStepBlocked": false,
+      "harvestMoverChecksBodies": false,
+      "patrolMoverChecksBodies": true
+    },
+    {
+      "type": "scv",
+      "order": "hold",
+      "workerNoCollide": false,
+      "workerInGroundRoster": true,
+      "patrolStepBlocked": true,
+      "harvestMoverChecksBodies": true,
+      "patrolMoverChecksBodies": true
+    },
+    {
+      "type": "drone",
+      "order": "gather",
+      "workerNoCollide": true,
+      "workerInGroundRoster": false,
+      "patrolStepBlocked": false,
+      "harvestMoverChecksBodies": false,
+      "patrolMoverChecksBodies": true
+    },
+    {
+      "type": "drone",
+      "order": "ret",
+      "workerNoCollide": true,
+      "workerInGroundRoster": false,
+      "patrolStepBlocked": false,
+      "harvestMoverChecksBodies": false,
+      "patrolMoverChecksBodies": true
+    },
+    {
+      "type": "drone",
+      "order": "hold",
+      "workerNoCollide": false,
+      "workerInGroundRoster": true,
+      "patrolStepBlocked": true,
+      "harvestMoverChecksBodies": true,
+      "patrolMoverChecksBodies": true
+    },
+    {
+      "type": "probe",
+      "order": "gather",
+      "workerNoCollide": true,
+      "workerInGroundRoster": false,
+      "patrolStepBlocked": false,
+      "harvestMoverChecksBodies": false,
+      "patrolMoverChecksBodies": true
+    },
+    {
+      "type": "probe",
+      "order": "ret",
+      "workerNoCollide": true,
+      "workerInGroundRoster": false,
+      "patrolStepBlocked": false,
+      "harvestMoverChecksBodies": false,
+      "patrolMoverChecksBodies": true
+    },
+    {
+      "type": "probe",
+      "order": "hold",
+      "workerNoCollide": false,
+      "workerInGroundRoster": true,
+      "patrolStepBlocked": true,
+      "harvestMoverChecksBodies": true,
+      "patrolMoverChecksBodies": true
+    }
+  ],
+  "approach": [
+    {
+      "case": "one patrol approaches one Hold",
+      "stepOnly": false,
+      "record": [
+        {
+          "tick": 1,
+          "x": 400,
+          "y": 400,
+          "distance": 40,
+          "normalStepClear": true,
+          "wanted": [
+            4,
+            0
+          ],
+          "steered": [
+            3.695518130045147,
+            1.5307337294603591
+          ],
+          "waypoint": [
+            429.56414504036115,
+            412.24586983568287
+          ]
+        },
+        {
+          "tick": 2,
+          "x": 403.6955181300452,
+          "y": 401.53073372946034,
+          "distance": 36.33673829055638,
+          "normalStepClear": true,
+          "wanted": [
+            3.999946624228506,
+            -0.02066405872468324
+          ],
+          "steered": [
+            3.7033766101816874,
+            1.5116222025225725
+          ],
+          "waypoint": [
+            433.32253101149865,
+            413.6237113496409
+          ]
+        },
+        {
+          "tick": 3,
+          "x": 407.39889474022686,
+          "y": 403.0423559319829,
+          "distance": 32.742754828750726,
+          "normalStepClear": true,
+          "wanted": [
+            3.9997837964092517,
+            -0.04158824331456748
+          ],
+          "steered": [
+            3.7112335156704526,
+            1.4922284651367337
+          ],
+          "waypoint": [
+            437.08876286559047,
+            414.9801836530768
+          ]
+        },
+        {
+          "tick": 4,
+          "x": 411.11012825589734,
+          "y": 404.53458439711966,
+          "distance": 29.243582972086415,
+          "normalStepClear": true,
+          "wanted": [
+            3.9995073254832896,
+            -0.0627786062723832
+          ],
+          "steered": [
+            3.7190872906703807,
+            1.4725453216706261
+          ],
+          "waypoint": [
+            440.8628265812604,
+            416.31494697048464
+          ]
+        },
+        {
+          "tick": 5,
+          "x": 414.8292155465677,
+          "y": 406.0071297187903,
+          "distance": 25.877673725810883,
+          "normalStepClear": true,
+          "wanted": [
+            3.99911282468139,
+            -0.08424141184021555
+          ],
+          "steered": [
+            3.7269362795568286,
+            1.4525653059752945
+          ],
+          "waypoint": [
+            444.64470578302235,
+            417.6276521665926
+          ]
+        },
+        {
+          "tick": 6,
+          "x": 418.5561518261245,
+          "y": 407.45969502476555,
+          "distance": 22.704309598988807,
+          "normalStepClear": true,
+          "wanted": [
+            3.998595700088383,
+            -0.10598314599354955
+          ],
+          "steered": [
+            3.7347787201809592,
+            1.4322806677755155
+          ],
+          "waypoint": [
+            448.4343815875722,
+            418.9179403669697
+          ]
+        },
+        {
+          "tick": 7,
+          "x": 422.29093054630545,
+          "y": 408.89197569254105,
+          "distance": 19.816113963956667,
+          "normalStepClear": true,
+          "wanted": [
+            3.997951138391864,
+            -0.12801052703276897
+          ],
+          "steered": [
+            3.742612736604205,
+            1.411683358196158
+          ],
+          "waypoint": [
+            452.2318324391391,
+            420.1854425581103
+          ]
+        },
+        {
+          "tick": 8,
+          "x": 426.03354328290965,
+          "y": 410.3036590507372,
+          "distance": 17.35590110205164,
+          "normalStepClear": true,
+          "wanted": [
+            3.9971740937459783,
+            -0.15033051681552412
+          ],
+          "steered": [
+            3.7504363312604436,
+            1.3907650143578216
+          ],
+          "waypoint": [
+            456.0370339329932,
+            421.4297791655998
+          ]
+        },
+        {
+          "tick": 9,
+          "x": 429.7839796141701,
+          "y": 411.69442406509506,
+          "distance": 15.528252533300922,
+          "normalStepClear": false,
+          "wanted": [
+            3.996259273674179,
+            -0.1729503326771123
+          ],
+          "steered": [
+            1.9981296368370896,
+            -0.08647516633855616
+          ],
+          "waypoint": [
+            700,
+            400
+          ]
+        },
+        {
+          "tick": 10,
+          "x": 431.78210925100717,
+          "y": 411.6079488987565,
+          "distance": 14.22245428885338,
+          "normalStepClear": false,
+          "wanted": [
+            3.996259273674179,
+            -0.17295033267711205
+          ],
+          "steered": [
+            3.758247376493556,
+            1.3695169429690532
+          ],
+          "waypoint": [
+            461.8480882629556,
+            422.56408444250894
+          ]
+        },
+        {
+          "tick": 11,
+          "x": 435.5403566275007,
+          "y": 412.9774658417255,
+          "distance": 13.722355434947358,
+          "normalStepClear": false,
+          "wanted": [
+            3.995192630663324,
+            -0.19605061564163911
+          ],
+          "steered": [
+            3.7661020224208013,
+            1.3477668777344056
+          ],
+          "waypoint": [
+            465.66917280686715,
+            423.7596008636008
+          ]
+        },
+        {
+          "tick": 12,
+          "x": 439.3064586499215,
+          "y": 414.3252327194599,
+          "distance": 14.342011437415369,
+          "normalStepClear": true,
+          "wanted": [
+            3.993974533850065,
+            -0.21947077927859585
+          ],
+          "steered": [
+            3.993974533850065,
+            -0.21947077927859585
+          ],
+          "waypoint": [
+            700,
+            400
+          ]
+        }
+      ]
+    },
+    {
+      "case": "one patrol approaches one Hold",
+      "stepOnly": true,
+      "record": [
+        {
+          "tick": 1,
+          "x": 400,
+          "y": 400,
+          "distance": 40,
+          "normalStepClear": true,
+          "wanted": [
+            4,
+            0
+          ],
+          "steered": [
+            4,
+            0
+          ],
+          "waypoint": [
+            700,
+            400
+          ]
+        },
+        {
+          "tick": 2,
+          "x": 404,
+          "y": 400,
+          "distance": 36,
+          "normalStepClear": true,
+          "wanted": [
+            4,
+            0
+          ],
+          "steered": [
+            4,
+            0
+          ],
+          "waypoint": [
+            700,
+            400
+          ]
+        },
+        {
+          "tick": 3,
+          "x": 408,
+          "y": 400,
+          "distance": 32,
+          "normalStepClear": true,
+          "wanted": [
+            4,
+            0
+          ],
+          "steered": [
+            4,
+            0
+          ],
+          "waypoint": [
+            700,
+            400
+          ]
+        },
+        {
+          "tick": 4,
+          "x": 412,
+          "y": 400,
+          "distance": 28,
+          "normalStepClear": true,
+          "wanted": [
+            4,
+            0
+          ],
+          "steered": [
+            4,
+            0
+          ],
+          "waypoint": [
+            700,
+            400
+          ]
+        },
+        {
+          "tick": 5,
+          "x": 416,
+          "y": 400,
+          "distance": 24,
+          "normalStepClear": true,
+          "wanted": [
+            4,
+            0
+          ],
+          "steered": [
+            4,
+            0
+          ],
+          "waypoint": [
+            700,
+            400
+          ]
+        },
+        {
+          "tick": 6,
+          "x": 420,
+          "y": 400,
+          "distance": 20,
+          "normalStepClear": true,
+          "wanted": [
+            4,
+            0
+          ],
+          "steered": [
+            4,
+            0
+          ],
+          "waypoint": [
+            700,
+            400
+          ]
+        },
+        {
+          "tick": 7,
+          "x": 424,
+          "y": 400,
+          "distance": 16,
+          "normalStepClear": false,
+          "wanted": [
+            4,
+            0
+          ],
+          "steered": [
+            2,
+            0
+          ],
+          "waypoint": [
+            700,
+            400
+          ]
+        },
+        {
+          "tick": 8,
+          "x": 426,
+          "y": 400,
+          "distance": 14,
+          "normalStepClear": false,
+          "wanted": [
+            4,
+            0
+          ],
+          "steered": [
+            2.4492935982947064e-16,
+            4
+          ],
+          "waypoint": [
+            426,
+            404
+          ]
+        },
+        {
+          "tick": 9,
+          "x": 426,
+          "y": 400,
+          "distance": 14,
+          "normalStepClear": false,
+          "wanted": [
+            4,
+            0
+          ],
+          "steered": [
+            2.4492935982947064e-16,
+            4
+          ],
+          "waypoint": [
+            426,
+            404
+          ]
+        },
+        {
+          "tick": 10,
+          "x": 426,
+          "y": 404,
+          "distance": 14.560219778561038,
+          "normalStepClear": false,
+          "wanted": [
+            3.999573833367638,
+            -0.058387939173250185
+          ],
+          "steered": [
+            1.584514064498407,
+            3.672780306444525
+          ],
+          "waypoint": [
+            427.5845140644984,
+            407.6727803064445
+          ]
+        },
+        {
+          "tick": 11,
+          "x": 427.5845140644984,
+          "y": 407.6727803064445,
+          "distance": 14.595062474878285,
+          "normalStepClear": false,
+          "wanted": [
+            3.998414326987379,
+            -0.11261824782008917
+          ],
+          "steered": [
+            0.9996035817468447,
+            -0.028154561955022292
+          ],
+          "waypoint": [
+            700,
+            400
+          ]
+        },
+        {
+          "tick": 12,
+          "x": 427.5845140644984,
+          "y": 407.6727803064445,
+          "distance": 14.595062474878285,
+          "normalStepClear": false,
+          "wanted": [
+            3.998414326987379,
+            -0.11261824782008917
+          ],
+          "steered": [
+            0.9996035817468447,
+            -0.028154561955022292
+          ],
+          "waypoint": [
+            700,
+            400
+          ]
+        }
+      ]
+    }
+  ],
+  "drill": [
+    {
+      "case": "gas drill followed by hold",
+      "type": "scv",
+      "stepOnly": false,
+      "crossedAt": 32,
+      "sideStepRequests": 0,
+      "recoveryMovementFrames": 981,
+      "recoveryWaitFrames": 515,
+      "patrolTurns": 0,
+      "frames": [
+        {
+          "tick": 0,
+          "overlaps": 60,
+          "width": 34,
+          "height": 71.93946982853492,
+          "recovering": 0
+        },
+        {
+          "tick": 24,
+          "overlaps": 11,
+          "width": 80.74973126185114,
+          "height": 83.76124011393802,
+          "recovering": 18
+        },
+        {
+          "tick": 48,
+          "overlaps": 7,
+          "width": 112.73401769957138,
+          "height": 103.29630559268423,
+          "recovering": 13
+        },
+        {
+          "tick": 72,
+          "overlaps": 3,
+          "width": 112.73401769957138,
+          "height": 120.6274169979697,
+          "recovering": 6
+        },
+        {
+          "tick": 96,
+          "overlaps": 4,
+          "width": 124.73401769957138,
+          "height": 130,
+          "recovering": 6
+        },
+        {
+          "tick": 120,
+          "overlaps": 1,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 4
+        },
+        {
+          "tick": 144,
+          "overlaps": 0,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 1
+        },
+        {
+          "tick": 168,
+          "overlaps": 2,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 3
+        },
+        {
+          "tick": 192,
+          "overlaps": 1,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 2
+        },
+        {
+          "tick": 216,
+          "overlaps": 0,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 2
+        },
+        {
+          "tick": 240,
+          "overlaps": 0,
+          "width": 137.21929907380996,
+          "height": 139.96981050575164,
+          "recovering": 2
+        }
+      ]
+    },
+    {
+      "case": "gas drill followed by hold",
+      "type": "scv",
+      "stepOnly": true,
+      "crossedAt": 32,
+      "sideStepRequests": 0,
+      "recoveryMovementFrames": 981,
+      "recoveryWaitFrames": 515,
+      "patrolTurns": 0,
+      "frames": [
+        {
+          "tick": 0,
+          "overlaps": 60,
+          "width": 34,
+          "height": 71.93946982853492,
+          "recovering": 0
+        },
+        {
+          "tick": 24,
+          "overlaps": 11,
+          "width": 80.74973126185114,
+          "height": 83.76124011393802,
+          "recovering": 18
+        },
+        {
+          "tick": 48,
+          "overlaps": 7,
+          "width": 112.73401769957138,
+          "height": 103.29630559268423,
+          "recovering": 13
+        },
+        {
+          "tick": 72,
+          "overlaps": 3,
+          "width": 112.73401769957138,
+          "height": 120.6274169979697,
+          "recovering": 6
+        },
+        {
+          "tick": 96,
+          "overlaps": 4,
+          "width": 124.73401769957138,
+          "height": 130,
+          "recovering": 6
+        },
+        {
+          "tick": 120,
+          "overlaps": 1,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 4
+        },
+        {
+          "tick": 144,
+          "overlaps": 0,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 1
+        },
+        {
+          "tick": 168,
+          "overlaps": 2,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 3
+        },
+        {
+          "tick": 192,
+          "overlaps": 1,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 2
+        },
+        {
+          "tick": 216,
+          "overlaps": 0,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 2
+        },
+        {
+          "tick": 240,
+          "overlaps": 0,
+          "width": 137.21929907380996,
+          "height": 139.96981050575164,
+          "recovering": 2
+        }
+      ]
+    },
+    {
+      "case": "gas drill followed by patrol",
+      "type": "scv",
+      "stepOnly": false,
+      "crossedAt": 32,
+      "sideStepRequests": 328,
+      "recoveryMovementFrames": 1074,
+      "recoveryWaitFrames": 658,
+      "patrolTurns": 49,
+      "frames": [
+        {
+          "tick": 0,
+          "overlaps": 60,
+          "width": 34,
+          "height": 71.93946982853492,
+          "recovering": 0
+        },
+        {
+          "tick": 24,
+          "overlaps": 15,
+          "width": 71.6687015344882,
+          "height": 93.92416603908032,
+          "recovering": 21
+        },
+        {
+          "tick": 48,
+          "overlaps": 4,
+          "width": 95.0477094700446,
+          "height": 101.61394502691724,
+          "recovering": 12
+        },
+        {
+          "tick": 72,
+          "overlaps": 5,
+          "width": 97.40932009248729,
+          "height": 120.82989808468221,
+          "recovering": 12
+        },
+        {
+          "tick": 96,
+          "overlaps": 4,
+          "width": 110.27274519342461,
+          "height": 107.80684177154342,
+          "recovering": 8
+        },
+        {
+          "tick": 120,
+          "overlaps": 3,
+          "width": 126.0350659075142,
+          "height": 133.25298073996169,
+          "recovering": 12
+        },
+        {
+          "tick": 144,
+          "overlaps": 1,
+          "width": 107.80600761937234,
+          "height": 125.83133764306922,
+          "recovering": 3
+        },
+        {
+          "tick": 168,
+          "overlaps": 0,
+          "width": 109.88041673679464,
+          "height": 133.7324008775243,
+          "recovering": 0
+        },
+        {
+          "tick": 192,
+          "overlaps": 0,
+          "width": 107.80600761937234,
+          "height": 135.6338932137807,
+          "recovering": 0
+        },
+        {
+          "tick": 216,
+          "overlaps": 0,
+          "width": 107.80600761937234,
+          "height": 132.4242025330305,
+          "recovering": 0
+        },
+        {
+          "tick": 240,
+          "overlaps": 0,
+          "width": 107.80600761937234,
+          "height": 131.39404647595558,
+          "recovering": 0
+        }
+      ]
+    },
+    {
+      "case": "gas drill followed by patrol",
+      "type": "scv",
+      "stepOnly": true,
+      "crossedAt": 32,
+      "sideStepRequests": 199,
+      "recoveryMovementFrames": 1421,
+      "recoveryWaitFrames": 959,
+      "patrolTurns": 46,
+      "frames": [
+        {
+          "tick": 0,
+          "overlaps": 60,
+          "width": 34,
+          "height": 71.93946982853492,
+          "recovering": 0
+        },
+        {
+          "tick": 24,
+          "overlaps": 11,
+          "width": 90.84315584845655,
+          "height": 80.43303893658663,
+          "recovering": 17
+        },
+        {
+          "tick": 48,
+          "overlaps": 10,
+          "width": 113.00698798203376,
+          "height": 128.63473491622915,
+          "recovering": 14
+        },
+        {
+          "tick": 72,
+          "overlaps": 12,
+          "width": 117.71550860857332,
+          "height": 105.97063432755351,
+          "recovering": 13
+        },
+        {
+          "tick": 96,
+          "overlaps": 2,
+          "width": 117.71550860857332,
+          "height": 109.42021535317343,
+          "recovering": 9
+        },
+        {
+          "tick": 120,
+          "overlaps": 3,
+          "width": 129.8707476408576,
+          "height": 103.19471091475327,
+          "recovering": 6
+        },
+        {
+          "tick": 144,
+          "overlaps": 7,
+          "width": 126.71871708375812,
+          "height": 115.09265825682934,
+          "recovering": 14
+        },
+        {
+          "tick": 168,
+          "overlaps": 4,
+          "width": 129.613474993892,
+          "height": 144.01436458730785,
+          "recovering": 10
+        },
+        {
+          "tick": 192,
+          "overlaps": 0,
+          "width": 129.613474993892,
+          "height": 152.30235402205767,
+          "recovering": 5
+        },
+        {
+          "tick": 216,
+          "overlaps": 0,
+          "width": 143.592589334941,
+          "height": 140.86972826257215,
+          "recovering": 1
+        },
+        {
+          "tick": 240,
+          "overlaps": 0,
+          "width": 145.613474993892,
+          "height": 123.17234058584381,
+          "recovering": 0
+        }
+      ]
+    },
+    {
+      "case": "gas drill followed by hold",
+      "type": "drone",
+      "stepOnly": false,
+      "crossedAt": 32,
+      "sideStepRequests": 0,
+      "recoveryMovementFrames": 981,
+      "recoveryWaitFrames": 515,
+      "patrolTurns": 0,
+      "frames": [
+        {
+          "tick": 0,
+          "overlaps": 60,
+          "width": 34,
+          "height": 71.93946982853492,
+          "recovering": 0
+        },
+        {
+          "tick": 24,
+          "overlaps": 11,
+          "width": 80.74973126185114,
+          "height": 83.76124011393802,
+          "recovering": 18
+        },
+        {
+          "tick": 48,
+          "overlaps": 7,
+          "width": 112.73401769957138,
+          "height": 103.29630559268423,
+          "recovering": 13
+        },
+        {
+          "tick": 72,
+          "overlaps": 3,
+          "width": 112.73401769957138,
+          "height": 120.6274169979697,
+          "recovering": 6
+        },
+        {
+          "tick": 96,
+          "overlaps": 4,
+          "width": 124.73401769957138,
+          "height": 130,
+          "recovering": 6
+        },
+        {
+          "tick": 120,
+          "overlaps": 1,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 4
+        },
+        {
+          "tick": 144,
+          "overlaps": 0,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 1
+        },
+        {
+          "tick": 168,
+          "overlaps": 2,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 3
+        },
+        {
+          "tick": 192,
+          "overlaps": 1,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 2
+        },
+        {
+          "tick": 216,
+          "overlaps": 0,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 2
+        },
+        {
+          "tick": 240,
+          "overlaps": 0,
+          "width": 137.21929907380996,
+          "height": 139.96981050575164,
+          "recovering": 2
+        }
+      ]
+    },
+    {
+      "case": "gas drill followed by hold",
+      "type": "drone",
+      "stepOnly": true,
+      "crossedAt": 32,
+      "sideStepRequests": 0,
+      "recoveryMovementFrames": 981,
+      "recoveryWaitFrames": 515,
+      "patrolTurns": 0,
+      "frames": [
+        {
+          "tick": 0,
+          "overlaps": 60,
+          "width": 34,
+          "height": 71.93946982853492,
+          "recovering": 0
+        },
+        {
+          "tick": 24,
+          "overlaps": 11,
+          "width": 80.74973126185114,
+          "height": 83.76124011393802,
+          "recovering": 18
+        },
+        {
+          "tick": 48,
+          "overlaps": 7,
+          "width": 112.73401769957138,
+          "height": 103.29630559268423,
+          "recovering": 13
+        },
+        {
+          "tick": 72,
+          "overlaps": 3,
+          "width": 112.73401769957138,
+          "height": 120.6274169979697,
+          "recovering": 6
+        },
+        {
+          "tick": 96,
+          "overlaps": 4,
+          "width": 124.73401769957138,
+          "height": 130,
+          "recovering": 6
+        },
+        {
+          "tick": 120,
+          "overlaps": 1,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 4
+        },
+        {
+          "tick": 144,
+          "overlaps": 0,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 1
+        },
+        {
+          "tick": 168,
+          "overlaps": 2,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 3
+        },
+        {
+          "tick": 192,
+          "overlaps": 1,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 2
+        },
+        {
+          "tick": 216,
+          "overlaps": 0,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 2
+        },
+        {
+          "tick": 240,
+          "overlaps": 0,
+          "width": 137.21929907380996,
+          "height": 139.96981050575164,
+          "recovering": 2
+        }
+      ]
+    },
+    {
+      "case": "gas drill followed by patrol",
+      "type": "drone",
+      "stepOnly": false,
+      "crossedAt": 32,
+      "sideStepRequests": 328,
+      "recoveryMovementFrames": 1074,
+      "recoveryWaitFrames": 658,
+      "patrolTurns": 49,
+      "frames": [
+        {
+          "tick": 0,
+          "overlaps": 60,
+          "width": 34,
+          "height": 71.93946982853492,
+          "recovering": 0
+        },
+        {
+          "tick": 24,
+          "overlaps": 15,
+          "width": 71.6687015344882,
+          "height": 93.92416603908032,
+          "recovering": 21
+        },
+        {
+          "tick": 48,
+          "overlaps": 4,
+          "width": 95.0477094700446,
+          "height": 101.61394502691724,
+          "recovering": 12
+        },
+        {
+          "tick": 72,
+          "overlaps": 5,
+          "width": 97.40932009248729,
+          "height": 120.82989808468221,
+          "recovering": 12
+        },
+        {
+          "tick": 96,
+          "overlaps": 4,
+          "width": 110.27274519342461,
+          "height": 107.80684177154342,
+          "recovering": 8
+        },
+        {
+          "tick": 120,
+          "overlaps": 3,
+          "width": 126.0350659075142,
+          "height": 133.25298073996169,
+          "recovering": 12
+        },
+        {
+          "tick": 144,
+          "overlaps": 1,
+          "width": 107.80600761937234,
+          "height": 125.83133764306922,
+          "recovering": 3
+        },
+        {
+          "tick": 168,
+          "overlaps": 0,
+          "width": 109.88041673679464,
+          "height": 133.7324008775243,
+          "recovering": 0
+        },
+        {
+          "tick": 192,
+          "overlaps": 0,
+          "width": 107.80600761937234,
+          "height": 135.6338932137807,
+          "recovering": 0
+        },
+        {
+          "tick": 216,
+          "overlaps": 0,
+          "width": 107.80600761937234,
+          "height": 132.4242025330305,
+          "recovering": 0
+        },
+        {
+          "tick": 240,
+          "overlaps": 0,
+          "width": 107.80600761937234,
+          "height": 131.39404647595558,
+          "recovering": 0
+        }
+      ]
+    },
+    {
+      "case": "gas drill followed by patrol",
+      "type": "drone",
+      "stepOnly": true,
+      "crossedAt": 32,
+      "sideStepRequests": 199,
+      "recoveryMovementFrames": 1421,
+      "recoveryWaitFrames": 959,
+      "patrolTurns": 46,
+      "frames": [
+        {
+          "tick": 0,
+          "overlaps": 60,
+          "width": 34,
+          "height": 71.93946982853492,
+          "recovering": 0
+        },
+        {
+          "tick": 24,
+          "overlaps": 11,
+          "width": 90.84315584845655,
+          "height": 80.43303893658663,
+          "recovering": 17
+        },
+        {
+          "tick": 48,
+          "overlaps": 10,
+          "width": 113.00698798203376,
+          "height": 128.63473491622915,
+          "recovering": 14
+        },
+        {
+          "tick": 72,
+          "overlaps": 12,
+          "width": 117.71550860857332,
+          "height": 105.97063432755351,
+          "recovering": 13
+        },
+        {
+          "tick": 96,
+          "overlaps": 2,
+          "width": 117.71550860857332,
+          "height": 109.42021535317343,
+          "recovering": 9
+        },
+        {
+          "tick": 120,
+          "overlaps": 3,
+          "width": 129.8707476408576,
+          "height": 103.19471091475327,
+          "recovering": 6
+        },
+        {
+          "tick": 144,
+          "overlaps": 7,
+          "width": 126.71871708375812,
+          "height": 115.09265825682934,
+          "recovering": 14
+        },
+        {
+          "tick": 168,
+          "overlaps": 4,
+          "width": 129.613474993892,
+          "height": 144.01436458730785,
+          "recovering": 10
+        },
+        {
+          "tick": 192,
+          "overlaps": 0,
+          "width": 129.613474993892,
+          "height": 152.30235402205767,
+          "recovering": 5
+        },
+        {
+          "tick": 216,
+          "overlaps": 0,
+          "width": 143.592589334941,
+          "height": 140.86972826257215,
+          "recovering": 1
+        },
+        {
+          "tick": 240,
+          "overlaps": 0,
+          "width": 145.613474993892,
+          "height": 123.17234058584381,
+          "recovering": 0
+        }
+      ]
+    },
+    {
+      "case": "gas drill followed by hold",
+      "type": "probe",
+      "stepOnly": false,
+      "crossedAt": 32,
+      "sideStepRequests": 0,
+      "recoveryMovementFrames": 981,
+      "recoveryWaitFrames": 515,
+      "patrolTurns": 0,
+      "frames": [
+        {
+          "tick": 0,
+          "overlaps": 60,
+          "width": 34,
+          "height": 71.93946982853492,
+          "recovering": 0
+        },
+        {
+          "tick": 24,
+          "overlaps": 11,
+          "width": 80.74973126185114,
+          "height": 83.76124011393802,
+          "recovering": 18
+        },
+        {
+          "tick": 48,
+          "overlaps": 7,
+          "width": 112.73401769957138,
+          "height": 103.29630559268423,
+          "recovering": 13
+        },
+        {
+          "tick": 72,
+          "overlaps": 3,
+          "width": 112.73401769957138,
+          "height": 120.6274169979697,
+          "recovering": 6
+        },
+        {
+          "tick": 96,
+          "overlaps": 4,
+          "width": 124.73401769957138,
+          "height": 130,
+          "recovering": 6
+        },
+        {
+          "tick": 120,
+          "overlaps": 1,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 4
+        },
+        {
+          "tick": 144,
+          "overlaps": 0,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 1
+        },
+        {
+          "tick": 168,
+          "overlaps": 2,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 3
+        },
+        {
+          "tick": 192,
+          "overlaps": 1,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 2
+        },
+        {
+          "tick": 216,
+          "overlaps": 0,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 2
+        },
+        {
+          "tick": 240,
+          "overlaps": 0,
+          "width": 137.21929907380996,
+          "height": 139.96981050575164,
+          "recovering": 2
+        }
+      ]
+    },
+    {
+      "case": "gas drill followed by hold",
+      "type": "probe",
+      "stepOnly": true,
+      "crossedAt": 32,
+      "sideStepRequests": 0,
+      "recoveryMovementFrames": 981,
+      "recoveryWaitFrames": 515,
+      "patrolTurns": 0,
+      "frames": [
+        {
+          "tick": 0,
+          "overlaps": 60,
+          "width": 34,
+          "height": 71.93946982853492,
+          "recovering": 0
+        },
+        {
+          "tick": 24,
+          "overlaps": 11,
+          "width": 80.74973126185114,
+          "height": 83.76124011393802,
+          "recovering": 18
+        },
+        {
+          "tick": 48,
+          "overlaps": 7,
+          "width": 112.73401769957138,
+          "height": 103.29630559268423,
+          "recovering": 13
+        },
+        {
+          "tick": 72,
+          "overlaps": 3,
+          "width": 112.73401769957138,
+          "height": 120.6274169979697,
+          "recovering": 6
+        },
+        {
+          "tick": 96,
+          "overlaps": 4,
+          "width": 124.73401769957138,
+          "height": 130,
+          "recovering": 6
+        },
+        {
+          "tick": 120,
+          "overlaps": 1,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 4
+        },
+        {
+          "tick": 144,
+          "overlaps": 0,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 1
+        },
+        {
+          "tick": 168,
+          "overlaps": 2,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 3
+        },
+        {
+          "tick": 192,
+          "overlaps": 1,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 2
+        },
+        {
+          "tick": 216,
+          "overlaps": 0,
+          "width": 137.21929907380996,
+          "height": 132.7947331922021,
+          "recovering": 2
+        },
+        {
+          "tick": 240,
+          "overlaps": 0,
+          "width": 137.21929907380996,
+          "height": 139.96981050575164,
+          "recovering": 2
+        }
+      ]
+    },
+    {
+      "case": "gas drill followed by patrol",
+      "type": "probe",
+      "stepOnly": false,
+      "crossedAt": 32,
+      "sideStepRequests": 328,
+      "recoveryMovementFrames": 1074,
+      "recoveryWaitFrames": 658,
+      "patrolTurns": 49,
+      "frames": [
+        {
+          "tick": 0,
+          "overlaps": 60,
+          "width": 34,
+          "height": 71.93946982853492,
+          "recovering": 0
+        },
+        {
+          "tick": 24,
+          "overlaps": 15,
+          "width": 71.6687015344882,
+          "height": 93.92416603908032,
+          "recovering": 21
+        },
+        {
+          "tick": 48,
+          "overlaps": 4,
+          "width": 95.0477094700446,
+          "height": 101.61394502691724,
+          "recovering": 12
+        },
+        {
+          "tick": 72,
+          "overlaps": 5,
+          "width": 97.40932009248729,
+          "height": 120.82989808468221,
+          "recovering": 12
+        },
+        {
+          "tick": 96,
+          "overlaps": 4,
+          "width": 110.27274519342461,
+          "height": 107.80684177154342,
+          "recovering": 8
+        },
+        {
+          "tick": 120,
+          "overlaps": 3,
+          "width": 126.0350659075142,
+          "height": 133.25298073996169,
+          "recovering": 12
+        },
+        {
+          "tick": 144,
+          "overlaps": 1,
+          "width": 107.80600761937234,
+          "height": 125.83133764306922,
+          "recovering": 3
+        },
+        {
+          "tick": 168,
+          "overlaps": 0,
+          "width": 109.88041673679464,
+          "height": 133.7324008775243,
+          "recovering": 0
+        },
+        {
+          "tick": 192,
+          "overlaps": 0,
+          "width": 107.80600761937234,
+          "height": 135.6338932137807,
+          "recovering": 0
+        },
+        {
+          "tick": 216,
+          "overlaps": 0,
+          "width": 107.80600761937234,
+          "height": 132.4242025330305,
+          "recovering": 0
+        },
+        {
+          "tick": 240,
+          "overlaps": 0,
+          "width": 107.80600761937234,
+          "height": 131.39404647595558,
+          "recovering": 0
+        }
+      ]
+    },
+    {
+      "case": "gas drill followed by patrol",
+      "type": "probe",
+      "stepOnly": true,
+      "crossedAt": 32,
+      "sideStepRequests": 199,
+      "recoveryMovementFrames": 1421,
+      "recoveryWaitFrames": 959,
+      "patrolTurns": 46,
+      "frames": [
+        {
+          "tick": 0,
+          "overlaps": 60,
+          "width": 34,
+          "height": 71.93946982853492,
+          "recovering": 0
+        },
+        {
+          "tick": 24,
+          "overlaps": 11,
+          "width": 90.84315584845655,
+          "height": 80.43303893658663,
+          "recovering": 17
+        },
+        {
+          "tick": 48,
+          "overlaps": 10,
+          "width": 113.00698798203376,
+          "height": 128.63473491622915,
+          "recovering": 14
+        },
+        {
+          "tick": 72,
+          "overlaps": 12,
+          "width": 117.71550860857332,
+          "height": 105.97063432755351,
+          "recovering": 13
+        },
+        {
+          "tick": 96,
+          "overlaps": 2,
+          "width": 117.71550860857332,
+          "height": 109.42021535317343,
+          "recovering": 9
+        },
+        {
+          "tick": 120,
+          "overlaps": 3,
+          "width": 129.8707476408576,
+          "height": 103.19471091475327,
+          "recovering": 6
+        },
+        {
+          "tick": 144,
+          "overlaps": 7,
+          "width": 126.71871708375812,
+          "height": 115.09265825682934,
+          "recovering": 14
+        },
+        {
+          "tick": 168,
+          "overlaps": 4,
+          "width": 129.613474993892,
+          "height": 144.01436458730785,
+          "recovering": 10
+        },
+        {
+          "tick": 192,
+          "overlaps": 0,
+          "width": 129.613474993892,
+          "height": 152.30235402205767,
+          "recovering": 5
+        },
+        {
+          "tick": 216,
+          "overlaps": 0,
+          "width": 143.592589334941,
+          "height": 140.86972826257215,
+          "recovering": 1
+        },
+        {
+          "tick": 240,
+          "overlaps": 0,
+          "width": 145.613474993892,
+          "height": 123.17234058584381,
+          "recovering": 0
+        }
+      ]
+    }
+  ]
+}
