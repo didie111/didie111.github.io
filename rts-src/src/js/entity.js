@@ -665,7 +665,10 @@ class Entity {
     }
     const a = o.depotApproach;
     if (!a) { this.vx = 0; this.vy = 0; return false; }
-    this.moveTo(a.x, a.y, .001);
+    // The approach is already on the one-pixel deposit boundary. Even a tiny
+    // early arrival can leave cargo outside that boundary forever. Finish the
+    // actual last movement step; a path's completion is still not a deposit.
+    this.moveTo(a.x, a.y, 0);
     // Missing/partial paths and immobility never count as a deposit.
     return depotReturnDistance(this, th) <= 1;
   }

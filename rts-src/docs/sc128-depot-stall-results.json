@@ -1,0 +1,687 @@
+{
+  "before": {
+    "version": "2026.10.03-sc1.27",
+    "nearEdge": [
+      {
+        "type": "scv",
+        "hall": "cc",
+        "order": "ret",
+        "kind": "min",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      },
+      {
+        "type": "scv",
+        "hall": "cc",
+        "order": "ret",
+        "kind": "gas",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      },
+      {
+        "type": "scv",
+        "hall": "cc",
+        "order": "gather",
+        "kind": "min",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      },
+      {
+        "type": "scv",
+        "hall": "cc",
+        "order": "gather",
+        "kind": "gas",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      },
+      {
+        "type": "drone",
+        "hall": "hatchery",
+        "order": "ret",
+        "kind": "min",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      },
+      {
+        "type": "drone",
+        "hall": "hatchery",
+        "order": "ret",
+        "kind": "gas",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      },
+      {
+        "type": "drone",
+        "hall": "hatchery",
+        "order": "gather",
+        "kind": "min",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      },
+      {
+        "type": "drone",
+        "hall": "hatchery",
+        "order": "gather",
+        "kind": "gas",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      },
+      {
+        "type": "drone",
+        "hall": "lair",
+        "order": "ret",
+        "kind": "min",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      },
+      {
+        "type": "drone",
+        "hall": "lair",
+        "order": "ret",
+        "kind": "gas",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      },
+      {
+        "type": "drone",
+        "hall": "lair",
+        "order": "gather",
+        "kind": "min",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      },
+      {
+        "type": "drone",
+        "hall": "lair",
+        "order": "gather",
+        "kind": "gas",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      },
+      {
+        "type": "drone",
+        "hall": "hive",
+        "order": "ret",
+        "kind": "min",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      },
+      {
+        "type": "drone",
+        "hall": "hive",
+        "order": "ret",
+        "kind": "gas",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      },
+      {
+        "type": "drone",
+        "hall": "hive",
+        "order": "gather",
+        "kind": "min",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      },
+      {
+        "type": "drone",
+        "hall": "hive",
+        "order": "gather",
+        "kind": "gas",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      },
+      {
+        "type": "probe",
+        "hall": "nexus",
+        "order": "ret",
+        "kind": "min",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      },
+      {
+        "type": "probe",
+        "hall": "nexus",
+        "order": "ret",
+        "kind": "gas",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      },
+      {
+        "type": "probe",
+        "hall": "nexus",
+        "order": "gather",
+        "kind": "min",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      },
+      {
+        "type": "probe",
+        "hall": "nexus",
+        "order": "gather",
+        "kind": "gas",
+        "depositedAt": null,
+        "credited": 0,
+        "carry": 8,
+        "travel": 0,
+        "gap": 1.0004999999999882
+      }
+    ],
+    "startingEconomy": {
+      "seed": 1998,
+      "ticks": 5000,
+      "simulationMs": 4319,
+      "min": [
+        2258,
+        970,
+        50
+      ],
+      "stalls": [
+        {
+          "tick": 1142,
+          "type": "scv",
+          "id": 86,
+          "x": 3418.0000365134943,
+          "y": 506.9999283222814,
+          "gap": 1.0000716777186085,
+          "approach": [
+            3418,
+            507
+          ]
+        }
+      ],
+      "workers": [
+        {
+          "id": 77,
+          "type": "scv",
+          "returns": 30,
+          "carry": 8,
+          "phase": "ret"
+        },
+        {
+          "id": 78,
+          "type": "scv",
+          "returns": 30,
+          "carry": 0,
+          "phase": "go"
+        },
+        {
+          "id": 79,
+          "type": "scv",
+          "returns": 30,
+          "carry": 0,
+          "phase": "go"
+        },
+        {
+          "id": 80,
+          "type": "scv",
+          "returns": 29,
+          "carry": 0,
+          "phase": "mine"
+        },
+        {
+          "id": 81,
+          "type": "scv",
+          "returns": 30,
+          "carry": 0,
+          "phase": "mine"
+        },
+        {
+          "id": 82,
+          "type": "scv",
+          "returns": 31,
+          "carry": 0,
+          "phase": "go"
+        },
+        {
+          "id": 83,
+          "type": "scv",
+          "returns": 31,
+          "carry": 0,
+          "phase": "mine"
+        },
+        {
+          "id": 84,
+          "type": "scv",
+          "returns": 31,
+          "carry": 0,
+          "phase": "mine"
+        },
+        {
+          "id": 85,
+          "type": "scv",
+          "returns": 30,
+          "carry": 0,
+          "phase": "go"
+        },
+        {
+          "id": 86,
+          "type": "scv",
+          "returns": 4,
+          "carry": 8,
+          "phase": "ret"
+        },
+        {
+          "id": 105,
+          "type": "drone",
+          "returns": 29,
+          "carry": 8,
+          "phase": "ret"
+        },
+        {
+          "id": 106,
+          "type": "drone",
+          "returns": 29,
+          "carry": 8,
+          "phase": "ret"
+        },
+        {
+          "id": 107,
+          "type": "drone",
+          "returns": 29,
+          "carry": 8,
+          "phase": "ret"
+        },
+        {
+          "id": 108,
+          "type": "drone",
+          "returns": 28,
+          "carry": 0,
+          "phase": "go"
+        }
+      ]
+    }
+  },
+  "after": {
+    "version": "2026.10.03-sc1.28",
+    "nearEdge": [
+      {
+        "type": "scv",
+        "hall": "cc",
+        "order": "ret",
+        "kind": "min",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      },
+      {
+        "type": "scv",
+        "hall": "cc",
+        "order": "ret",
+        "kind": "gas",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      },
+      {
+        "type": "scv",
+        "hall": "cc",
+        "order": "gather",
+        "kind": "min",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      },
+      {
+        "type": "scv",
+        "hall": "cc",
+        "order": "gather",
+        "kind": "gas",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      },
+      {
+        "type": "drone",
+        "hall": "hatchery",
+        "order": "ret",
+        "kind": "min",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      },
+      {
+        "type": "drone",
+        "hall": "hatchery",
+        "order": "ret",
+        "kind": "gas",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      },
+      {
+        "type": "drone",
+        "hall": "hatchery",
+        "order": "gather",
+        "kind": "min",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      },
+      {
+        "type": "drone",
+        "hall": "hatchery",
+        "order": "gather",
+        "kind": "gas",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      },
+      {
+        "type": "drone",
+        "hall": "lair",
+        "order": "ret",
+        "kind": "min",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      },
+      {
+        "type": "drone",
+        "hall": "lair",
+        "order": "ret",
+        "kind": "gas",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      },
+      {
+        "type": "drone",
+        "hall": "lair",
+        "order": "gather",
+        "kind": "min",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      },
+      {
+        "type": "drone",
+        "hall": "lair",
+        "order": "gather",
+        "kind": "gas",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      },
+      {
+        "type": "drone",
+        "hall": "hive",
+        "order": "ret",
+        "kind": "min",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      },
+      {
+        "type": "drone",
+        "hall": "hive",
+        "order": "ret",
+        "kind": "gas",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      },
+      {
+        "type": "drone",
+        "hall": "hive",
+        "order": "gather",
+        "kind": "min",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      },
+      {
+        "type": "drone",
+        "hall": "hive",
+        "order": "gather",
+        "kind": "gas",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      },
+      {
+        "type": "probe",
+        "hall": "nexus",
+        "order": "ret",
+        "kind": "min",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      },
+      {
+        "type": "probe",
+        "hall": "nexus",
+        "order": "ret",
+        "kind": "gas",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      },
+      {
+        "type": "probe",
+        "hall": "nexus",
+        "order": "gather",
+        "kind": "min",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      },
+      {
+        "type": "probe",
+        "hall": "nexus",
+        "order": "gather",
+        "kind": "gas",
+        "depositedAt": 2,
+        "credited": 8,
+        "carry": 0,
+        "travel": 0.0004999999999881766,
+        "gap": 1
+      }
+    ],
+    "startingEconomy": {
+      "seed": 1998,
+      "ticks": 5000,
+      "simulationMs": 4385,
+      "min": [
+        2442,
+        970,
+        50
+      ],
+      "stalls": [],
+      "workers": [
+        {
+          "id": 77,
+          "type": "scv",
+          "returns": 30,
+          "carry": 8,
+          "phase": "ret"
+        },
+        {
+          "id": 78,
+          "type": "scv",
+          "returns": 30,
+          "carry": 0,
+          "phase": "go"
+        },
+        {
+          "id": 79,
+          "type": "scv",
+          "returns": 30,
+          "carry": 0,
+          "phase": "go"
+        },
+        {
+          "id": 80,
+          "type": "scv",
+          "returns": 29,
+          "carry": 0,
+          "phase": "mine"
+        },
+        {
+          "id": 81,
+          "type": "scv",
+          "returns": 30,
+          "carry": 0,
+          "phase": "mine"
+        },
+        {
+          "id": 82,
+          "type": "scv",
+          "returns": 31,
+          "carry": 0,
+          "phase": "go"
+        },
+        {
+          "id": 83,
+          "type": "scv",
+          "returns": 31,
+          "carry": 0,
+          "phase": "mine"
+        },
+        {
+          "id": 84,
+          "type": "scv",
+          "returns": 31,
+          "carry": 0,
+          "phase": "mine"
+        },
+        {
+          "id": 85,
+          "type": "scv",
+          "returns": 30,
+          "carry": 0,
+          "phase": "go"
+        },
+        {
+          "id": 86,
+          "type": "scv",
+          "returns": 27,
+          "carry": 8,
+          "phase": "ret"
+        },
+        {
+          "id": 105,
+          "type": "drone",
+          "returns": 29,
+          "carry": 8,
+          "phase": "ret"
+        },
+        {
+          "id": 106,
+          "type": "drone",
+          "returns": 29,
+          "carry": 8,
+          "phase": "ret"
+        },
+        {
+          "id": 107,
+          "type": "drone",
+          "returns": 29,
+          "carry": 8,
+          "phase": "ret"
+        },
+        {
+          "id": 108,
+          "type": "drone",
+          "returns": 28,
+          "carry": 0,
+          "phase": "go"
+        }
+      ]
+    }
+  }
+}

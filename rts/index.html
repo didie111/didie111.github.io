@@ -579,7 +579,7 @@ function supplyText(v) { return (Math.round(v * 2) / 2).toString(); }
 'use strict';
 // 확장 데이터: Blizzard StarCraft Compendium 수치/역할을 참고한 웹게임 구현.
 // 원작 MPQ/엔진을 포함하지 않으며 투사체/애니메이션/길찾기는 자체 구현이다.
-const RTS_VERSION = '2026.10.03-sc1.27';
+const RTS_VERSION = '2026.10.03-sc1.28';
 // flingy.dat: [acceleration, turn N/256 circle, halt N/256 px, movement control].
 // Control 0: acceleration + braking; 1: acceleration without braking; 2: iscript.
 // The acceleration field alone does not identify walking units (notably templars).
@@ -2472,7 +2472,10 @@ class Entity {
     }
     const a = o.depotApproach;
     if (!a) { this.vx = 0; this.vy = 0; return false; }
-    this.moveTo(a.x, a.y, .001);
+    // The approach is already on the one-pixel deposit boundary. Even a tiny
+    // early arrival can leave cargo outside that boundary forever. Finish the
+    // actual last movement step; a path's completion is still not a deposit.
+    this.moveTo(a.x, a.y, 0);
     // Missing/partial paths and immobility never count as a deposit.
     return depotReturnDistance(this, th) <= 1;
   }
