@@ -599,6 +599,31 @@ class Entity {
   }
 
   // ---------- 채취 ----------
+  moveToMineral(res, o) {
+    // OpenBW keeps a reachable border target instead of replacing it with the
+    // resource center. That center is occupied, and nearestPassable's tile scan
+    // can otherwise send a worker around an entire connected mineral line.
+    if (edgeDist(this, res) <= 3) {
+      this.path = null; this.vx = 0; this.vy = 0; return true;
+    }
+    let a = o.mineralApproach;
+    if (a && (a.target !== res || !PF.positionClear(a.x, a.y, this.r, 0) || this.stuck >= 20)) {
+      a = o.mineralApproach = null; this.path = null; o.mineralRetryAt = 0;
+    }
+    if (!a) {
+      if (GAME.tick < (o.mineralRetryAt || 0)) return false;
+      a = mineralApproach(this, res, o);
+      if (!a) { this.path = null; this.vx = 0; this.vy = 0; o.mineralRetryAt = GAME.tick + 6 + this.id % 6; return false; }
+      o.mineralApproach = a;
+      this.path = a.path; this.pi = 0; this.pgx = a.x; this.pgy = a.y;
+      this.pathExact = true; this.pathDynamic = false;
+      this.repathAt = GAME.tick + 120; this.pathRetryAt = 0;
+      this.unitPathUntil = 0; this.stuck = 0; this.lastD = undefined;
+    }
+    this.moveTo(a.x, a.y, .001);
+    // A failed/partial path or an immobile worker is not an arrival at minerals.
+    return edgeDist(this, res) <= 3;
+  }
   returnDepot(o) {
     // ReturnMinerals/ReturnGas처럼 명령과 적재물을 유지하며 반납 기지를 재탐색한다.
     this.noCollide = true;
@@ -622,6 +647,7 @@ class Entity {
         const p = P(this.owner);
         if (this.carryKind === 'gas') p.gas += this.carry; else p.min += this.carry;
         this.carry = 0; this.carryKind = null; o.phase = 'go'; this.path = null;
+        o.mineralApproach = null; o.mineralRetryAt = 0;
         o.depot = null; o.depotRetryAt = 0;
       }
       return;
@@ -651,10 +677,10 @@ class Entity {
         }
         return;
       }
-      if (this.moveTo(res.x, res.y, 3, res)) {
+      if (this.moveToMineral(res, o)) {
         if (res.miner && res.miner !== this && !res.miner.dead && res.miner.orders[0] && res.miner.orders[0].tgt === res && res.miner.orders[0].phase === 'mine') {
           const alt = findFreeMineral(res.x, res.y, this, res);
-          if (alt) { o.tgt = alt; this.path = null; }
+          if (alt) { o.tgt = alt; this.path = null; o.mineralApproach = null; o.mineralRetryAt = 0; }
           return; // 대기
         }
         res.miner = this; o.phase = 'mine'; this.mineT = 75;
@@ -1083,6 +1109,51 @@ function gasBuildApproach(worker, box, failed) {
   for (const y of ys) points.push([left, y], [right, y]);
   return points.filter(p => !(failed && failed.has(p.join(','))) && PF.positionClear(...p, worker.r, 0))
     .sort((a, b) => dist(worker.x, worker.y, ...a) - dist(worker.x, worker.y, ...b))[0];
+}
+
+function mineralApproach(worker, res, o) {
+  if (o.mineralCandidateTarget !== res) { o.mineralCandidateTarget = res; o.mineralCandidateOffset = 0; }
+  const gap = worker.r + 2, left = res.x - res.hw, right = res.x + res.hw,
+    top = res.y - res.hh, bottom = res.y + res.hh;
+  const points = [], seen = new Set();
+  const add = (x, y) => {
+    const key = x + ',' + y;
+    if (!seen.has(key) && PF.positionClear(x, y, worker.r, 0)) {
+      seen.add(key); points.push({x, y, direct: dist(worker.x, worker.y, x, y)});
+    }
+  };
+  const xs = [Math.max(left, Math.min(right, worker.x))], ys = [Math.max(top, Math.min(bottom, worker.y))];
+  for (let x = left; x <= right; x += TILE / 4) xs.push(x);
+  for (let y = top; y <= bottom; y += TILE / 4) ys.push(y);
+  for (const x of xs) { add(x, top - gap); add(x, bottom + gap); }
+  for (const y of ys) { add(left - gap, y); add(right + gap, y); }
+  points.sort((a, b) => a.direct - b.direct);
+  const radius = Math.max(3, worker.r * .75);
+  let best = null, bestLength = Infinity, resume = null;
+  const offset = o.mineralCandidateOffset || 0;
+  for (let i = 0; i < points.length; i++) {
+    const index = (offset + i) % points.length, p = points[index];
+    if (p.direct >= bestLength) { if (!offset) break; continue; }
+    let route;
+    if (PF.lineClear(worker.x, worker.y, p.x, p.y, radius, 0)) route = [[p.x, p.y]];
+    else {
+      // Resume at untested edges next time: repeated searches in an enclosed
+      // near-side pocket must not consume every tick's budget forever.
+      if (PF.budget <= 0) { if (resume === null) resume = index; continue; }
+      route = PF.worldPath(worker.x, worker.y, p.x, p.y, worker.r, 0, null, Math.min(9000, PF.budget));
+      if (!route?.length || dist(...route.at(-1), p.x, p.y) >= .001) continue;
+    }
+    let x = worker.x, y = worker.y, length = 0;
+    const clear = route.every(([nx, ny]) => {
+      const ok = PF.lineClear(x, y, nx, ny, radius, 0);
+      length += dist(x, y, nx, ny); x = nx; y = ny; return ok;
+    });
+    if (clear && length < bestLength) {
+      bestLength = length; best = {target: res, x: p.x, y: p.y, path: route};
+    }
+  }
+  o.mineralCandidateOffset = best ? 0 : resume || 0;
+  return best;
 }
 
 function startConstruction(worker, o) {
