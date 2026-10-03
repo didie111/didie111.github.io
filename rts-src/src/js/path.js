@@ -117,8 +117,9 @@ const PF = (() => {
     if (terrainRectEmpty(tileOf(x-r), tileOf(y-r), tileOf(x+r), tileOf(y+r))) return true;
     for (let ty = tileOf(y - r); ty <= tileOf(y + r); ty++) for (let tx = tileOf(x - r); tx <= tileOf(x + r); tx++) {
       if (passable(tx, ty, ignoreId)) continue;
-      const qx = Math.max(tx * TILE, Math.min(x, (tx + 1) * TILE));
-      const qy = Math.max(ty * TILE, Math.min(y, (ty + 1) * TILE));
+      const [left, top, right, bottom] = groundObstacleRect(tx, ty);
+      const qx = Math.max(left, Math.min(x, right));
+      const qy = Math.max(top, Math.min(y, bottom));
       if ((x - qx) ** 2 + (y - qy) ** 2 < (r - 0.001) ** 2) return false;
     }
     return true;

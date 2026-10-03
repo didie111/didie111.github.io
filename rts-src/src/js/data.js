@@ -167,7 +167,8 @@ const UNITS = {
 // ---------------------------------------------------------------
 const BUILDINGS = {
   // ---------- TERRAN ----------
-  cc: { name: '커맨드 센터', race: 'T', hp: 1500, armor: 1, w: 4, h: 3, cost: [400, 0], time: 1800, provides: 10,
+  // units.dat collision half-extents; placement remains 4x3 tiles.
+  cc: { name: '커맨드 센터', race: 'T', hp: 1500, armor: 1, w: 4, h: 3, collision: [58, 41], cost: [400, 0], time: 1800, provides: 10,
     townHall: true, produces: ['scv'], research: [], spells: ['scan', 'lift'], hotkey: 'C', canLift: true, sight: 10, tier: 0 },
   depot: { name: '서플라이 디팟', race: 'T', hp: 500, armor: 1, w: 3, h: 2, cost: [100, 0], time: 600, provides: 8, hotkey: 'S', sight: 8 },
   refinery: { name: '리파이너리', race: 'T', hp: 750, armor: 1, w: 4, h: 2, cost: [100, 0], time: 600, onGeyser: true, hotkey: 'R', sight: 8 },
@@ -191,11 +192,11 @@ const BUILDINGS = {
     research: ['irradiate', 'emp_t', 'yamato', 'lockdown_t', 'cloak_g'], hotkey: 'I', adv: true, sight: 8, tier: 2 },
 
   // ---------- ZERG ----------
-  hatchery: { name: '해처리', race: 'Z', hp: 1250, armor: 1, w: 4, h: 3, cost: [300, 0], time: 1800, provides: 1,
+  hatchery: { name: '해처리', race: 'Z', hp: 1250, armor: 1, w: 4, h: 3, collision: [49, 32], cost: [300, 0], time: 1800, provides: 1,
     townHall: true, larvaHall: true, research: ['burrow_t'], spells: ['select_larva', 'morph_lair'], hotkey: 'H', noCreepNeeded: true, sight: 9, tier: 0 },
-  lair: { name: '레어', race: 'Z', hp: 1800, armor: 1, w: 4, h: 3, cost: [150, 100], time: 1500, provides: 1, hidden: true,
+  lair: { name: '레어', race: 'Z', hp: 1800, armor: 1, w: 4, h: 3, collision: [49, 32], cost: [150, 100], time: 1500, provides: 1, hidden: true,
     townHall: true, larvaHall: true, research: ['burrow_t', 'ventral', 'pneumatized'], spells: ['select_larva', 'morph_hive'], sight: 10, tier: 1, counts: ['hatchery'] },
-  hive: { name: '하이브', race: 'Z', hp: 2500, armor: 1, w: 4, h: 3, cost: [200, 150], time: 1800, provides: 1, hidden: true,
+  hive: { name: '하이브', race: 'Z', hp: 2500, armor: 1, w: 4, h: 3, collision: [49, 32], cost: [200, 150], time: 1800, provides: 1, hidden: true,
     townHall: true, larvaHall: true, research: ['burrow_t', 'ventral', 'pneumatized'], spells: ['select_larva'], sight: 11, tier: 2, counts: ['hatchery', 'lair'] },
   extractor: { name: '익스트랙터', race: 'Z', hp: 750, armor: 1, w: 4, h: 2, cost: [50, 0], time: 600, onGeyser: true, hotkey: 'E', noCreepNeeded: true, sight: 7 },
   pool: { name: '스포닝 풀', race: 'Z', hp: 750, armor: 1, w: 3, h: 2, cost: [200, 0], time: 1200, req: ['hatchery'],
@@ -218,7 +219,7 @@ const BUILDINGS = {
     research: ['plague_t', 'consume_t'], hotkey: 'F', adv: true, sight: 8 },
 
   // ---------- PROTOSS ----------
-  nexus: { name: '넥서스', race: 'P', hp: 750, sh: 750, armor: 1, w: 4, h: 3, cost: [400, 0], time: 1800, provides: 9,
+  nexus: { name: '넥서스', race: 'P', hp: 750, sh: 750, armor: 1, w: 4, h: 3, collision: [56, 39], cost: [400, 0], time: 1800, provides: 9,
     townHall: true, produces: ['probe'], hotkey: 'N', noPower: true, sight: 11, tier: 0 },
   pylon: { name: '파일런', race: 'P', hp: 300, sh: 300, armor: 0, w: 2, h: 2, cost: [100, 0], time: 450, provides: 8, hotkey: 'P', noPower: true, pylon: true, sight: 8 },
   assimilator: { name: '어시밀레이터', race: 'P', hp: 450, sh: 450, armor: 1, w: 4, h: 2, cost: [100, 0], time: 600, onGeyser: true, hotkey: 'A', noPower: true, sight: 8 },

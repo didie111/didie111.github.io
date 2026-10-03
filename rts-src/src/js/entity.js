@@ -615,40 +615,71 @@ class Entity {
       a = mineralApproach(this, res, o);
       if (!a) { this.path = null; this.vx = 0; this.vy = 0; o.mineralRetryAt = GAME.tick + 6 + this.id % 6; return false; }
       o.mineralApproach = a;
-      this.path = a.path; this.pi = 0; this.pgx = a.x; this.pgy = a.y;
-      this.pathExact = true; this.pathDynamic = false;
-      this.repathAt = GAME.tick + 120; this.pathRetryAt = 0;
-      this.unitPathUntil = 0; this.stuck = 0; this.lastD = undefined;
+      this.setResourceApproach(a);
     }
     this.moveTo(a.x, a.y, .001);
     // A failed/partial path or an immobile worker is not an arrival at minerals.
     return edgeDist(this, res) <= 3;
   }
+  setResourceApproach(a) {
+    this.path = a.path; this.pi = 0; this.pgx = a.x; this.pgy = a.y;
+    this.pathExact = true; this.pathDynamic = false; this.repathAt = GAME.tick + 120;
+    this.pathRetryAt = 0; this.unitPathUntil = 0; this.stuck = 0; this.lastD = undefined;
+  }
   returnDepot(o) {
-    // ReturnMinerals/ReturnGas처럼 명령과 적재물을 유지하며 반납 기지를 재탐색한다.
+    // Select the nearest owned, active depot with an actually reachable body edge.
     this.noCollide = true;
-    let th = o.depot;
-    if (th && (th.dead || th.owner !== this.owner || !th.done || th.lifted || th.liftT > 0)) {
-      th = o.depot = null; this.path = null; o.depotRetryAt = 0;
+    let th = o.depot, a = o.depotApproach;
+    if (th && (!activeResourceDepot(th, this.owner) || a &&
+        (a.target !== th || !PF.positionClear(a.x, a.y, this.r, 0) || this.stuck >= 20))) {
+      th = o.depot = null; o.depotApproach = null; this.path = null; o.depotRetryAt = 0;
     }
+    if (th && (depotReturnDistance(this, th) <= 1 || o.depotApproach)) return th;
+    if (th) { th = o.depot = null; this.path = null; o.depotRetryAt = 0; }
     if (!th && GAME.tick >= (o.depotRetryAt || 0)) {
-      th = o.depot = nearestTownHall(this.owner, this.x, this.y);
-      if (!th) o.depotRetryAt = GAME.tick + 75;
+      const depots = GAME.entities.filter(e => activeResourceDepot(e, this.owner))
+        .sort((a, b) => dist(this.x, this.y, a.x, a.y) - dist(this.x, this.y, b.x, b.y));
+      const offset = o.depotSearchOffset || 0;
+      let resume = null;
+      for (let i = 0; i < depots.length; i++) {
+        const index = (offset + i) % depots.length, candidate = depots[index];
+        a = depotReturnDistance(this, candidate) <= 1 ? null : borderApproach(this, candidate, o, bodyBox(candidate), 12, 'depot');
+        if (a || depotReturnDistance(this, candidate) <= 1) {
+          th = o.depot = candidate; o.depotApproach = a; o.depotSearchOffset = 0;
+          if (a) this.setResourceApproach(a);
+          break;
+        }
+        if (PF.budget <= 0 && resume === null) resume = (index + 1) % depots.length;
+      }
+      if (!th) {
+        o.depotSearchOffset = resume || 0;
+        o.depotRetryAt = GAME.tick + (depots.length ? 6 + this.id % 6 : 75);
+      }
     }
     if (!th) { this.path = null; this.vx = 0; this.vy = 0; }
     return th;
+  }
+  moveToDepot(th, o) {
+    if (depotReturnDistance(this, th) <= 1) {
+      this.path = null; this.vx = 0; this.vy = 0; return true;
+    }
+    const a = o.depotApproach;
+    if (!a) { this.vx = 0; this.vy = 0; return false; }
+    this.moveTo(a.x, a.y, .001);
+    // Missing/partial paths and immobility never count as a deposit.
+    return depotReturnDistance(this, th) <= 1;
   }
   gatherLogic(o) {
     if (this.carry > 0 && o.phase !== 'ret' && o.phase !== 'in') o.phase = 'ret';
     if (o.phase === 'ret') {
       const th = this.returnDepot(o);
       if (!th) return;
-      if (this.moveTo(th.x, th.y, 4, th)) {
+      if (this.moveToDepot(th, o)) {
         const p = P(this.owner);
         if (this.carryKind === 'gas') p.gas += this.carry; else p.min += this.carry;
         this.carry = 0; this.carryKind = null; o.phase = 'go'; this.path = null;
         o.mineralApproach = null; o.mineralRetryAt = 0;
-        o.depot = null; o.depotRetryAt = 0;
+        o.depot = null; o.depotApproach = null; o.depotRetryAt = 0;
       }
       return;
     }
@@ -717,7 +748,7 @@ class Entity {
     if (this.carry <= 0) { this.nextOrder(); return; }
     const th = this.returnDepot(o);
     if (!th) return;
-    if (this.moveTo(th.x, th.y, 4, th)) {
+    if (this.moveToDepot(th, o)) {
       const p = P(this.owner);
       if (this.carryKind === 'gas') p.gas += this.carry; else p.min += this.carry;
       this.carry = 0; this.carryKind = null;
@@ -1112,9 +1143,13 @@ function gasBuildApproach(worker, box, failed) {
 }
 
 function mineralApproach(worker, res, o) {
-  if (o.mineralCandidateTarget !== res) { o.mineralCandidateTarget = res; o.mineralCandidateOffset = 0; }
-  const gap = worker.r + 2, left = res.x - res.hw, right = res.x + res.hw,
-    top = res.y - res.hh, bottom = res.y + res.hh;
+  return borderApproach(worker, res, o, res, worker.r + 2, 'mineral');
+}
+function borderApproach(worker, res, o, box, gap, kind) {
+  const targetKey = kind + 'CandidateTarget', offsetKey = kind + 'CandidateOffset';
+  if (o[targetKey] !== res) { o[targetKey] = res; o[offsetKey] = 0; }
+  const left = box.x - box.hw, right = box.x + box.hw,
+    top = box.y - box.hh, bottom = box.y + box.hh;
   const points = [], seen = new Set();
   const add = (x, y) => {
     const key = x + ',' + y;
@@ -1130,7 +1165,7 @@ function mineralApproach(worker, res, o) {
   points.sort((a, b) => a.direct - b.direct);
   const radius = Math.max(3, worker.r * .75);
   let best = null, bestLength = Infinity, resume = null;
-  const offset = o.mineralCandidateOffset || 0;
+  const offset = o[offsetKey] || 0;
   for (let i = 0; i < points.length; i++) {
     const index = (offset + i) % points.length, p = points[index];
     if (p.direct >= bestLength) { if (!offset) break; continue; }
@@ -1141,7 +1176,13 @@ function mineralApproach(worker, res, o) {
       // near-side pocket must not consume every tick's budget forever.
       if (PF.budget <= 0) { if (resume === null) resume = index; continue; }
       route = PF.worldPath(worker.x, worker.y, p.x, p.y, worker.r, 0, null, Math.min(9000, PF.budget));
-      if (!route?.length || dist(...route.at(-1), p.x, p.y) >= .001) continue;
+      if (!route?.length) continue;
+      // The real depot edge can lie inside an occupied placement tile.
+      // Connect the coarse route only when the entire final segment is legal.
+      if (dist(...route.at(-1), p.x, p.y) >= .001) {
+        if (!PF.lineClear(...route.at(-1), p.x, p.y, radius, 0)) continue;
+        route.push([p.x, p.y]);
+      }
     }
     let x = worker.x, y = worker.y, length = 0;
     const clear = route.every(([nx, ny]) => {
@@ -1152,7 +1193,7 @@ function mineralApproach(worker, res, o) {
       bestLength = length; best = {target: res, x: p.x, y: p.y, path: route};
     }
   }
-  o.mineralCandidateOffset = best ? 0 : resume || 0;
+  o[offsetKey] = best ? 0 : resume || 0;
   return best;
 }
 

@@ -369,7 +369,8 @@ const UNITS = {
 // ---------------------------------------------------------------
 const BUILDINGS = {
   // ---------- TERRAN ----------
-  cc: { name: '커맨드 센터', race: 'T', hp: 1500, armor: 1, w: 4, h: 3, cost: [400, 0], time: 1800, provides: 10,
+  // units.dat collision half-extents; placement remains 4x3 tiles.
+  cc: { name: '커맨드 센터', race: 'T', hp: 1500, armor: 1, w: 4, h: 3, collision: [58, 41], cost: [400, 0], time: 1800, provides: 10,
     townHall: true, produces: ['scv'], research: [], spells: ['scan', 'lift'], hotkey: 'C', canLift: true, sight: 10, tier: 0 },
   depot: { name: '서플라이 디팟', race: 'T', hp: 500, armor: 1, w: 3, h: 2, cost: [100, 0], time: 600, provides: 8, hotkey: 'S', sight: 8 },
   refinery: { name: '리파이너리', race: 'T', hp: 750, armor: 1, w: 4, h: 2, cost: [100, 0], time: 600, onGeyser: true, hotkey: 'R', sight: 8 },
@@ -393,11 +394,11 @@ const BUILDINGS = {
     research: ['irradiate', 'emp_t', 'yamato', 'lockdown_t', 'cloak_g'], hotkey: 'I', adv: true, sight: 8, tier: 2 },
 
   // ---------- ZERG ----------
-  hatchery: { name: '해처리', race: 'Z', hp: 1250, armor: 1, w: 4, h: 3, cost: [300, 0], time: 1800, provides: 1,
+  hatchery: { name: '해처리', race: 'Z', hp: 1250, armor: 1, w: 4, h: 3, collision: [49, 32], cost: [300, 0], time: 1800, provides: 1,
     townHall: true, larvaHall: true, research: ['burrow_t'], spells: ['select_larva', 'morph_lair'], hotkey: 'H', noCreepNeeded: true, sight: 9, tier: 0 },
-  lair: { name: '레어', race: 'Z', hp: 1800, armor: 1, w: 4, h: 3, cost: [150, 100], time: 1500, provides: 1, hidden: true,
+  lair: { name: '레어', race: 'Z', hp: 1800, armor: 1, w: 4, h: 3, collision: [49, 32], cost: [150, 100], time: 1500, provides: 1, hidden: true,
     townHall: true, larvaHall: true, research: ['burrow_t', 'ventral', 'pneumatized'], spells: ['select_larva', 'morph_hive'], sight: 10, tier: 1, counts: ['hatchery'] },
-  hive: { name: '하이브', race: 'Z', hp: 2500, armor: 1, w: 4, h: 3, cost: [200, 150], time: 1800, provides: 1, hidden: true,
+  hive: { name: '하이브', race: 'Z', hp: 2500, armor: 1, w: 4, h: 3, collision: [49, 32], cost: [200, 150], time: 1800, provides: 1, hidden: true,
     townHall: true, larvaHall: true, research: ['burrow_t', 'ventral', 'pneumatized'], spells: ['select_larva'], sight: 11, tier: 2, counts: ['hatchery', 'lair'] },
   extractor: { name: '익스트랙터', race: 'Z', hp: 750, armor: 1, w: 4, h: 2, cost: [50, 0], time: 600, onGeyser: true, hotkey: 'E', noCreepNeeded: true, sight: 7 },
   pool: { name: '스포닝 풀', race: 'Z', hp: 750, armor: 1, w: 3, h: 2, cost: [200, 0], time: 1200, req: ['hatchery'],
@@ -420,7 +421,7 @@ const BUILDINGS = {
     research: ['plague_t', 'consume_t'], hotkey: 'F', adv: true, sight: 8 },
 
   // ---------- PROTOSS ----------
-  nexus: { name: '넥서스', race: 'P', hp: 750, sh: 750, armor: 1, w: 4, h: 3, cost: [400, 0], time: 1800, provides: 9,
+  nexus: { name: '넥서스', race: 'P', hp: 750, sh: 750, armor: 1, w: 4, h: 3, collision: [56, 39], cost: [400, 0], time: 1800, provides: 9,
     townHall: true, produces: ['probe'], hotkey: 'N', noPower: true, sight: 11, tier: 0 },
   pylon: { name: '파일런', race: 'P', hp: 300, sh: 300, armor: 0, w: 2, h: 2, cost: [100, 0], time: 450, provides: 8, hotkey: 'P', noPower: true, pylon: true, sight: 8 },
   assimilator: { name: '어시밀레이터', race: 'P', hp: 450, sh: 450, armor: 1, w: 4, h: 2, cost: [100, 0], time: 600, onGeyser: true, hotkey: 'A', noPower: true, sight: 8 },
@@ -578,7 +579,7 @@ function supplyText(v) { return (Math.round(v * 2) / 2).toString(); }
 'use strict';
 // 확장 데이터: Blizzard StarCraft Compendium 수치/역할을 참고한 웹게임 구현.
 // 원작 MPQ/엔진을 포함하지 않으며 투사체/애니메이션/길찾기는 자체 구현이다.
-const RTS_VERSION = '2026.10.03-sc1.25';
+const RTS_VERSION = '2026.10.03-sc1.26';
 // flingy.dat: [acceleration, turn N/256 circle, halt N/256 px, movement control].
 // Control 0: acceleration + braking; 1: acceleration without braking; 2: iscript.
 // The acceleration field alone does not identify walking units (notably templars).
@@ -970,6 +971,14 @@ function groundPassable(tx, ty) {
   const i = tIdx(tx, ty);
   return MAP.walk[i] === 1 && MAP.occ[i] === 0;
 }
+function groundObstacleRect(tx, ty) {
+  const i = tIdx(tx, ty), b = MAP.walk[i] === 1 && GAME.byId.get(MAP.occ[i]);
+  if (b && b.def.collision) {
+    const box = bodyBox(b);
+    return [box.x - box.hw, box.y - box.hh, box.x + box.hw, box.y + box.hh];
+  }
+  return [tx * TILE, ty * TILE, (tx + 1) * TILE, (ty + 1) * TILE];
+}
 
 // 파일런 전력장 (타원 반경 8x5 타일)
 function isPowered(owner, cx, cy) {
@@ -1134,8 +1143,9 @@ const PF = (() => {
     if (terrainRectEmpty(tileOf(x-r), tileOf(y-r), tileOf(x+r), tileOf(y+r))) return true;
     for (let ty = tileOf(y - r); ty <= tileOf(y + r); ty++) for (let tx = tileOf(x - r); tx <= tileOf(x + r); tx++) {
       if (passable(tx, ty, ignoreId)) continue;
-      const qx = Math.max(tx * TILE, Math.min(x, (tx + 1) * TILE));
-      const qy = Math.max(ty * TILE, Math.min(y, (ty + 1) * TILE));
+      const [left, top, right, bottom] = groundObstacleRect(tx, ty);
+      const qx = Math.max(left, Math.min(x, right));
+      const qy = Math.max(top, Math.min(y, bottom));
       if ((x - qx) ** 2 + (y - qy) ** 2 < (r - 0.001) ** 2) return false;
     }
     return true;
@@ -1500,6 +1510,18 @@ function edgeDistPt(a, x, y) {
   const dy = Math.max(0, Math.abs(a.y - y) - hy(a));
   return Math.hypot(dx, dy);
 }
+function bodyBox(e) {
+  const size = e.def && e.def.collision;
+  return size ? {x: e.x, y: e.y, hw: size[0], hh: size[1]} : e;
+}
+function depotReturnDistance(worker, depot) {
+  // All three workers have 11px DAT extents; their movement circles remain unchanged.
+  return edgeDist({x: worker.x, y: worker.y, hw: 11, hh: 11}, bodyBox(depot));
+}
+function activeResourceDepot(e, owner) {
+  return e && !e.dead && e.owner === owner && e.isBuilding && e.def.townHall &&
+    (e.done || e.def.larvaHall && e.morph) && !e.lifted && !(e.liftT > 0);
+}
 function hasTech(owner, id) { return !!P(owner).tech[id]; }
 function upgLevel(owner, id) { return P(owner).upg[id] || 0; }
 
@@ -1622,7 +1644,7 @@ function canPlace(type, tx, ty, owner, builder, quiet) {
 function nearestTownHall(owner, x, y) {
   let best = null, bd = 1e9;
   for (const e of GAME.entities) {
-    if (e.dead || e.owner !== owner || !e.isBuilding || !e.def.townHall || !e.done || e.lifted || e.liftT > 0) continue;
+    if (!activeResourceDepot(e, owner)) continue;
     const d = dist(x, y, e.x, e.y);
     if (d < bd) { bd = d; best = e; }
   }
@@ -2400,40 +2422,71 @@ class Entity {
       a = mineralApproach(this, res, o);
       if (!a) { this.path = null; this.vx = 0; this.vy = 0; o.mineralRetryAt = GAME.tick + 6 + this.id % 6; return false; }
       o.mineralApproach = a;
-      this.path = a.path; this.pi = 0; this.pgx = a.x; this.pgy = a.y;
-      this.pathExact = true; this.pathDynamic = false;
-      this.repathAt = GAME.tick + 120; this.pathRetryAt = 0;
-      this.unitPathUntil = 0; this.stuck = 0; this.lastD = undefined;
+      this.setResourceApproach(a);
     }
     this.moveTo(a.x, a.y, .001);
     // A failed/partial path or an immobile worker is not an arrival at minerals.
     return edgeDist(this, res) <= 3;
   }
+  setResourceApproach(a) {
+    this.path = a.path; this.pi = 0; this.pgx = a.x; this.pgy = a.y;
+    this.pathExact = true; this.pathDynamic = false; this.repathAt = GAME.tick + 120;
+    this.pathRetryAt = 0; this.unitPathUntil = 0; this.stuck = 0; this.lastD = undefined;
+  }
   returnDepot(o) {
-    // ReturnMinerals/ReturnGas처럼 명령과 적재물을 유지하며 반납 기지를 재탐색한다.
+    // Select the nearest owned, active depot with an actually reachable body edge.
     this.noCollide = true;
-    let th = o.depot;
-    if (th && (th.dead || th.owner !== this.owner || !th.done || th.lifted || th.liftT > 0)) {
-      th = o.depot = null; this.path = null; o.depotRetryAt = 0;
+    let th = o.depot, a = o.depotApproach;
+    if (th && (!activeResourceDepot(th, this.owner) || a &&
+        (a.target !== th || !PF.positionClear(a.x, a.y, this.r, 0) || this.stuck >= 20))) {
+      th = o.depot = null; o.depotApproach = null; this.path = null; o.depotRetryAt = 0;
     }
+    if (th && (depotReturnDistance(this, th) <= 1 || o.depotApproach)) return th;
+    if (th) { th = o.depot = null; this.path = null; o.depotRetryAt = 0; }
     if (!th && GAME.tick >= (o.depotRetryAt || 0)) {
-      th = o.depot = nearestTownHall(this.owner, this.x, this.y);
-      if (!th) o.depotRetryAt = GAME.tick + 75;
+      const depots = GAME.entities.filter(e => activeResourceDepot(e, this.owner))
+        .sort((a, b) => dist(this.x, this.y, a.x, a.y) - dist(this.x, this.y, b.x, b.y));
+      const offset = o.depotSearchOffset || 0;
+      let resume = null;
+      for (let i = 0; i < depots.length; i++) {
+        const index = (offset + i) % depots.length, candidate = depots[index];
+        a = depotReturnDistance(this, candidate) <= 1 ? null : borderApproach(this, candidate, o, bodyBox(candidate), 12, 'depot');
+        if (a || depotReturnDistance(this, candidate) <= 1) {
+          th = o.depot = candidate; o.depotApproach = a; o.depotSearchOffset = 0;
+          if (a) this.setResourceApproach(a);
+          break;
+        }
+        if (PF.budget <= 0 && resume === null) resume = (index + 1) % depots.length;
+      }
+      if (!th) {
+        o.depotSearchOffset = resume || 0;
+        o.depotRetryAt = GAME.tick + (depots.length ? 6 + this.id % 6 : 75);
+      }
     }
     if (!th) { this.path = null; this.vx = 0; this.vy = 0; }
     return th;
+  }
+  moveToDepot(th, o) {
+    if (depotReturnDistance(this, th) <= 1) {
+      this.path = null; this.vx = 0; this.vy = 0; return true;
+    }
+    const a = o.depotApproach;
+    if (!a) { this.vx = 0; this.vy = 0; return false; }
+    this.moveTo(a.x, a.y, .001);
+    // Missing/partial paths and immobility never count as a deposit.
+    return depotReturnDistance(this, th) <= 1;
   }
   gatherLogic(o) {
     if (this.carry > 0 && o.phase !== 'ret' && o.phase !== 'in') o.phase = 'ret';
     if (o.phase === 'ret') {
       const th = this.returnDepot(o);
       if (!th) return;
-      if (this.moveTo(th.x, th.y, 4, th)) {
+      if (this.moveToDepot(th, o)) {
         const p = P(this.owner);
         if (this.carryKind === 'gas') p.gas += this.carry; else p.min += this.carry;
         this.carry = 0; this.carryKind = null; o.phase = 'go'; this.path = null;
         o.mineralApproach = null; o.mineralRetryAt = 0;
-        o.depot = null; o.depotRetryAt = 0;
+        o.depot = null; o.depotApproach = null; o.depotRetryAt = 0;
       }
       return;
     }
@@ -2502,7 +2555,7 @@ class Entity {
     if (this.carry <= 0) { this.nextOrder(); return; }
     const th = this.returnDepot(o);
     if (!th) return;
-    if (this.moveTo(th.x, th.y, 4, th)) {
+    if (this.moveToDepot(th, o)) {
       const p = P(this.owner);
       if (this.carryKind === 'gas') p.gas += this.carry; else p.min += this.carry;
       this.carry = 0; this.carryKind = null;
@@ -2897,9 +2950,13 @@ function gasBuildApproach(worker, box, failed) {
 }
 
 function mineralApproach(worker, res, o) {
-  if (o.mineralCandidateTarget !== res) { o.mineralCandidateTarget = res; o.mineralCandidateOffset = 0; }
-  const gap = worker.r + 2, left = res.x - res.hw, right = res.x + res.hw,
-    top = res.y - res.hh, bottom = res.y + res.hh;
+  return borderApproach(worker, res, o, res, worker.r + 2, 'mineral');
+}
+function borderApproach(worker, res, o, box, gap, kind) {
+  const targetKey = kind + 'CandidateTarget', offsetKey = kind + 'CandidateOffset';
+  if (o[targetKey] !== res) { o[targetKey] = res; o[offsetKey] = 0; }
+  const left = box.x - box.hw, right = box.x + box.hw,
+    top = box.y - box.hh, bottom = box.y + box.hh;
   const points = [], seen = new Set();
   const add = (x, y) => {
     const key = x + ',' + y;
@@ -2915,7 +2972,7 @@ function mineralApproach(worker, res, o) {
   points.sort((a, b) => a.direct - b.direct);
   const radius = Math.max(3, worker.r * .75);
   let best = null, bestLength = Infinity, resume = null;
-  const offset = o.mineralCandidateOffset || 0;
+  const offset = o[offsetKey] || 0;
   for (let i = 0; i < points.length; i++) {
     const index = (offset + i) % points.length, p = points[index];
     if (p.direct >= bestLength) { if (!offset) break; continue; }
@@ -2926,7 +2983,13 @@ function mineralApproach(worker, res, o) {
       // near-side pocket must not consume every tick's budget forever.
       if (PF.budget <= 0) { if (resume === null) resume = index; continue; }
       route = PF.worldPath(worker.x, worker.y, p.x, p.y, worker.r, 0, null, Math.min(9000, PF.budget));
-      if (!route?.length || dist(...route.at(-1), p.x, p.y) >= .001) continue;
+      if (!route?.length) continue;
+      // The real depot edge can lie inside an occupied placement tile.
+      // Connect the coarse route only when the entire final segment is legal.
+      if (dist(...route.at(-1), p.x, p.y) >= .001) {
+        if (!PF.lineClear(...route.at(-1), p.x, p.y, radius, 0)) continue;
+        route.push([p.x, p.y]);
+      }
     }
     let x = worker.x, y = worker.y, length = 0;
     const clear = route.every(([nx, ny]) => {
@@ -2937,7 +3000,7 @@ function mineralApproach(worker, res, o) {
       bestLength = length; best = {target: res, x: p.x, y: p.y, path: route};
     }
   }
-  o.mineralCandidateOffset = best ? 0 : resume || 0;
+  o[offsetKey] = best ? 0 : resume || 0;
   return best;
 }
 
@@ -4140,8 +4203,10 @@ function physics() {
 }
 function resolveTerrain(e) {
   const r = Math.max(3, e.r * 0.75);
+  if (PF.positionClear(e.x, e.y, r, 0)) return;
   const tx = tileOf(e.x), ty = tileOf(e.y);
-  if (!groundPassable(tx, ty)) {
+  const [left, top, right, bottom] = groundObstacleRect(tx, ty);
+  if (!groundPassable(tx, ty) && e.x >= left && e.x <= right && e.y >= top && e.y <= bottom) {
     const np = PF.nearestPassable(tx, ty, 8, 0);
     if (np) {
       const cx = np[0] * TILE + 16, cy = np[1] * TILE + 16;
@@ -4152,7 +4217,8 @@ function resolveTerrain(e) {
   }
   for (let y = tileOf(e.y - r); y <= tileOf(e.y + r); y++) for (let x = tileOf(e.x - r); x <= tileOf(e.x + r); x++) {
     if (groundPassable(x, y)) continue;
-    const qx = Math.max(x * TILE, Math.min(e.x, x * TILE + TILE)), qy = Math.max(y * TILE, Math.min(e.y, y * TILE + TILE));
+    const [l, t, rt, bt] = groundObstacleRect(x, y);
+    const qx = Math.max(l, Math.min(e.x, rt)), qy = Math.max(t, Math.min(e.y, bt));
     const dx = e.x - qx, dy = e.y - qy, d = Math.hypot(dx, dy);
     if (d < r && d > 0.001) { e.x += dx / d * (r - d); e.y += dy / d * (r - d); }
   }

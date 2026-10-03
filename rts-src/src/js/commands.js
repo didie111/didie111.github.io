@@ -593,8 +593,10 @@ function physics() {
 }
 function resolveTerrain(e) {
   const r = Math.max(3, e.r * 0.75);
+  if (PF.positionClear(e.x, e.y, r, 0)) return;
   const tx = tileOf(e.x), ty = tileOf(e.y);
-  if (!groundPassable(tx, ty)) {
+  const [left, top, right, bottom] = groundObstacleRect(tx, ty);
+  if (!groundPassable(tx, ty) && e.x >= left && e.x <= right && e.y >= top && e.y <= bottom) {
     const np = PF.nearestPassable(tx, ty, 8, 0);
     if (np) {
       const cx = np[0] * TILE + 16, cy = np[1] * TILE + 16;
@@ -605,7 +607,8 @@ function resolveTerrain(e) {
   }
   for (let y = tileOf(e.y - r); y <= tileOf(e.y + r); y++) for (let x = tileOf(e.x - r); x <= tileOf(e.x + r); x++) {
     if (groundPassable(x, y)) continue;
-    const qx = Math.max(x * TILE, Math.min(e.x, x * TILE + TILE)), qy = Math.max(y * TILE, Math.min(e.y, y * TILE + TILE));
+    const [l, t, rt, bt] = groundObstacleRect(x, y);
+    const qx = Math.max(l, Math.min(e.x, rt)), qy = Math.max(t, Math.min(e.y, bt));
     const dx = e.x - qx, dy = e.y - qy, d = Math.hypot(dx, dy);
     if (d < r && d > 0.001) { e.x += dx / d * (r - d); e.y += dy / d * (r - d); }
   }

@@ -218,6 +218,14 @@ function groundPassable(tx, ty) {
   const i = tIdx(tx, ty);
   return MAP.walk[i] === 1 && MAP.occ[i] === 0;
 }
+function groundObstacleRect(tx, ty) {
+  const i = tIdx(tx, ty), b = MAP.walk[i] === 1 && GAME.byId.get(MAP.occ[i]);
+  if (b && b.def.collision) {
+    const box = bodyBox(b);
+    return [box.x - box.hw, box.y - box.hh, box.x + box.hw, box.y + box.hh];
+  }
+  return [tx * TILE, ty * TILE, (tx + 1) * TILE, (ty + 1) * TILE];
+}
 
 // 파일런 전력장 (타원 반경 8x5 타일)
 function isPowered(owner, cx, cy) {

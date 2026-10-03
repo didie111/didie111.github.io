@@ -1,0 +1,453 @@
+{
+  "baselineCommit": "4a34c31f2b5b753affd3f60985b12228b7d47d00",
+  "version": "2026.10.03-sc1.26",
+  "scope": "Node VM only. Open terrain, original building/worker DAT extents; not a Blizzard/OpenBW runtime trace.",
+  "reproduction": {
+    "before": [
+      {
+        "type": "scv",
+        "hall": "cc",
+        "side": "right",
+        "tick": 34,
+        "dx": 74.6233322900705,
+        "dy": -51.09171767754151,
+        "travel": 117.10937499999953,
+        "gap": 5.623332290070493
+      },
+      {
+        "type": "scv",
+        "hall": "cc",
+        "side": "bottom",
+        "tick": 38,
+        "dx": 65.69545604377277,
+        "dy": 58.46294525088615,
+        "travel": 138.1562499999997,
+        "gap": 6.4629452508861505
+      },
+      {
+        "type": "drone",
+        "hall": "hatchery",
+        "side": "right",
+        "tick": 34,
+        "dx": 74.6233322900705,
+        "dy": -51.09171767754151,
+        "travel": 117.10937499999953,
+        "gap": 16.71280174712954
+      },
+      {
+        "type": "drone",
+        "hall": "hatchery",
+        "side": "bottom",
+        "tick": 38,
+        "dx": 65.69545604377277,
+        "dy": 58.46294525088615,
+        "travel": 138.1562499999997,
+        "gap": 16.47849797094536
+      },
+      {
+        "type": "probe",
+        "hall": "nexus",
+        "side": "right",
+        "tick": 34,
+        "dx": 74.6233322900705,
+        "dy": -51.09171767754151,
+        "travel": 117.10937499999953,
+        "gap": 7.701106588814887
+      },
+      {
+        "type": "probe",
+        "hall": "nexus",
+        "side": "bottom",
+        "tick": 38,
+        "dx": 65.69545604377277,
+        "dy": 58.46294525088615,
+        "travel": 138.1562499999997,
+        "gap": 8.46294525088615
+      },
+      {
+        "case": "unreachable",
+        "credited": 8,
+        "carry": 0
+      }
+    ],
+    "after": [
+      {
+        "type": "scv",
+        "hall": "cc",
+        "side": "right",
+        "tick": 42,
+        "dx": 70,
+        "dy": 0,
+        "travel": 110,
+        "gap": 1
+      },
+      {
+        "type": "scv",
+        "hall": "cc",
+        "side": "bottom",
+        "tick": 40,
+        "dx": 0,
+        "dy": 53,
+        "travel": 127,
+        "gap": 1
+      },
+      {
+        "type": "drone",
+        "hall": "hatchery",
+        "side": "right",
+        "tick": 41,
+        "dx": 61,
+        "dy": 0,
+        "travel": 119,
+        "gap": 1
+      },
+      {
+        "type": "drone",
+        "hall": "hatchery",
+        "side": "bottom",
+        "tick": 44,
+        "dx": 0,
+        "dy": 44,
+        "travel": 136,
+        "gap": 1
+      },
+      {
+        "type": "probe",
+        "hall": "nexus",
+        "side": "right",
+        "tick": 37,
+        "dx": 68,
+        "dy": 0,
+        "travel": 112,
+        "gap": 1
+      },
+      {
+        "type": "probe",
+        "hall": "nexus",
+        "side": "bottom",
+        "tick": 43,
+        "dx": 0,
+        "dy": 51,
+        "travel": 129,
+        "gap": 1
+      },
+      {
+        "case": "unreachable",
+        "credited": 0,
+        "carry": 8
+      }
+    ]
+  },
+  "benchmark": {
+    "before": [
+      {
+        "version": "2026.10.03-sc1.25",
+        "mode": "idle",
+        "count": 100,
+        "ticks": 96,
+        "meanMs": 1.05,
+        "p95Ms": 1.76,
+        "maxMs": 7.71,
+        "perTick": {
+          "queries": 113,
+          "candidates": 1680,
+          "obstacleBuilds": 0,
+          "lineChecks": 0
+        },
+        "moving": 0,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.03-sc1.25",
+        "mode": "idle",
+        "count": 400,
+        "ticks": 96,
+        "meanMs": 3.95,
+        "p95Ms": 5.16,
+        "maxMs": 10.46,
+        "perTick": {
+          "queries": 453,
+          "candidates": 7540,
+          "obstacleBuilds": 0,
+          "lineChecks": 0
+        },
+        "moving": 0,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.03-sc1.25",
+        "mode": "idle",
+        "count": 800,
+        "ticks": 96,
+        "meanMs": 7.47,
+        "p95Ms": 9.13,
+        "maxMs": 18.27,
+        "perTick": {
+          "queries": 907,
+          "candidates": 15574,
+          "obstacleBuilds": 0,
+          "lineChecks": 0
+        },
+        "moving": 0,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.03-sc1.25",
+        "mode": "move",
+        "count": 100,
+        "ticks": 96,
+        "meanMs": 5.54,
+        "p95Ms": 7.9,
+        "maxMs": 49.5,
+        "perTick": {
+          "queries": 200,
+          "candidates": 1437,
+          "obstacleBuilds": 0,
+          "lineChecks": 305
+        },
+        "moving": 99,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.03-sc1.25",
+        "mode": "move",
+        "count": 400,
+        "ticks": 96,
+        "meanMs": 23.89,
+        "p95Ms": 29.98,
+        "maxMs": 281.84,
+        "perTick": {
+          "queries": 800,
+          "candidates": 11585,
+          "obstacleBuilds": 1,
+          "lineChecks": 1508
+        },
+        "moving": 395,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.03-sc1.25",
+        "mode": "move",
+        "count": 800,
+        "ticks": 96,
+        "meanMs": 49.32,
+        "p95Ms": 61.1,
+        "maxMs": 94.53,
+        "perTick": {
+          "queries": 1600,
+          "candidates": 42235,
+          "obstacleBuilds": 1,
+          "lineChecks": 3507
+        },
+        "moving": 778,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.03-sc1.25",
+        "mode": "overlap",
+        "count": 100,
+        "ticks": 32,
+        "meanMs": 2.92,
+        "p95Ms": 5.11,
+        "maxMs": 14.12,
+        "perTick": {
+          "queries": 113,
+          "candidates": 6297,
+          "obstacleBuilds": 0,
+          "lineChecks": 80
+        },
+        "moving": 62,
+        "recovering": 90
+      },
+      {
+        "version": "2026.10.03-sc1.25",
+        "mode": "overlap",
+        "count": 400,
+        "ticks": 32,
+        "meanMs": 15.99,
+        "p95Ms": 18.63,
+        "maxMs": 34.35,
+        "perTick": {
+          "queries": 453,
+          "candidates": 66821,
+          "obstacleBuilds": 0,
+          "lineChecks": 317
+        },
+        "moving": 213,
+        "recovering": 393
+      },
+      {
+        "version": "2026.10.03-sc1.25",
+        "mode": "overlap",
+        "count": 800,
+        "ticks": 32,
+        "meanMs": 37.9,
+        "p95Ms": 44.35,
+        "maxMs": 63.31,
+        "perTick": {
+          "queries": 907,
+          "candidates": 176475,
+          "obstacleBuilds": 0,
+          "lineChecks": 638
+        },
+        "moving": 470,
+        "recovering": 791
+      }
+    ],
+    "after": [
+      {
+        "version": "2026.10.03-sc1.26",
+        "mode": "idle",
+        "count": 100,
+        "ticks": 96,
+        "meanMs": 0.91,
+        "p95Ms": 1.42,
+        "maxMs": 8.4,
+        "perTick": {
+          "queries": 113,
+          "candidates": 1680,
+          "obstacleBuilds": 0,
+          "lineChecks": 0
+        },
+        "moving": 0,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.03-sc1.26",
+        "mode": "idle",
+        "count": 400,
+        "ticks": 96,
+        "meanMs": 3.17,
+        "p95Ms": 4.53,
+        "maxMs": 10.86,
+        "perTick": {
+          "queries": 453,
+          "candidates": 7540,
+          "obstacleBuilds": 0,
+          "lineChecks": 0
+        },
+        "moving": 0,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.03-sc1.26",
+        "mode": "idle",
+        "count": 800,
+        "ticks": 96,
+        "meanMs": 6.1,
+        "p95Ms": 8.89,
+        "maxMs": 15.53,
+        "perTick": {
+          "queries": 907,
+          "candidates": 15574,
+          "obstacleBuilds": 0,
+          "lineChecks": 0
+        },
+        "moving": 0,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.03-sc1.26",
+        "mode": "move",
+        "count": 100,
+        "ticks": 96,
+        "meanMs": 4.88,
+        "p95Ms": 5.66,
+        "maxMs": 46.81,
+        "perTick": {
+          "queries": 200,
+          "candidates": 1437,
+          "obstacleBuilds": 0,
+          "lineChecks": 305
+        },
+        "moving": 99,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.03-sc1.26",
+        "mode": "move",
+        "count": 400,
+        "ticks": 96,
+        "meanMs": 22.03,
+        "p95Ms": 25.78,
+        "maxMs": 263.51,
+        "perTick": {
+          "queries": 800,
+          "candidates": 11585,
+          "obstacleBuilds": 1,
+          "lineChecks": 1508
+        },
+        "moving": 395,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.03-sc1.26",
+        "mode": "move",
+        "count": 800,
+        "ticks": 96,
+        "meanMs": 48.9,
+        "p95Ms": 61.35,
+        "maxMs": 97.4,
+        "perTick": {
+          "queries": 1600,
+          "candidates": 42235,
+          "obstacleBuilds": 1,
+          "lineChecks": 3507
+        },
+        "moving": 778,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.03-sc1.26",
+        "mode": "overlap",
+        "count": 100,
+        "ticks": 32,
+        "meanMs": 2.54,
+        "p95Ms": 3.93,
+        "maxMs": 8.43,
+        "perTick": {
+          "queries": 113,
+          "candidates": 6297,
+          "obstacleBuilds": 0,
+          "lineChecks": 80
+        },
+        "moving": 62,
+        "recovering": 90
+      },
+      {
+        "version": "2026.10.03-sc1.26",
+        "mode": "overlap",
+        "count": 400,
+        "ticks": 32,
+        "meanMs": 15.53,
+        "p95Ms": 17.86,
+        "maxMs": 30.77,
+        "perTick": {
+          "queries": 453,
+          "candidates": 66821,
+          "obstacleBuilds": 0,
+          "lineChecks": 317
+        },
+        "moving": 213,
+        "recovering": 393
+      },
+      {
+        "version": "2026.10.03-sc1.26",
+        "mode": "overlap",
+        "count": 800,
+        "ticks": 32,
+        "meanMs": 40.23,
+        "p95Ms": 46.3,
+        "maxMs": 69.92,
+        "perTick": {
+          "queries": 907,
+          "candidates": 176475,
+          "obstacleBuilds": 0,
+          "lineChecks": 638
+        },
+        "moving": 470,
+        "recovering": 791
+      }
+    ]
+  }
+}

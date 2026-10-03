@@ -32,6 +32,18 @@ function edgeDistPt(a, x, y) {
   const dy = Math.max(0, Math.abs(a.y - y) - hy(a));
   return Math.hypot(dx, dy);
 }
+function bodyBox(e) {
+  const size = e.def && e.def.collision;
+  return size ? {x: e.x, y: e.y, hw: size[0], hh: size[1]} : e;
+}
+function depotReturnDistance(worker, depot) {
+  // All three workers have 11px DAT extents; their movement circles remain unchanged.
+  return edgeDist({x: worker.x, y: worker.y, hw: 11, hh: 11}, bodyBox(depot));
+}
+function activeResourceDepot(e, owner) {
+  return e && !e.dead && e.owner === owner && e.isBuilding && e.def.townHall &&
+    (e.done || e.def.larvaHall && e.morph) && !e.lifted && !(e.liftT > 0);
+}
 function hasTech(owner, id) { return !!P(owner).tech[id]; }
 function upgLevel(owner, id) { return P(owner).upg[id] || 0; }
 
@@ -154,7 +166,7 @@ function canPlace(type, tx, ty, owner, builder, quiet) {
 function nearestTownHall(owner, x, y) {
   let best = null, bd = 1e9;
   for (const e of GAME.entities) {
-    if (e.dead || e.owner !== owner || !e.isBuilding || !e.def.townHall || !e.done || e.lifted || e.liftT > 0) continue;
+    if (!activeResourceDepot(e, owner)) continue;
     const d = dist(x, y, e.x, e.y);
     if (d < bd) { bd = d; best = e; }
   }
