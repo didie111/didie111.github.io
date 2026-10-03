@@ -578,7 +578,7 @@ function supplyText(v) { return (Math.round(v * 2) / 2).toString(); }
 'use strict';
 // 확장 데이터: Blizzard StarCraft Compendium 수치/역할을 참고한 웹게임 구현.
 // 원작 MPQ/엔진을 포함하지 않으며 투사체/애니메이션/길찾기는 자체 구현이다.
-const RTS_VERSION = '2026.10.03-sc1.23';
+const RTS_VERSION = '2026.10.03-sc1.24';
 // flingy.dat: [acceleration, turn N/256 circle, halt N/256 px, movement control].
 // Control 0: acceleration + braking; 1: acceleration without braking; 2: iscript.
 // The acceleration field alone does not identify walking units (notably templars).
@@ -926,18 +926,21 @@ function generateMap(seed) {
     return true;
   };
   const mark = (tx, ty, w, h) => { for (let y = ty; y < ty + h; y++) for (let x = tx; x < tx + w; x++) tmpOcc[tIdx(x, y)] = 1; };
+  // 2x1 mineral footprints share an edge, including the bends. Independent
+  // polar rounding left walkable tiles between fields and split the line.
+  const mineralLines = {
+    main: [[0, -6], [2, -6], [4, -6], [6, -6], [7, -5], [7, -4], [7, -3], [7, -2]],
+    east: [[6, -3], [7, -2], [7, -1], [7, 0], [7, 1], [7, 2], [7, 3], [6, 4]],
+    fourth: [[-5, -4], [-4, -5], [-2, -5], [0, -5], [2, -5], [4, -5], [6, -5], [7, -4]],
+  };
   for (const b of MAP.bases.filter(b => b.side === 0)) {
     const cx = b.tx + 2, cy = b.ty + 1.5;
     const res = [];
-    let placed = 0;
-    for (let i = 0; i < 12 && placed < 8; i++) {
-      const k = placed;
-      const ang = b.dir + (k - 3.5) * 0.3;
-      for (const rr of [7, 7.8, 6.4, 8.6, 9.4]) {
-        const fx = Math.round(cx + Math.cos(ang) * rr - 1), fy = Math.round(cy + Math.sin(ang) * rr - 0.5);
-        if (free(fx, fy, 2, 1, b)) { mark(fx, fy, 2, 1); res.push({ type: 'mineral', tx: fx, ty: fy, amount: k % 3 === 0 ? 1500 : 1500 }); placed++; break; }
-      }
-      if (res.length <= k) placed++;
+    const line = mineralLines[b.kind] || mineralLines.east;
+    for (const [dx, dy] of line) {
+      const fx = b.tx + dx, fy = b.ty + dy;
+      mark(fx, fy, 2, 1);
+      res.push({ type: 'mineral', tx: fx, ty: fy, amount: 1500 });
     }
     for (const side of [1, -1]) {
       const ang = b.dir + side * 1.75;
