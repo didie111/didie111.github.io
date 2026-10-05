@@ -148,8 +148,56 @@ const PF = (() => {
     return true;
   }
 
+  // Exact swept-circle clearance for gas routes. Four-pixel samples can miss
+  // a shallow corner intersection; increasing r instead strands legal workers.
+  function lineClearExact(x0, y0, x1, y1, r, ignoreId) {
+    if (!lineClear(x0, y0, x1, y1, r, ignoreId)) return false;
+    const tx0 = tileOf(Math.min(x0, x1) - r), tx1 = tileOf(Math.max(x0, x1) + r),
+      ty0 = tileOf(Math.min(y0, y1) - r), ty1 = tileOf(Math.max(y0, y1) + r);
+    if (terrainRectEmpty(tx0, ty0, tx1, ty1)) return true;
+    const dx = x1 - x0, dy = y1 - y0, len2 = dx * dx + dy * dy, limit = (r - .001) ** 2;
+    for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
+      if (passable(tx, ty, ignoreId)) continue;
+      const [left, top, right, bottom] = groundObstacleRect(tx, ty);
+      let lo = 0, hi = 1;
+      for (const [p, d, a, b] of [[x0, dx, left, right], [y0, dy, top, bottom]]) {
+        if (!d) { if (p < a || p > b) { lo = 1; hi = 0; break; } }
+        else { const u = (a - p) / d, v = (b - p) / d; lo = Math.max(lo, Math.min(u, v)); hi = Math.min(hi, Math.max(u, v)); }
+      }
+      if (lo <= hi) return false;
+      const pointBox = (x, y) => Math.max(left - x, 0, x - right) ** 2 + Math.max(top - y, 0, y - bottom) ** 2;
+      let nearest = Math.min(pointBox(x0, y0), pointBox(x1, y1));
+      for (const [x, y] of [[left, top], [right, top], [left, bottom], [right, bottom]]) {
+        const t = len2 ? Math.max(0, Math.min(1, ((x - x0) * dx + (y - y0) * dy) / len2)) : 0;
+        nearest = Math.min(nearest, (x - x0 - dx * t) ** 2 + (y - y0 - dy * t) ** 2);
+      }
+      if (nearest < limit) return false;
+    }
+    return true;
+  }
+
   // 월드 좌표 경로 (스무딩 포함)
-  function worldPath(x0, y0, x1, y1, r, ignoreId, obstacles, maxNodes = 9000) {
+  function worldPath(x0, y0, x1, y1, r, ignoreId, obstacles, maxNodes = 9000, precise = false) {
+    const rr = Math.max(3, r * .75);
+    if (precise && !passable(tileOf(x0), tileOf(y0), ignoreId)) {
+      // A legal DAT body margin can lie inside an occupied placement tile.
+      // Connect the real source to a reachable free tile; nearestPassable's
+      // arbitrary source tile can otherwise require crossing the body corner.
+      const entries = [], tx = tileOf(x0), ty = tileOf(y0);
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+        const x = tx + dx, y = ty + dy, px = x * TILE + TILE / 2, py = y * TILE + TILE / 2;
+        if (!passable(x, y, ignoreId) || obstacles?.cells.has(tIdx(x, y)) ||
+            !lineClearExact(x0, y0, px, py, rr, ignoreId) || obstacles && !unitsClear(x0, y0, px, py, r, obstacles.units)) continue;
+        entries.push({x: px, y: py, cost: Math.hypot(px - x0, py - y0) + Math.hypot(px - x1, py - y1)});
+      }
+      entries.sort((a, b) => a.cost - b.cost);
+      for (const p of entries.slice(0, 4)) {
+        if (budget <= 0) break;
+        const route = worldPath(p.x, p.y, x1, y1, r, ignoreId, obstacles, Math.min(maxNodes, budget), true);
+        if (route?.length) return [[p.x, p.y], ...route];
+      }
+      return null;
+    }
     const tiles = find(Math.floor(x0 / TILE), Math.floor(y0 / TILE), Math.floor(x1 / TILE), Math.floor(y1 / TILE), ignoreId, obstacles && obstacles.cells, maxNodes);
     if (!tiles) return null;
     const pts = tiles.map(([x, y]) => [x * TILE + 16, y * TILE + 16]);
@@ -158,10 +206,10 @@ const PF = (() => {
     // string pulling
     const out = [];
     let ax = x0, ay = y0, i = 0;
-    const rr = Math.max(3, r * 0.75);
+    const clear = precise ? lineClearExact : lineClear;
     while (i < pts.length) {
       let j = pts.length - 1;
-      while (j > i && (!lineClear(ax, ay, pts[j][0], pts[j][1], rr, ignoreId) || obstacles && !unitsClear(ax, ay, pts[j][0], pts[j][1], r, obstacles.units))) j--;
+      while (j > i && (!clear(ax, ay, pts[j][0], pts[j][1], rr, ignoreId) || obstacles && !unitsClear(ax, ay, pts[j][0], pts[j][1], r, obstacles.units))) j--;
       out.push(pts[j]);
       ax = pts[j][0]; ay = pts[j][1];
       i = j + 1;
@@ -375,7 +423,7 @@ const PF = (() => {
     return { cells, units: indexUnits(units) };
   }
   return {
-    find, worldPath, lineClear, positionClear, localPath, unitPath, nearestPassable, passable, unitsClear, unitObstacles, goalBlocker, compactPath,
+    find, worldPath, lineClear, lineClearExact, positionClear, localPath, unitPath, nearestPassable, passable, unitsClear, unitObstacles, goalBlocker, compactPath,
     resetBudget() { budget = 24000; terrainFrame = false; },
     beginTick() { budget = 24000; terrainFrame = true; terrainDirty = true; },
     endTick() { terrainFrame = false; }, invalidateTerrain() { terrainDirty = true; },

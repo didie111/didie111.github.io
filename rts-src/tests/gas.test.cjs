@@ -21,6 +21,13 @@ function world(code){
    }return null;}
   ${code}`,ctx);
 }
+test('gas swept-circle check catches a shallow building-corner intersection',()=>world(`
+ createBuilding('hatchery',0,10,10,true);
+ const x=432.4326964177915,y=406.0063810210942;
+ assert.ok(PF.lineClear(x,y,630,384,6,0),'fixture no longer reproduces the sampled corner gap');
+ assert.ok(!PF.lineClearExact(x,y,630,384,6,0),'gas route misses the actual swept corner');
+ assert.ok(PF.lineClearExact(x,y,464,432,6,0),'legal departure from the body margin is blocked');
+`));
 const races=[['scv','refinery','cc'],['drone','extractor','hatchery'],['probe','assimilator','nexus']];
 for(const [type,refinery,hall] of races){
  for(const refined of [false,true])for(const side of ['top','bottom','left','right'])
@@ -53,6 +60,18 @@ for(const [type,refinery,hall] of races){
   const w=worker('${type}',g,0,-190),r=approach(w,g);
   assert.ok(r,'sealed near edge prevents a reachable alternative');assert.ok(edgeDist(w,g)<=3);
   assert.ok(Math.abs(w.x-g.x)>g.hw||w.y>g.y,'arrival uses an unreachable near-side point');
+ `));
+ for(const gt of ['geyser',refinery])test(type+' leaves a legal building margin to approach '+gt,()=>world(`
+  const g=gas('${gt}'),d=createBuilding('depot',0,21,16,true);
+  const w=worker('${type}',g,d.x-g.x,d.y+d.hh+6.5-g.y);
+  assert.ok(PF.positionClear(w.x,w.y,w.r*.75,0));assert.ok(!PF.positionClear(w.x,w.y,w.r,0));
+  assert.ok(approach(w,g,120),'gas planning strands a physically legal worker at a building edge');
+ `));
+ test(type+' gas approach preserves a physically passable narrow building gap',()=>world(`
+  const g=createBuilding('geyser',NEUTRAL,20,25,true);g.amount=5000;
+  createBuilding('cc',0,18,18,true);createBuilding('cc',0,22,18,true);
+  const w=worker('${type}',g,0,-272),r=approach(w,g,100);
+  assert.ok(r,'a legal narrow gap is treated as blocked');assert.ok(r.travel<260,'gas route detours around a passable gap');
  `));
  for(const gt of ['geyser',refinery])test(type+' retains inaccessible '+gt+' orders and resumes after an edge opens',()=>world(`
    const g=gas('${gt}');for(let y=19;y<=22;y++)for(let x=19;x<=24;x++)if(y===19||y===22||x===19||x===24)MAP.walk[tIdx(x,y)]=0;

@@ -664,9 +664,9 @@ class Entity {
     }
     if (!a) {
       if (GAME.tick < (o.gasRetryAt || 0)) return false;
-      // Keep the full worker clearance around depot corners. A route that
-      // grazes them with the reduced physics radius can stall on its next step.
-      a = borderApproach(this, res, o, res, this.r + 2, 'gas', this.r,
+      // Check the continuous swept body at corners using the actual physics
+      // radius; extra padding would block legal margins and narrow passages.
+      a = borderApproach(this, res, o, res, this.r + 2, 'gas',
         waiters.length ? PF.unitObstacles(this, true) : null);
       if (!a) { this.path = null; this.vx = 0; this.vy = 0; o.gasRetryAt = GAME.tick + 6 + this.id % 6; return false; }
       o.gasApproach = a;
@@ -1202,7 +1202,7 @@ function gasBuildApproach(worker, box, failed) {
 function mineralApproach(worker, res, o) {
   return borderApproach(worker, res, o, res, worker.r + 2, 'mineral');
 }
-function borderApproach(worker, res, o, box, gap, kind, radius = Math.max(3, worker.r * .75), obstacles = null) {
+function borderApproach(worker, res, o, box, gap, kind, obstacles = null) {
   const targetKey = kind + 'CandidateTarget', offsetKey = kind + 'CandidateOffset';
   if (o[targetKey] !== res) { o[targetKey] = res; o[offsetKey] = 0; }
   const left = box.x - box.hw, right = box.x + box.hw,
@@ -1221,13 +1221,14 @@ function borderApproach(worker, res, o, box, gap, kind, radius = Math.max(3, wor
   for (const x of xs) { add(x, top - gap); add(x, bottom + gap); }
   for (const y of ys) { add(left - gap, y); add(right + gap, y); }
   points.sort((a, b) => a.direct - b.direct);
+  const radius = Math.max(3, worker.r * .75), line = kind === 'gas' ? PF.lineClearExact : PF.lineClear;
   let best = null, bestLength = Infinity, resume = null, searches = 0;
   const offset = o[offsetKey] || 0;
   for (let i = 0; i < points.length; i++) {
     const index = (offset + i) % points.length, p = points[index];
     if (p.direct >= bestLength) { if (!offset) break; continue; }
     let route;
-    if (PF.lineClear(worker.x, worker.y, p.x, p.y, radius, 0) &&
+    if (line(worker.x, worker.y, p.x, p.y, radius, 0) &&
         (!obstacles || PF.unitsClear(worker.x, worker.y, p.x, p.y, worker.r, obstacles.units))) route = [[p.x, p.y]];
     else {
       // Resume at untested edges next time: repeated searches in an enclosed
@@ -1236,18 +1237,18 @@ function borderApproach(worker, res, o, box, gap, kind, radius = Math.max(3, wor
       // testing cheap direct edges, and resume untested routes on the next retry.
       if (PF.budget <= 0 || kind === 'gas' && searches >= 4) { if (resume === null) resume = index; continue; }
       searches++;
-      route = PF.worldPath(worker.x, worker.y, p.x, p.y, Math.max(worker.r, radius / .75), 0, obstacles, Math.min(9000, PF.budget));
+      route = PF.worldPath(worker.x, worker.y, p.x, p.y, worker.r, 0, obstacles, Math.min(9000, PF.budget), kind === 'gas');
       if (!route?.length) continue;
       // The real depot edge can lie inside an occupied placement tile.
       // Connect the coarse route only when the entire final segment is legal.
       if (dist(...route.at(-1), p.x, p.y) >= .001) {
-        if (!PF.lineClear(...route.at(-1), p.x, p.y, radius, 0)) continue;
+        if (!line(...route.at(-1), p.x, p.y, radius, 0)) continue;
         route.push([p.x, p.y]);
       }
     }
     let x = worker.x, y = worker.y, length = 0;
     const clear = route.every(([nx, ny]) => {
-      const ok = PF.lineClear(x, y, nx, ny, radius, 0) &&
+      const ok = line(x, y, nx, ny, radius, 0) &&
         (!obstacles || PF.unitsClear(x, y, nx, ny, worker.r, obstacles.units));
       length += dist(x, y, nx, ny); x = nx; y = ny; return ok;
     });
