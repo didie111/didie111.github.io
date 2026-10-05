@@ -1,0 +1,520 @@
+{
+  "scope": "Sequential Node VM simulation on one host, no rendering; no tests/other benchmark ran concurrently. Warmup excluded from average/p95, maximum includes initial ticks.",
+  "beforeCommit": "68700acfade3a0dfd4870cc092d07bc0e2a4545a",
+  "general": {
+    "before": [
+      {
+        "version": "2026.10.04-sc1.29",
+        "mode": "idle",
+        "count": 100,
+        "ticks": 96,
+        "meanMs": 0.9,
+        "p95Ms": 1.7,
+        "maxMs": 7.59,
+        "perTick": {
+          "queries": 113,
+          "candidates": 1680,
+          "obstacleBuilds": 0,
+          "lineChecks": 0
+        },
+        "moving": 0,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.04-sc1.29",
+        "mode": "idle",
+        "count": 400,
+        "ticks": 96,
+        "meanMs": 3.14,
+        "p95Ms": 4.03,
+        "maxMs": 11.04,
+        "perTick": {
+          "queries": 453,
+          "candidates": 7540,
+          "obstacleBuilds": 0,
+          "lineChecks": 0
+        },
+        "moving": 0,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.04-sc1.29",
+        "mode": "idle",
+        "count": 800,
+        "ticks": 96,
+        "meanMs": 6.74,
+        "p95Ms": 9.9,
+        "maxMs": 17.65,
+        "perTick": {
+          "queries": 907,
+          "candidates": 15574,
+          "obstacleBuilds": 0,
+          "lineChecks": 0
+        },
+        "moving": 0,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.04-sc1.29",
+        "mode": "move",
+        "count": 100,
+        "ticks": 96,
+        "meanMs": 3.32,
+        "p95Ms": 4.78,
+        "maxMs": 12.44,
+        "perTick": {
+          "queries": 200,
+          "candidates": 1598,
+          "obstacleBuilds": 0,
+          "lineChecks": 215
+        },
+        "moving": 100,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.04-sc1.29",
+        "mode": "move",
+        "count": 400,
+        "ticks": 96,
+        "meanMs": 12.79,
+        "p95Ms": 17.34,
+        "maxMs": 21.41,
+        "perTick": {
+          "queries": 800,
+          "candidates": 12324,
+          "obstacleBuilds": 0,
+          "lineChecks": 868
+        },
+        "moving": 400,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.04-sc1.29",
+        "mode": "move",
+        "count": 800,
+        "ticks": 96,
+        "meanMs": 35.99,
+        "p95Ms": 48.27,
+        "maxMs": 57.2,
+        "perTick": {
+          "queries": 1600,
+          "candidates": 45228,
+          "obstacleBuilds": 0,
+          "lineChecks": 1743
+        },
+        "moving": 800,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.04-sc1.29",
+        "mode": "overlap",
+        "count": 100,
+        "ticks": 32,
+        "meanMs": 2.94,
+        "p95Ms": 4.29,
+        "maxMs": 7.64,
+        "perTick": {
+          "queries": 113,
+          "candidates": 6297,
+          "obstacleBuilds": 0,
+          "lineChecks": 80
+        },
+        "moving": 62,
+        "recovering": 90
+      },
+      {
+        "version": "2026.10.04-sc1.29",
+        "mode": "overlap",
+        "count": 400,
+        "ticks": 32,
+        "meanMs": 15.86,
+        "p95Ms": 19.71,
+        "maxMs": 33.39,
+        "perTick": {
+          "queries": 453,
+          "candidates": 66821,
+          "obstacleBuilds": 0,
+          "lineChecks": 317
+        },
+        "moving": 213,
+        "recovering": 393
+      },
+      {
+        "version": "2026.10.04-sc1.29",
+        "mode": "overlap",
+        "count": 800,
+        "ticks": 32,
+        "meanMs": 35.57,
+        "p95Ms": 40.48,
+        "maxMs": 57.61,
+        "perTick": {
+          "queries": 907,
+          "candidates": 176475,
+          "obstacleBuilds": 0,
+          "lineChecks": 638
+        },
+        "moving": 470,
+        "recovering": 791
+      }
+    ],
+    "after": [
+      {
+        "version": "2026.10.05-sc1.30",
+        "mode": "idle",
+        "count": 100,
+        "ticks": 96,
+        "meanMs": 1.01,
+        "p95Ms": 1.8,
+        "maxMs": 9.85,
+        "perTick": {
+          "queries": 113,
+          "candidates": 1680,
+          "obstacleBuilds": 0,
+          "lineChecks": 0
+        },
+        "moving": 0,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.05-sc1.30",
+        "mode": "idle",
+        "count": 400,
+        "ticks": 96,
+        "meanMs": 3.64,
+        "p95Ms": 5.64,
+        "maxMs": 18.41,
+        "perTick": {
+          "queries": 453,
+          "candidates": 7540,
+          "obstacleBuilds": 0,
+          "lineChecks": 0
+        },
+        "moving": 0,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.05-sc1.30",
+        "mode": "idle",
+        "count": 800,
+        "ticks": 96,
+        "meanMs": 6.47,
+        "p95Ms": 8.61,
+        "maxMs": 17.62,
+        "perTick": {
+          "queries": 907,
+          "candidates": 15574,
+          "obstacleBuilds": 0,
+          "lineChecks": 0
+        },
+        "moving": 0,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.05-sc1.30",
+        "mode": "move",
+        "count": 100,
+        "ticks": 96,
+        "meanMs": 2.8,
+        "p95Ms": 3.79,
+        "maxMs": 14.69,
+        "perTick": {
+          "queries": 200,
+          "candidates": 1598,
+          "obstacleBuilds": 0,
+          "lineChecks": 215
+        },
+        "moving": 100,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.05-sc1.30",
+        "mode": "move",
+        "count": 400,
+        "ticks": 96,
+        "meanMs": 14.06,
+        "p95Ms": 21.82,
+        "maxMs": 25.31,
+        "perTick": {
+          "queries": 800,
+          "candidates": 12324,
+          "obstacleBuilds": 0,
+          "lineChecks": 868
+        },
+        "moving": 400,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.05-sc1.30",
+        "mode": "move",
+        "count": 800,
+        "ticks": 96,
+        "meanMs": 40.19,
+        "p95Ms": 55.83,
+        "maxMs": 61.13,
+        "perTick": {
+          "queries": 1600,
+          "candidates": 45228,
+          "obstacleBuilds": 0,
+          "lineChecks": 1743
+        },
+        "moving": 800,
+        "recovering": 0
+      },
+      {
+        "version": "2026.10.05-sc1.30",
+        "mode": "overlap",
+        "count": 100,
+        "ticks": 32,
+        "meanMs": 2.75,
+        "p95Ms": 3.67,
+        "maxMs": 13.06,
+        "perTick": {
+          "queries": 113,
+          "candidates": 6297,
+          "obstacleBuilds": 0,
+          "lineChecks": 80
+        },
+        "moving": 62,
+        "recovering": 90
+      },
+      {
+        "version": "2026.10.05-sc1.30",
+        "mode": "overlap",
+        "count": 400,
+        "ticks": 32,
+        "meanMs": 16.21,
+        "p95Ms": 19.55,
+        "maxMs": 35.95,
+        "perTick": {
+          "queries": 453,
+          "candidates": 66821,
+          "obstacleBuilds": 0,
+          "lineChecks": 317
+        },
+        "moving": 213,
+        "recovering": 393
+      },
+      {
+        "version": "2026.10.05-sc1.30",
+        "mode": "overlap",
+        "count": 800,
+        "ticks": 32,
+        "meanMs": 37.73,
+        "p95Ms": 45.07,
+        "maxMs": 62.62,
+        "perTick": {
+          "queries": 907,
+          "candidates": 176475,
+          "obstacleBuilds": 0,
+          "lineChecks": 638
+        },
+        "moving": 470,
+        "recovering": 791
+      }
+    ]
+  },
+  "gas": {
+    "before": {
+      "scope": "Node simulation timing only; excludes browser rendering and input.",
+      "cases": [
+        {
+          "version": "2026.10.04-sc1.29",
+          "target": "geyser",
+          "count": 10,
+          "ticks": 120,
+          "avgMs": 0.451,
+          "p95Ms": 0.915,
+          "maxMs": 13.457,
+          "contacted": 10,
+          "entries": 0,
+          "hidden": 0,
+          "hardSteps": 0,
+          "playerGas": 0,
+          "cargo": 0,
+          "gasAmount": 5000
+        },
+        {
+          "version": "2026.10.04-sc1.29",
+          "target": "geyser",
+          "count": 100,
+          "ticks": 120,
+          "avgMs": 3.263,
+          "p95Ms": 5.883,
+          "maxMs": 64.664,
+          "contacted": 100,
+          "entries": 0,
+          "hidden": 0,
+          "hardSteps": 0,
+          "playerGas": 0,
+          "cargo": 0,
+          "gasAmount": 5000
+        },
+        {
+          "version": "2026.10.04-sc1.29",
+          "target": "geyser",
+          "count": 400,
+          "ticks": 120,
+          "avgMs": 26.795,
+          "p95Ms": 37.106,
+          "maxMs": 330.724,
+          "contacted": 400,
+          "entries": 0,
+          "hidden": 0,
+          "hardSteps": 0,
+          "playerGas": 0,
+          "cargo": 0,
+          "gasAmount": 5000
+        },
+        {
+          "version": "2026.10.04-sc1.29",
+          "target": "refinery",
+          "count": 10,
+          "ticks": 120,
+          "avgMs": 0.779,
+          "p95Ms": 1.172,
+          "maxMs": 18.347,
+          "contacted": 8,
+          "entries": 3,
+          "hidden": 1,
+          "hardSteps": 0,
+          "playerGas": 0,
+          "cargo": 16,
+          "gasAmount": 4984
+        },
+        {
+          "version": "2026.10.04-sc1.29",
+          "target": "refinery",
+          "count": 100,
+          "ticks": 120,
+          "avgMs": 11.95,
+          "p95Ms": 42.159,
+          "maxMs": 66.756,
+          "contacted": 40,
+          "entries": 3,
+          "hidden": 1,
+          "hardSteps": 0,
+          "playerGas": 0,
+          "cargo": 16,
+          "gasAmount": 4984
+        },
+        {
+          "version": "2026.10.04-sc1.29",
+          "target": "refinery",
+          "count": 400,
+          "ticks": 120,
+          "avgMs": 71.204,
+          "p95Ms": 184.128,
+          "maxMs": 342.753,
+          "contacted": 90,
+          "entries": 3,
+          "hidden": 1,
+          "hardSteps": 0,
+          "playerGas": 0,
+          "cargo": 16,
+          "gasAmount": 4984
+        }
+      ]
+    },
+    "after": {
+      "scope": "Node simulation timing only; excludes browser rendering and input.",
+      "cases": [
+        {
+          "version": "2026.10.05-sc1.30",
+          "target": "geyser",
+          "count": 10,
+          "ticks": 120,
+          "avgMs": 0.367,
+          "p95Ms": 0.698,
+          "maxMs": 7.853,
+          "contacted": 10,
+          "entries": 0,
+          "hidden": 0,
+          "hardSteps": 0,
+          "playerGas": 0,
+          "cargo": 0,
+          "gasAmount": 5000
+        },
+        {
+          "version": "2026.10.05-sc1.30",
+          "target": "geyser",
+          "count": 100,
+          "ticks": 120,
+          "avgMs": 3.269,
+          "p95Ms": 5.262,
+          "maxMs": 20.427,
+          "contacted": 100,
+          "entries": 0,
+          "hidden": 0,
+          "hardSteps": 0,
+          "playerGas": 0,
+          "cargo": 0,
+          "gasAmount": 5000
+        },
+        {
+          "version": "2026.10.05-sc1.30",
+          "target": "geyser",
+          "count": 400,
+          "ticks": 120,
+          "avgMs": 27.111,
+          "p95Ms": 35.688,
+          "maxMs": 81.79,
+          "contacted": 400,
+          "entries": 0,
+          "hidden": 0,
+          "hardSteps": 0,
+          "playerGas": 0,
+          "cargo": 0,
+          "gasAmount": 5000
+        },
+        {
+          "version": "2026.10.05-sc1.30",
+          "target": "refinery",
+          "count": 10,
+          "ticks": 120,
+          "avgMs": 0.397,
+          "p95Ms": 0.98,
+          "maxMs": 5.383,
+          "contacted": 10,
+          "entries": 3,
+          "hidden": 1,
+          "hardSteps": 0,
+          "playerGas": 0,
+          "cargo": 16,
+          "gasAmount": 4984
+        },
+        {
+          "version": "2026.10.05-sc1.30",
+          "target": "refinery",
+          "count": 100,
+          "ticks": 120,
+          "avgMs": 9.417,
+          "p95Ms": 14.212,
+          "maxMs": 92.793,
+          "contacted": 47,
+          "entries": 3,
+          "hidden": 1,
+          "hardSteps": 0,
+          "playerGas": 0,
+          "cargo": 16,
+          "gasAmount": 4984
+        },
+        {
+          "version": "2026.10.05-sc1.30",
+          "target": "refinery",
+          "count": 400,
+          "ticks": 120,
+          "avgMs": 70.581,
+          "p95Ms": 198.719,
+          "maxMs": 303.304,
+          "contacted": 111,
+          "entries": 3,
+          "hidden": 1,
+          "hardSteps": 0,
+          "playerGas": 0,
+          "cargo": 16,
+          "gasAmount": 4984
+        }
+      ]
+    }
+  }
+}

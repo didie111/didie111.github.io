@@ -579,7 +579,7 @@ function supplyText(v) { return (Math.round(v * 2) / 2).toString(); }
 'use strict';
 // 확장 데이터: Blizzard StarCraft Compendium 수치/역할을 참고한 웹게임 구현.
 // 원작 MPQ/엔진을 포함하지 않으며 투사체/애니메이션/길찾기는 자체 구현이다.
-const RTS_VERSION = '2026.10.04-sc1.29';
+const RTS_VERSION = '2026.10.05-sc1.30';
 // flingy.dat: [acceleration, turn N/256 circle, halt N/256 px, movement control].
 // Control 0: acceleration + braking; 1: acceleration without braking; 2: iscript.
 // The acceleration field alone does not identify walking units (notably templars).
@@ -2456,6 +2456,35 @@ class Entity {
     this.pathExact = true; this.pathDynamic = false; this.repathAt = GAME.tick + 120;
     this.pathRetryAt = 0; this.unitPathUntil = 0; this.stuck = 0; this.lastD = undefined;
   }
+  moveToGas(res, o) {
+    // OpenBW's target-unit path ends on a reachable body border. Sending a
+    // worker to the occupied gas center picks a far-side tile and circles it.
+    if (edgeDist(this, res) <= 3) {
+      this.path = null; this.vx = 0; this.vy = 0; return true;
+    }
+    o.gasWaiting = false;
+    // Incoming harvesters collide with actual WaitForGas bodies. An occupied
+    // entrance needs another reachable edge, not repeated unitPath to that spot.
+    const waiters = res.def.onGeyser ? SH.queryGround(res.x, res.y, res.r + this.r * 3).filter(u => canGroundCollide(this, u)) : [];
+    let a = o.gasApproach;
+    if (a && (a.target !== res || !PF.positionClear(a.x, a.y, this.r, 0) ||
+        waiters.length && !PF.unitsClear(a.x, a.y, a.x, a.y, this.r, waiters) || this.stuck >= 20)) {
+      a = o.gasApproach = null; this.path = null; o.gasRetryAt = 0;
+    }
+    if (!a) {
+      if (GAME.tick < (o.gasRetryAt || 0)) return false;
+      // Keep the full worker clearance around depot corners. A route that
+      // grazes them with the reduced physics radius can stall on its next step.
+      a = borderApproach(this, res, o, res, this.r + 2, 'gas', this.r,
+        waiters.length ? PF.unitObstacles(this, true) : null);
+      if (!a) { this.path = null; this.vx = 0; this.vy = 0; o.gasRetryAt = GAME.tick + 6 + this.id % 6; return false; }
+      o.gasApproach = a;
+      this.setResourceApproach(a);
+    }
+    this.moveTo(a.x, a.y, 0);
+    // A partial/failed path or immobility is not contact with the gas body.
+    return edgeDist(this, res) <= 3;
+  }
   returnDepot(o) {
     // Select the nearest owned, active depot with an actually reachable body edge.
     this.gathering = true;
@@ -2512,6 +2541,7 @@ class Entity {
         if (this.carryKind === 'gas') p.gas += this.carry; else p.min += this.carry;
         this.carry = 0; this.carryKind = null; o.phase = 'go'; this.path = null;
         o.mineralApproach = null; o.mineralRetryAt = 0;
+        o.gasApproach = null; o.gasRetryAt = 0;
         o.depot = null; o.depotApproach = null; o.depotRetryAt = 0;
       }
       return;
@@ -2554,7 +2584,7 @@ class Entity {
       // get_default_gather_order / MoveToGas: 미정제 가스도 채취 충돌로 접근한다.
       // 도착 후 채취 가능 여부를 검사하며, 정제소가 없으면 충돌을 복원한다.
       if (res.type === 'geyser') {
-        if (this.moveTo(res.x, res.y, 3, res)) this.nextOrder();
+        if (this.moveToGas(res, o)) this.nextOrder();
         return;
       }
       if (res.dead || res.owner !== this.owner || !res.done || !res.def.onGeyser) { this.nextOrder(); this.noCollide = false; return; }
@@ -2570,10 +2600,11 @@ class Entity {
         }
         return;
       }
-      if (this.moveTo(res.x, res.y, 3, res)) {
+      if (this.moveToGas(res, o)) {
         o.gasWaiting = true;
         if (!res.gasUser || res.gasUser.dead || res.gasUser.orders[0]?.tgt !== res) {
           o.gasWaiting = false;
+          o.gasApproach = null; o.gasRetryAt = 0;
           res.gasUser = this; o.phase = 'in'; this.gasT = 37; this.hidden = true;
         }
       }
@@ -2980,7 +3011,7 @@ function gasBuildApproach(worker, box, failed) {
 function mineralApproach(worker, res, o) {
   return borderApproach(worker, res, o, res, worker.r + 2, 'mineral');
 }
-function borderApproach(worker, res, o, box, gap, kind) {
+function borderApproach(worker, res, o, box, gap, kind, radius = Math.max(3, worker.r * .75), obstacles = null) {
   const targetKey = kind + 'CandidateTarget', offsetKey = kind + 'CandidateOffset';
   if (o[targetKey] !== res) { o[targetKey] = res; o[offsetKey] = 0; }
   const left = box.x - box.hw, right = box.x + box.hw,
@@ -2988,7 +3019,8 @@ function borderApproach(worker, res, o, box, gap, kind) {
   const points = [], seen = new Set();
   const add = (x, y) => {
     const key = x + ',' + y;
-    if (!seen.has(key) && PF.positionClear(x, y, worker.r, 0)) {
+    if (!seen.has(key) && PF.positionClear(x, y, worker.r, 0) &&
+        (!obstacles || PF.unitsClear(x, y, x, y, worker.r, obstacles.units))) {
       seen.add(key); points.push({x, y, direct: dist(worker.x, worker.y, x, y)});
     }
   };
@@ -2998,19 +3030,22 @@ function borderApproach(worker, res, o, box, gap, kind) {
   for (const x of xs) { add(x, top - gap); add(x, bottom + gap); }
   for (const y of ys) { add(left - gap, y); add(right + gap, y); }
   points.sort((a, b) => a.direct - b.direct);
-  const radius = Math.max(3, worker.r * .75);
-  let best = null, bestLength = Infinity, resume = null;
+  let best = null, bestLength = Infinity, resume = null, searches = 0;
   const offset = o[offsetKey] || 0;
   for (let i = 0; i < points.length; i++) {
     const index = (offset + i) % points.length, p = points[index];
     if (p.direct >= bestLength) { if (!offset) break; continue; }
     let route;
-    if (PF.lineClear(worker.x, worker.y, p.x, p.y, radius, 0)) route = [[p.x, p.y]];
+    if (PF.lineClear(worker.x, worker.y, p.x, p.y, radius, 0) &&
+        (!obstacles || PF.unitsClear(worker.x, worker.y, p.x, p.y, worker.r, obstacles.units))) route = [[p.x, p.y]];
     else {
       // Resume at untested edges next time: repeated searches in an enclosed
       // near-side pocket must not consume every tick's budget forever.
-      if (PF.budget <= 0) { if (resume === null) resume = index; continue; }
-      route = PF.worldPath(worker.x, worker.y, p.x, p.y, worker.r, 0, null, Math.min(9000, PF.budget));
+      // A crowded gas queue must share search work across workers. Continue
+      // testing cheap direct edges, and resume untested routes on the next retry.
+      if (PF.budget <= 0 || kind === 'gas' && searches >= 4) { if (resume === null) resume = index; continue; }
+      searches++;
+      route = PF.worldPath(worker.x, worker.y, p.x, p.y, Math.max(worker.r, radius / .75), 0, obstacles, Math.min(9000, PF.budget));
       if (!route?.length) continue;
       // The real depot edge can lie inside an occupied placement tile.
       // Connect the coarse route only when the entire final segment is legal.
@@ -3021,7 +3056,8 @@ function borderApproach(worker, res, o, box, gap, kind) {
     }
     let x = worker.x, y = worker.y, length = 0;
     const clear = route.every(([nx, ny]) => {
-      const ok = PF.lineClear(x, y, nx, ny, radius, 0);
+      const ok = PF.lineClear(x, y, nx, ny, radius, 0) &&
+        (!obstacles || PF.unitsClear(x, y, nx, ny, worker.r, obstacles.units));
       length += dist(x, y, nx, ny); x = nx; y = ny; return ok;
     });
     if (clear && length < bestLength) {

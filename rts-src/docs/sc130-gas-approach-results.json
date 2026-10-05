@@ -1,0 +1,563 @@
+{
+  "scope": "Same project modules and 12 raw-gas placements before and after; video input timing and OpenBW executable frames are not reproduced.",
+  "beforeCommit": "68700acfade3a0dfd4870cc092d07bc0e2a4545a",
+  "before": {
+    "scope": "Project modules only; video input timings and original engine frames are not reproduced.",
+    "gas": {
+      "x": 704,
+      "y": 672,
+      "hw": 64,
+      "hh": 32
+    },
+    "cases": [
+      {
+        "worker": "scv",
+        "side": "top",
+        "firstPath": [
+          [
+            784,
+            624
+          ],
+          [
+            784,
+            720
+          ],
+          [
+            704,
+            672
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 37,
+        "lastContactTick": 67,
+        "minTravel": 136.17,
+        "maxTravel": 240.47,
+        "maxSideways": 87.65,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.04-sc1.29"
+      },
+      {
+        "worker": "scv",
+        "side": "bottom",
+        "firstPath": [
+          [
+            704,
+            672
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 30,
+        "lastContactTick": 34,
+        "minTravel": 104.46,
+        "maxTravel": 124.46,
+        "maxSideways": 6.88,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.04-sc1.29"
+      },
+      {
+        "worker": "scv",
+        "side": "left",
+        "firstPath": [
+          [
+            656,
+            720
+          ],
+          [
+            704,
+            672
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 26,
+        "lastContactTick": 29,
+        "minTravel": 82.11,
+        "maxTravel": 97.11,
+        "maxSideways": 43.45,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.04-sc1.29"
+      },
+      {
+        "worker": "scv",
+        "side": "right",
+        "firstPath": [
+          [
+            752,
+            720
+          ],
+          [
+            704,
+            672
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 26,
+        "lastContactTick": 29,
+        "minTravel": 82.11,
+        "maxTravel": 97.11,
+        "maxSideways": 43.45,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.04-sc1.29"
+      },
+      {
+        "worker": "drone",
+        "side": "top",
+        "firstPath": [
+          [
+            784,
+            624
+          ],
+          [
+            784,
+            720
+          ],
+          [
+            704,
+            672
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 37,
+        "lastContactTick": 67,
+        "minTravel": 136.17,
+        "maxTravel": 240.47,
+        "maxSideways": 87.65,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.04-sc1.29"
+      },
+      {
+        "worker": "drone",
+        "side": "bottom",
+        "firstPath": [
+          [
+            704,
+            672
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 30,
+        "lastContactTick": 34,
+        "minTravel": 104.46,
+        "maxTravel": 124.46,
+        "maxSideways": 6.88,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.04-sc1.29"
+      },
+      {
+        "worker": "drone",
+        "side": "left",
+        "firstPath": [
+          [
+            656,
+            720
+          ],
+          [
+            704,
+            672
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 26,
+        "lastContactTick": 29,
+        "minTravel": 82.11,
+        "maxTravel": 97.11,
+        "maxSideways": 43.45,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.04-sc1.29"
+      },
+      {
+        "worker": "drone",
+        "side": "right",
+        "firstPath": [
+          [
+            752,
+            720
+          ],
+          [
+            704,
+            672
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 26,
+        "lastContactTick": 29,
+        "minTravel": 82.11,
+        "maxTravel": 97.11,
+        "maxSideways": 43.45,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.04-sc1.29"
+      },
+      {
+        "worker": "probe",
+        "side": "top",
+        "firstPath": [
+          [
+            784,
+            624
+          ],
+          [
+            784,
+            720
+          ],
+          [
+            704,
+            672
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 37,
+        "lastContactTick": 67,
+        "minTravel": 136.17,
+        "maxTravel": 240.47,
+        "maxSideways": 87.65,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.04-sc1.29"
+      },
+      {
+        "worker": "probe",
+        "side": "bottom",
+        "firstPath": [
+          [
+            704,
+            672
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 30,
+        "lastContactTick": 34,
+        "minTravel": 104.46,
+        "maxTravel": 124.46,
+        "maxSideways": 6.88,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.04-sc1.29"
+      },
+      {
+        "worker": "probe",
+        "side": "left",
+        "firstPath": [
+          [
+            656,
+            720
+          ],
+          [
+            704,
+            672
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 26,
+        "lastContactTick": 29,
+        "minTravel": 82.11,
+        "maxTravel": 97.11,
+        "maxSideways": 43.45,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.04-sc1.29"
+      },
+      {
+        "worker": "probe",
+        "side": "right",
+        "firstPath": [
+          [
+            752,
+            720
+          ],
+          [
+            704,
+            672
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 26,
+        "lastContactTick": 29,
+        "minTravel": 82.11,
+        "maxTravel": 97.11,
+        "maxSideways": 43.45,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.04-sc1.29"
+      }
+    ]
+  },
+  "after": {
+    "scope": "Project modules only; video input timings and original engine frames are not reproduced.",
+    "gas": {
+      "x": 704,
+      "y": 672,
+      "hw": 64,
+      "hh": 32
+    },
+    "cases": [
+      {
+        "worker": "scv",
+        "side": "top",
+        "firstPath": [
+          [
+            696,
+            630
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 34,
+        "lastContactTick": 38,
+        "minTravel": 102,
+        "maxTravel": 117.25,
+        "maxSideways": 0,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.05-sc1.30"
+      },
+      {
+        "worker": "scv",
+        "side": "bottom",
+        "firstPath": [
+          [
+            696,
+            714
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 37,
+        "lastContactTick": 39,
+        "minTravel": 104.68,
+        "maxTravel": 120.94,
+        "maxSideways": 3.44,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.05-sc1.30"
+      },
+      {
+        "worker": "scv",
+        "side": "left",
+        "firstPath": [
+          [
+            630,
+            664
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 27,
+        "lastContactTick": 32,
+        "minTravel": 70.14,
+        "maxTravel": 86.23,
+        "maxSideways": 0.6,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.05-sc1.30"
+      },
+      {
+        "worker": "scv",
+        "side": "right",
+        "firstPath": [
+          [
+            778,
+            664
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 27,
+        "lastContactTick": 32,
+        "minTravel": 70.14,
+        "maxTravel": 86.23,
+        "maxSideways": 0.6,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.05-sc1.30"
+      },
+      {
+        "worker": "drone",
+        "side": "top",
+        "firstPath": [
+          [
+            696,
+            630
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 34,
+        "lastContactTick": 38,
+        "minTravel": 102,
+        "maxTravel": 117.25,
+        "maxSideways": 0,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.05-sc1.30"
+      },
+      {
+        "worker": "drone",
+        "side": "bottom",
+        "firstPath": [
+          [
+            696,
+            714
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 37,
+        "lastContactTick": 39,
+        "minTravel": 104.68,
+        "maxTravel": 120.94,
+        "maxSideways": 3.44,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.05-sc1.30"
+      },
+      {
+        "worker": "drone",
+        "side": "left",
+        "firstPath": [
+          [
+            630,
+            664
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 27,
+        "lastContactTick": 32,
+        "minTravel": 70.14,
+        "maxTravel": 86.23,
+        "maxSideways": 0.6,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.05-sc1.30"
+      },
+      {
+        "worker": "drone",
+        "side": "right",
+        "firstPath": [
+          [
+            778,
+            664
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 27,
+        "lastContactTick": 32,
+        "minTravel": 70.14,
+        "maxTravel": 86.23,
+        "maxSideways": 0.6,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.05-sc1.30"
+      },
+      {
+        "worker": "probe",
+        "side": "top",
+        "firstPath": [
+          [
+            696,
+            630
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 34,
+        "lastContactTick": 38,
+        "minTravel": 102,
+        "maxTravel": 117.25,
+        "maxSideways": 0,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.05-sc1.30"
+      },
+      {
+        "worker": "probe",
+        "side": "bottom",
+        "firstPath": [
+          [
+            696,
+            714
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 37,
+        "lastContactTick": 39,
+        "minTravel": 104.68,
+        "maxTravel": 120.94,
+        "maxSideways": 3.44,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.05-sc1.30"
+      },
+      {
+        "worker": "probe",
+        "side": "left",
+        "firstPath": [
+          [
+            630,
+            664
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 27,
+        "lastContactTick": 32,
+        "minTravel": 70.14,
+        "maxTravel": 86.23,
+        "maxSideways": 0.6,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.05-sc1.30"
+      },
+      {
+        "worker": "probe",
+        "side": "right",
+        "firstPath": [
+          [
+            778,
+            664
+          ]
+        ],
+        "contacted": 10,
+        "total": 10,
+        "firstContactTick": 27,
+        "lastContactTick": 32,
+        "minTravel": 70.14,
+        "maxTravel": 86.23,
+        "maxSideways": 0.6,
+        "gasAmount": null,
+        "cargo": 0,
+        "version": "2026.10.05-sc1.30"
+      }
+    ]
+  },
+  "tests": {
+    "newGasChecks": 57,
+    "baselinePass": 30,
+    "baselineFail": 27,
+    "afterPass": 57,
+    "allPass": 570,
+    "allFail": 0,
+    "inlineScriptSyntaxPass": 14
+  }
+}
