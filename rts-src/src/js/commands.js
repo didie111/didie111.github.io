@@ -463,16 +463,25 @@ function recoveryRand(from, to) {
 function recoverGround(e, blockers) {
   const speed = e.speed;
   if (collisionFixed(e) || speed <= 0) { e.groundRecovery = null; return false; }
+  const rr = Math.max(3, e.r * 0.75), bodies = PF.overlappingBodies(e.x, e.y, rr);
   const overlaps = blockers.filter(o => (e.x - o.x) ** 2 + (e.y - o.y) ** 2 < ((e.r + o.r) * 0.85 - 1e-6) ** 2);
   let state = e.groundRecovery;
-  if (!state && !overlaps.length) return false;
+  if (!state && !overlaps.length && !bodies.length) return false;
   if (!state) state = e.groundRecovery = { phase: 'check' };
+  // Grounded buildings/resources are unit bodies in OpenBW, not water terrain.
+  // Only an existing illegal overlap may leave their body. Once clear, that
+  // body becomes an ordinary barrier again; newly encountered bodies always are.
+  if (state.phase === 'check') state.bodyIds = new Set(bodies.map(b => b.id));
+  else if (state.bodyIds?.size) {
+    const current = new Set(bodies.map(b => b.id));
+    for (const id of state.bodyIds) if (!current.has(id)) state.bodyIds.delete(id);
+  }
+  const clearTerrain = (x, y) => PF.lineClearExact(e.x, e.y, x, y, rr, state.bodyIds);
   const requestedAngle = e.velocityDirection;
   e.vx = 0; e.vy = 0;
-  const rr = Math.max(3, e.r * 0.75);
   // MoveToLegal follows its chosen short path without ordinary unit collision.
   // Only already-illegal bodies enter this state; ordinary approaches still
-  // collide with Hold/Stop. Terrain and physically fixed bodies remain barriers.
+  // collide with Hold/Stop. Terrain and newly encountered fixed bodies remain barriers.
   const fixedNew = blockers.filter(o => collisionFixed(o) && !overlaps.includes(o));
   const newlyBlocked = (x, y) => !PF.unitsClear(e.x, e.y, x, y, e.r, fixedNew);
   if (state.phase === 'move') {
@@ -480,31 +489,45 @@ function recoverGround(e, blockers) {
     if (distance > 1e-6) {
       groundMovement(e, state.x, state.y);
       const x = e.x + e.vx, y = e.y + e.vy;
-      if (PF.lineClear(e.x, e.y, x, y, rr, 0) && !newlyBlocked(x, y)) {
+      if (clearTerrain(x, y) && !newlyBlocked(x, y)) {
         return true;
       }
       e.vx = 0; e.vy = 0; e.currentSpeed = 0;
       // Keep the chosen path while turning past a temporary sideways obstruction.
-      if (PF.lineClear(e.x, e.y, state.x, state.y, rr, 0) && !newlyBlocked(state.x, state.y)) return true;
+      if (clearTerrain(state.x, state.y) && !newlyBlocked(state.x, state.y)) return true;
     }
     state.phase = 'check'; // 도착 또는 새 장애물: 다음 검사에서 탈출 지점을 다시 선택한다.
     return true;
   }
-  if (!overlaps.length) { e.groundRecovery = null; return false; }
-  const blocking = overlaps.reduce((a, b) => a.r >= b.r ? a : b);
+  if (!overlaps.length && !bodies.length) { e.groundRecovery = null; return false; }
+  const blocking = [...overlaps, ...bodies].reduce((a, b) => a.r >= b.r ? a : b);
   // UM_CheckIllegal: 움직이거나 CheckIllegal/MoveToLegal 중인 상대이면
   // 0..31 중 24 미만에서 기다린다. 전체 유닛의 속도나 고정 지속시간을 바꾸지 않는다.
   const otherMoving = !collisionFixed(blocking) && (blocking.groundRecovery || collisionMover(blocking));
   if (otherMoving && recoveryRand(0, 31) < 24) return true;
-  const legal = (x, y) => PF.positionClear(x, y, rr, 0) && PF.lineClear(e.x, e.y, x, y, rr, 0) &&
+  const legal = (x, y) => PF.positionClear(x, y, rr, 0) && clearTerrain(x, y) &&
     PF.unitsClear(x, y, x, y, e.r, blockers) && !newlyBlocked(x, y);
   // 원작의 확장 사각형 둘레에서 가장 가까운 유효 지점을 찾는 분기를 원형 몸체에 적용한다.
   let target = null, bestDistance = Infinity;
   if (!otherMoving) {
-    const radius = (e.r + blocking.r) * 0.85 + 0.11;
-    const bearing = e.x === blocking.x && e.y === blocking.y ? requestedAngle : Math.atan2(e.y - blocking.y, e.x - blocking.x);
-    for (let i = 0; i < 16; i++) {
-      const angle = bearing + i * Math.PI / 8, x = blocking.x + Math.cos(angle) * radius, y = blocking.y + Math.sin(angle) * radius;
+    const candidates = [];
+    if (blocking.isBuilding) {
+      const box = bodyBox(blocking), left = box.x-box.hw, right = box.x+box.hw,
+        top = box.y-box.hh, bottom = box.y+box.hh, gap = rr+.11;
+      const xs = [Math.max(left, Math.min(right, e.x))], ys = [Math.max(top, Math.min(bottom, e.y))];
+      for (let x = left; x <= right; x += TILE/4) xs.push(x);
+      for (let y = top; y <= bottom; y += TILE/4) ys.push(y);
+      for (const x of xs) candidates.push([x, top-gap], [x, bottom+gap]);
+      for (const y of ys) candidates.push([left-gap, y], [right+gap, y]);
+    } else {
+      const radius = (e.r + blocking.r) * 0.85 + 0.11;
+      const bearing = e.x === blocking.x && e.y === blocking.y ? requestedAngle : Math.atan2(e.y - blocking.y, e.x - blocking.x);
+      for (let i = 0; i < 16; i++) {
+        const angle = bearing + i * Math.PI/8;
+        candidates.push([blocking.x + Math.cos(angle)*radius, blocking.y + Math.sin(angle)*radius]);
+      }
+    }
+    for (const [x, y] of candidates) {
       const distance = Math.hypot(x - e.x, y - e.y);
       if (distance < bestDistance - 1e-6 && legal(x, y)) { bestDistance = distance; target = [x, y]; }
     }
@@ -528,8 +551,8 @@ function recoverGround(e, blockers) {
       // 이동 가능한 몸체가 남은 대체 지점도 짧은 이동 후 다시 검사한다.
       // 복구 경로에서도 지형과 고정 몸체는 보호한다.
       const fixedBlocked = blockers.some(o => collisionFixed(o) && Math.hypot(x - o.x, y - o.y) < (e.r + o.r) * .85);
-      if (Math.hypot(x - e.x, y - e.y) > 1e-6 && PF.positionClear(x, y, rr, 0) &&
-          PF.lineClear(e.x, e.y, x, y, rr, 0) && !fixedBlocked && !newlyBlocked(x, y)) target = [x, y];
+      if (Math.hypot(x - e.x, y - e.y) > 1e-6 && PF.positionClear(x, y, rr, state.bodyIds) &&
+          clearTerrain(x, y) && !fixedBlocked && !newlyBlocked(x, y)) target = [x, y];
     }
   }
   if (target) { state.phase = 'move'; [state.x, state.y] = target; }
@@ -551,9 +574,9 @@ function physics() {
     // Ordinary movers need only exclude themselves; harvesters use the pair rule.
     e.collisionNeighbors = SH.queryGround(e.x, e.y, radius).filter(o => o !== e && (!harvesting || canGroundCollide(e, o)));
     if (collisionFixed(e)) { e.groundRecovery = null; continue; }
-    if (!e.groundRecovery && e.collisionNeighbors.some(o =>
+    if (!e.groundRecovery && (PF.overlappingBodies(e.x, e.y, Math.max(3, e.r*.75)).length || e.collisionNeighbors.some(o =>
         (!o.isWorkerGathering() || collisionMover(e)) &&
-        (e.x - o.x) ** 2 + (e.y - o.y) ** 2 < ((e.r + o.r) * .85 - 1e-6) ** 2)) e.groundRecovery = { phase: 'check' };
+        (e.x - o.x) ** 2 + (e.y - o.y) ** 2 < ((e.r + o.r) * .85 - 1e-6) ** 2))) e.groundRecovery = { phase: 'check' };
   }
   for (const e of ents) {
     e.collisionMoving = collisionMover(e);
@@ -564,6 +587,7 @@ function physics() {
   // 공간 해시는 틱 시작 위치이므로 최대 이동량만큼 검색 여유를 확보한다.
   for (const e of ents) {
     if (e.dead || e.hidden) { e.currentSpeed = 0; continue; }
+    e.physicsStartX = e.x; e.physicsStartY = e.y;
     if (collisionFixed(e)) { e.vx = 0; e.vy = 0; e.currentSpeed = 0; continue; }
     if (groundCollider(e)) {
       const blockers = e.collisionNeighbors;
@@ -577,7 +601,7 @@ function physics() {
         const length = Math.hypot(e.vx, e.vy), waypoint = e.moveWaypoint || [e.x + e.vx, e.y + e.vy];
         groundMovement(e, waypoint[0], waypoint[1], length);
         // 회피에서 놓친 접촉도 좌표를 밀지 않고 이번 틱의 이동을 기다린다.
-        const movementClear = (vx, vy) => PF.lineClear(e.x, e.y, e.x + vx, e.y + vy, Math.max(3, e.r * .75), 0) && !blockers.some(o => {
+        const movementClear = (vx, vy) => PF.lineClearExact(e.x, e.y, e.x + vx, e.y + vy, Math.max(3, e.r * .75), 0) && !blockers.some(o => {
           const ox = o.x - e.x, oy = o.y - e.y;
           // OpenBW의 실제 이동 충돌처럼 현재 몸체를 검사한다. 아직 적용되지
           // 않은 상대 속도를 미리 빼면 상대가 감속/재탐색할 때 새 겹침이 생긴다.
@@ -623,17 +647,20 @@ function physics() {
 function resolveTerrain(e) {
   const r = Math.max(3, e.r * 0.75);
   if (PF.positionClear(e.x, e.y, r, 0)) return;
+  // MoveToLegal already uses bounded movement and the underlying terrain.
+  // Projecting it to nearestPassable would skip buildings or cross a water gap.
+  if (e.groundRecovery) return;
+  if (Number.isFinite(e.physicsStartX) && PF.positionClear(e.physicsStartX, e.physicsStartY, r, 0)) {
+    e.x = e.physicsStartX; e.y = e.physicsStartY;
+    e.vx = 0; e.vy = 0; e.currentSpeed = 0; return;
+  }
   const tx = tileOf(e.x), ty = tileOf(e.y);
   const [left, top, right, bottom] = groundObstacleRect(tx, ty);
   if (!groundPassable(tx, ty) && e.x >= left && e.x <= right && e.y >= top && e.y <= bottom) {
-    const np = PF.nearestPassable(tx, ty, 8, 0);
-    if (np) {
-      const cx = np[0] * TILE + 16, cy = np[1] * TILE + 16;
-      const dx = cx - e.x, dy = cy - e.y, d = Math.hypot(dx, dy);
-      if (d > 40) { e.x = cx; e.y = cy; } else { e.x += dx / (d || 1) * Math.min(d, 4); e.y += dy / (d || 1) * Math.min(d, 4); }
-    }
+    e.vx = 0; e.vy = 0; e.currentSpeed = 0;
     return;
   }
+  const startX = e.x, startY = e.y;
   for (let y = tileOf(e.y - r); y <= tileOf(e.y + r); y++) for (let x = tileOf(e.x - r); x <= tileOf(e.x + r); x++) {
     if (groundPassable(x, y)) continue;
     const [l, t, rt, bt] = groundObstacleRect(x, y);
@@ -641,6 +668,8 @@ function resolveTerrain(e) {
     const dx = e.x - qx, dy = e.y - qy, d = Math.hypot(dx, dy);
     if (d < r && d > 0.001) { e.x += dx / d * (r - d); e.y += dy / d * (r - d); }
   }
+  const dx = e.x-startX, dy = e.y-startY, distance = Math.hypot(dx,dy);
+  if (distance > e.speed) { e.x = startX + dx/distance*e.speed; e.y = startY + dy/distance*e.speed; }
 }
 
 function gameTick() {

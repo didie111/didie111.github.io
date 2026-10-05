@@ -67,7 +67,28 @@ const PF = (() => {
   function passable(x, y, ignoreId, avoid) {
     if (!inMap(x, y)) return false;
     const i = tIdx(x, y);
-    return MAP.walk[i] === 1 && (MAP.occ[i] === 0 || MAP.occ[i] === ignoreId) && !(avoid && avoid.has(i));
+    const id = MAP.occ[i];
+    // MoveToLegal may leave bodies it already overlaps. This exception never
+    // changes the underlying terrain: water/cliffs still fail MAP.walk.
+    return MAP.walk[i] === 1 && (!id || id === ignoreId ||
+      !!ignoreId && typeof ignoreId.has === 'function' && ignoreId.has(id)) && !(avoid && avoid.has(i));
+  }
+
+  function overlappingBodies(x, y, r) {
+    const x0 = tileOf(x-r), x1 = tileOf(x+r), y0 = tileOf(y-r), y1 = tileOf(y+r);
+    if (terrainRectEmpty(x0, y0, x1, y1)) return [];
+    const out = [], seen = new Set();
+    for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
+      if (!inMap(tx, ty)) continue;
+      const id = MAP.occ[tIdx(tx, ty)];
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      const b = GAME.byId.get(id);
+      if (!b || b.dead || b.hidden || b.lifted) continue;
+      const box = bodyBox(b), dx = Math.max(Math.abs(x-box.x)-box.hw, 0), dy = Math.max(Math.abs(y-box.y)-box.hh, 0);
+      if (dx*dx+dy*dy < (r-.001)**2) out.push(b);
+    }
+    return out;
   }
 
   function find(sx, sy, gx, gy, ignoreId, avoid, maxNodes = 9000) {
@@ -148,8 +169,8 @@ const PF = (() => {
     return true;
   }
 
-  // Exact swept-circle clearance for gas routes. Four-pixel samples can miss
-  // a shallow corner intersection; increasing r instead strands legal workers.
+  // Exact swept-circle clearance for gas routes and physical movement. Four-pixel
+  // samples can miss a shallow corner; padding r instead strands legal workers.
   function lineClearExact(x0, y0, x1, y1, r, ignoreId) {
     if (!lineClear(x0, y0, x1, y1, r, ignoreId)) return false;
     const tx0 = tileOf(Math.min(x0, x1) - r), tx1 = tileOf(Math.max(x0, x1) + r),
@@ -423,7 +444,7 @@ const PF = (() => {
     return { cells, units: indexUnits(units) };
   }
   return {
-    find, worldPath, lineClear, lineClearExact, positionClear, localPath, unitPath, nearestPassable, passable, unitsClear, unitObstacles, goalBlocker, compactPath,
+    find, worldPath, lineClear, lineClearExact, positionClear, overlappingBodies, localPath, unitPath, nearestPassable, passable, unitsClear, unitObstacles, goalBlocker, compactPath,
     resetBudget() { budget = 24000; terrainFrame = false; },
     beginTick() { budget = 24000; terrainFrame = true; terrainDirty = true; },
     endTick() { terrainFrame = false; }, invalidateTerrain() { terrainDirty = true; },
