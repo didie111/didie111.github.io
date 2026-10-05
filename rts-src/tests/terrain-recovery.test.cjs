@@ -40,11 +40,13 @@ for(const type of ['scv','drone','probe'])
   assert.deepEqual([u.x,u.y],start,'a body with no legal departure jumps across hard terrain');
  `));
 for(const type of ['scv','drone','probe','marine','hydra','zealot'])
- test(type+' existing body recovery cannot enter a newly placed adjacent body',()=>world(`
+ test(type+' existing recovery follows its path through a newly placed adjacent body and rechecks at arrival',()=>world(`
   const b=createBuilding('cc',0,20,20,true),u=held('${type}',b.x,b.y);
-  gameTick();const d=createBuilding('depot',0,21,18,true);
-  steps(u,180,()=>assert.ok(PF.positionClear(u.x,u.y,u.r*.75,b.id),'recovery enters a new building instead of leaving the original overlap'));
-  assert.ok(PF.positionClear(u.x,u.y,u.r*.75,0),'new obstacle prevents every legal escape');
+  gameTick();const d=createBuilding('depot',0,21,18,true),bodies=new Set([b.id,d.id]);let touched=false;
+  steps(u,180,()=>{assert.ok(PF.positionClear(u.x,u.y,u.r*.75,bodies),'recovery crosses hard terrain');
+   if(!PF.positionClear(u.x,u.y,u.r*.75,b.id))touched=true;});
+  assert.ok(touched,'MoveToLegal incorrectly reapplies the adjacent building collision');
+  assert.ok(PF.positionClear(u.x,u.y,u.r*.75,0),'recovery never returns to a legal ordinary position');
  `));
 for(const type of ['scv','drone','probe','marine','hydra','zealot'])
  test(type+' illegal mobile overlap near water keeps the hard boundary',()=>world(`
@@ -71,4 +73,35 @@ for(const [worker,army] of [['scv','marine'],['drone','hydra'],['probe','zealot'
     assert.equal(u.orders[0]?.t,'hold');assert.ok(PF.positionClear(u.x,u.y,u.r*.75,b.id));});
   }
   for(const u of us)assert.ok(PF.positionClear(u.x,u.y,u.r*.75,0),'a member of the crowd remains inside the new building');
+ `));
+for(const type of ['scv','drone','probe','marine','hydra','zealot'])
+ for(const bt of ['mineral','geyser','depot','cc','hatchery','nexus'])
+ test(type+' rubbing a stationary ground body can move across a nearby '+bt+' corner',()=>world(`
+  const b=createBuilding('${bt}',${bt==='mineral'||bt==='geyser'?'NEUTRAL':'0'},20,20,true),box=bodyBox(b);
+  const u=held('${type}',box.x-box.hw-UNITS['${type}'].r*.75-.1,box.y-box.hh-2),s=held('tank_siege',u.x-5,u.y);
+  u.dir=u.velocityDirection=0;const fixed=[b.x,b.y,s.x,s.y];let touched=false;
+  assert.ok(PF.positionClear(u.x,u.y,u.r*.75,0),'mover already starts inside the building');
+  assert.ok(PF.positionClear(s.x,s.y,s.r*.75,0),'stationary blocker starts inside the building');
+  steps(u,180,()=>{assert.deepEqual([b.x,b.y,s.x,s.y],fixed,'rubbing displaces a fixed body');
+   assert.ok(PF.positionClear(u.x,u.y,u.r*.75,b.id),'rubbing crosses hard terrain');
+   if(!PF.positionClear(u.x,u.y,u.r*.75,0))touched=true;});
+  assert.ok(touched,'existing mobile overlap cannot follow a recovery path through the nearby body');
+  assert.ok(PF.positionClear(u.x,u.y,u.r*.75,0),'ordinary body collision never returns');
+ `));
+for(const type of ['scv','drone','probe','marine','hydra','zealot'])
+ test(type+' ordinary movement retains nearby resource collision without an illegal overlap',()=>world(`
+  const b=createBuilding('mineral',NEUTRAL,20,20,true),box=bodyBox(b),u=createUnit('${type}',0,box.x-box.hw-UNITS['${type}'].r*.75-.1,box.y-box.hh-2);
+  u.dir=u.velocityDirection=0;u.issue({t:'move',x:box.x+24,y:box.y-box.hh-32});
+  for(let i=0;i<180;i++){const x=u.x,y=u.y;gameTick();assert.ok(dist(x,y,u.x,u.y)<=u.speed+1e-6);
+   assert.ok(PF.positionClear(u.x,u.y,u.r*.75,0),'normal movement gains the rubbing exception');}
+  assert.ok(dist(u.x,u.y,box.x+24,box.y-box.hh-32)<10,'ordinary movement cannot use the legal route');
+ `));
+for(const type of ['scv','drone','probe','marine','hydra','zealot'])
+ test(type+' nearby resource on unwalkable tiles never overrides the terrain during rubbing',()=>world(`
+  const b=createBuilding('mineral',NEUTRAL,20,20,true),box=bodyBox(b);
+  MAP.walk[tIdx(20,20)]=MAP.walk[tIdx(21,20)]=0;
+  const u=held('${type}',box.x-box.hw-UNITS['${type}'].r*.75-.1,box.y-box.hh-2),s=held('tank_siege',u.x-5,u.y);
+  u.dir=u.velocityDirection=0;const fixed=[s.x,s.y];
+  steps(u,180,()=>{assert.deepEqual([s.x,s.y],fixed);assert.ok(PF.positionClear(u.x,u.y,u.r*.75,b.id),'resource exception crosses water terrain');});
+  assert.ok(dist(u.x,u.y,s.x,s.y)>=(u.r+s.r)*.85-1e-6,'hard terrain blocks every otherwise legal recovery');
  `));

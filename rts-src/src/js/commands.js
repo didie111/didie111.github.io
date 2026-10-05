@@ -468,20 +468,15 @@ function recoverGround(e, blockers) {
   let state = e.groundRecovery;
   if (!state && !overlaps.length && !bodies.length) return false;
   if (!state) state = e.groundRecovery = { phase: 'check' };
-  // Grounded buildings/resources are unit bodies in OpenBW, not water terrain.
-  // Only an existing illegal overlap may leave their body. Once clear, that
-  // body becomes an ordinary barrier again; newly encountered bodies always are.
-  if (state.phase === 'check') state.bodyIds = new Set(bodies.map(b => b.id));
-  else if (state.bodyIds?.size) {
-    const current = new Set(bodies.map(b => b.id));
-    for (const id of state.bodyIds) if (!current.has(id)) state.bodyIds.delete(id);
-  }
-  const clearTerrain = (x, y) => PF.lineClearExact(e.x, e.y, x, y, rr, state.bodyIds);
+  // OpenBW MoveToLegal does not reapply unit-body collision along its chosen
+  // recovery path. Nearby grounded buildings/resources may be crossed too;
+  // this is not limited to bodies that overlapped the initial position.
+  const clearTerrain = (x, y) => PF.terrainLineClear(e.x, e.y, x, y, rr);
   const requestedAngle = e.velocityDirection;
   e.vx = 0; e.vy = 0;
   // MoveToLegal follows its chosen short path without ordinary unit collision.
   // Only already-illegal bodies enter this state; ordinary approaches still
-  // collide with Hold/Stop. Terrain and newly encountered fixed bodies remain barriers.
+  // collide with Hold/Stop. Hard terrain and fixed mobile-body guards remain.
   const fixedNew = blockers.filter(o => collisionFixed(o) && !overlaps.includes(o));
   const newlyBlocked = (x, y) => !PF.unitsClear(e.x, e.y, x, y, e.r, fixedNew);
   if (state.phase === 'move') {
@@ -549,9 +544,12 @@ function recoverGround(e, blockers) {
         x = e.x + Math.cos(angle) * distance; y = e.y + Math.sin(angle) * distance;
       }
       // 이동 가능한 몸체가 남은 대체 지점도 짧은 이동 후 다시 검사한다.
-      // 복구 경로에서도 지형과 고정 몸체는 보호한다.
+      // CheckIllegal rejects an immovable destination when the original
+      // blocker is moving. A stationary blocker may use the alternative
+      // body-overlapping point; MoveToLegal checks collision again at arrival.
       const fixedBlocked = blockers.some(o => collisionFixed(o) && Math.hypot(x - o.x, y - o.y) < (e.r + o.r) * .85);
-      if (Math.hypot(x - e.x, y - e.y) > 1e-6 && PF.positionClear(x, y, rr, state.bodyIds) &&
+      const fixedDestination = otherMoving && PF.overlappingBodies(x, y, rr).length;
+      if (Math.hypot(x - e.x, y - e.y) > 1e-6 && PF.terrainPositionClear(x, y, rr) && !fixedDestination &&
           clearTerrain(x, y) && !fixedBlocked && !newlyBlocked(x, y)) target = [x, y];
     }
   }

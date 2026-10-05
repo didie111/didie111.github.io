@@ -3,6 +3,7 @@
 //  길찾기(A*, 8방향) + 공간 해시
 // ===================================================================
 const PF = (() => {
+  const terrainOnly = Symbol('terrain-only recovery');
   const N = MAP_W * MAP_H;
   const prefixWidth = MAP_W + 1, terrainPrefix = new Uint32Array((MAP_W + 1) * (MAP_H + 1));
   let terrainFrame = false, terrainDirty = true;
@@ -68,9 +69,9 @@ const PF = (() => {
     if (!inMap(x, y)) return false;
     const i = tIdx(x, y);
     const id = MAP.occ[i];
-    // MoveToLegal may leave bodies it already overlaps. This exception never
-    // changes the underlying terrain: water/cliffs still fail MAP.walk.
-    return MAP.walk[i] === 1 && (!id || id === ignoreId ||
+    // MoveToLegal follows a short recovery path without ordinary unit-body
+    // collision. Underlying water/cliffs always remain unwalkable.
+    return MAP.walk[i] === 1 && (ignoreId === terrainOnly || !id || id === ignoreId ||
       !!ignoreId && typeof ignoreId.has === 'function' && ignoreId.has(id)) && !(avoid && avoid.has(i));
   }
 
@@ -445,6 +446,8 @@ const PF = (() => {
   }
   return {
     find, worldPath, lineClear, lineClearExact, positionClear, overlappingBodies, localPath, unitPath, nearestPassable, passable, unitsClear, unitObstacles, goalBlocker, compactPath,
+    terrainPositionClear(x, y, r) { return positionClear(x, y, r, terrainOnly); },
+    terrainLineClear(x0, y0, x1, y1, r) { return lineClearExact(x0, y0, x1, y1, r, terrainOnly); },
     resetBudget() { budget = 24000; terrainFrame = false; },
     beginTick() { budget = 24000; terrainFrame = true; terrainDirty = true; },
     endTick() { terrainFrame = false; }, invalidateTerrain() { terrainDirty = true; },
